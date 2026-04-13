@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
+import '../../features/onboarding/domain/onboarding_provider.dart';
 import '../../features/auth/presentation/screens/auth_screen.dart';
 import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/matches/presentation/screens/matches_screen.dart';
@@ -9,8 +10,15 @@ import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../shared/widgets/main_shell.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
+  final onboardingAsync = ref.watch(onboardingDoneProvider);
+
   return GoRouter(
     initialLocation: '/',
+    redirect: (context, state) {
+      final onboardingDone = onboardingAsync.valueOrNull ?? false;
+      if (!onboardingDone && state.uri.path != '/') return '/';
+      return null;
+    },
     routes: [
       GoRoute(path: '/', builder: (context, state) => const OnboardingScreen()),
       GoRoute(path: '/auth', builder: (context, state) => const AuthScreen()),
