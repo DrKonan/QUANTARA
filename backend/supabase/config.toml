@@ -1,0 +1,56 @@
+[api]
+enabled = true
+port = 4544
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+
+[auth]
+enabled = true
+site_url = "https://juniari.com/quantara"
+additional_redirect_urls = ["https://juniari.com/quantara", "http://localhost:4240/quantara"]
+jwt_expiry = 3600
+enable_signup = true
+phone_otp_expiry = 300
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+# provider = "twilio" ou "vonage" — configurer dans le dashboard Supabase
+
+[edge_runtime]
+enabled = true
+policy = "oneshot"
+
+# ----------------------------------------------------------------
+# Scheduled Jobs (Cron) — nécessite Supabase Pro ou pg_cron
+# ----------------------------------------------------------------
+# Ces jobs sont configurés via le dashboard Supabase > Database > Cron Jobs
+# ou via pg_cron directement dans les migrations.
+#
+# fetch-matches        : "0 6 * * *"           (6h UTC chaque jour)
+# fetch-lineups        : "*/10 * * * *"        (toutes les 10min — ne poll que les matchs à ≤90min du KO)
+# predict-live-t1      : "*/15 * * * *"        (toutes les 15min)
+# predict-live-t2      : "*/5 * * * *"         (toutes les 5min, avec filtre interne 55-65min)
+# evaluate-predictions : "*/30 * * * *"        (toutes les 30min)
