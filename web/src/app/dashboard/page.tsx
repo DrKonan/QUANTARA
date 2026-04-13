@@ -51,14 +51,14 @@ export default async function DashboardPage() {
     : "—";
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold">Vue d&apos;ensemble</h2>
-        <p className="text-[#A0A0B0] mt-1">Statistiques globales de Quantara</p>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 lg:mb-8">
+        <h2 className="text-xl sm:text-2xl font-bold">Vue d&apos;ensemble</h2>
+        <p className="text-[#A0A0B0] mt-1 text-sm sm:text-base">Statistiques globales de Quantara</p>
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 lg:mb-8">
         <StatCard
           title="Utilisateurs"
           value={stats.totalUsers.toLocaleString("fr")}

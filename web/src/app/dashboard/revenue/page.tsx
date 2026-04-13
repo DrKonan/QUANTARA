@@ -38,16 +38,16 @@ export default async function RevenuePage() {
     .reduce((sum, s) => sum + (s.amount ?? 0), 0);
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold">Revenus</h2>
-        <p className="text-[#A0A0B0] mt-1">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 lg:mb-8">
+        <h2 className="text-xl sm:text-2xl font-bold">Revenus</h2>
+        <p className="text-[#A0A0B0] mt-1 text-sm sm:text-base">
           {activeSubs ?? 0} abonnements actifs · {totalSubs ?? 0} total
         </p>
       </div>
 
       {/* Résumé */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 lg:mb-8">
         <div className="bg-[#1A1A2E] rounded-xl border border-white/10 p-5">
           <div className="text-sm text-[#A0A0B0] mb-2">Revenus totaux</div>
           <div className="text-2xl font-bold text-[#D4AF37]">

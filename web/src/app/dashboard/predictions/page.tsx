@@ -27,10 +27,10 @@ export default async function PredictionsPage() {
   const list = (predictions ?? []) as unknown as Prediction[];
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold">Pronos</h2>
-        <p className="text-[#A0A0B0] mt-1">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 lg:mb-8">
+        <h2 className="text-xl sm:text-2xl font-bold">Pronos</h2>
+        <p className="text-[#A0A0B0] mt-1 text-sm sm:text-base">
           {list.length} pronos affichés (100 derniers)
         </p>
       </div>

@@ -36,37 +36,37 @@ export default async function StatsPage() {
   );
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold">Performance</h2>
-        <p className="text-[#A0A0B0] mt-1">Taux de réussite global et par catégorie</p>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 lg:mb-8">
+        <h2 className="text-xl sm:text-2xl font-bold">Performance</h2>
+        <p className="text-[#A0A0B0] mt-1 text-sm sm:text-base">Taux de réussite global et par catégorie</p>
       </div>
 
       {/* Global */}
       {globalStat && (
-        <div className="bg-[#1A1A2E] rounded-xl border border-white/10 p-6 mb-6 flex items-center gap-8">
+        <div className="bg-[#1A1A2E] rounded-xl border border-white/10 p-4 sm:p-6 mb-6 grid grid-cols-2 sm:flex sm:items-center gap-4 sm:gap-8">
           <div>
             <div className="text-sm text-[#A0A0B0]">Taux de réussite global</div>
             <div className={`text-4xl font-bold mt-1 ${winRateColor(globalStat.win_rate ?? 0)}`}>
               {globalStat.win_rate ? `${(globalStat.win_rate * 100).toFixed(1)}%` : "—"}
             </div>
           </div>
-          <div className="border-l border-white/10 pl-8">
+          <div className="sm:border-l sm:border-white/10 sm:pl-8">
             <div className="text-sm text-[#A0A0B0]">Pronos évalués</div>
-            <div className="text-2xl font-bold mt-1">{globalStat.total}</div>
+            <div className="text-xl sm:text-2xl font-bold mt-1">{globalStat.total}</div>
           </div>
-          <div className="border-l border-white/10 pl-8">
+          <div className="sm:border-l sm:border-white/10 sm:pl-8">
             <div className="text-sm text-[#A0A0B0]">Gagnés</div>
-            <div className="text-2xl font-bold text-[#2ED573] mt-1">{globalStat.correct}</div>
+            <div className="text-xl sm:text-2xl font-bold text-[#2ED573] mt-1">{globalStat.correct}</div>
           </div>
-          <div className="border-l border-white/10 pl-8">
+          <div className="sm:border-l sm:border-white/10 sm:pl-8">
             <div className="text-sm text-[#A0A0B0]">Perdus</div>
-            <div className="text-2xl font-bold text-[#FF4757] mt-1">{globalStat.incorrect}</div>
+            <div className="text-xl sm:text-2xl font-bold text-[#FF4757] mt-1">{globalStat.incorrect}</div>
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Par ligue */}
         <div className="bg-[#1A1A2E] rounded-xl border border-white/10">
           <div className="p-5 border-b border-white/10">

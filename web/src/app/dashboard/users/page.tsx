@@ -28,11 +28,11 @@ export default async function UsersPage() {
   const list = (users ?? []) as User[];
 
   return (
-    <div className="p-8">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 lg:mb-8 flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Utilisateurs</h2>
-          <p className="text-[#A0A0B0] mt-1">
+          <h2 className="text-xl sm:text-2xl font-bold">Utilisateurs</h2>
+          <p className="text-[#A0A0B0] mt-1 text-sm sm:text-base">
             {count ?? 0} inscrits · {premiumCount ?? 0} premium
           </p>
         </div>
