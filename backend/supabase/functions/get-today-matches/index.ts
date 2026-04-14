@@ -115,11 +115,12 @@ Deno.serve(async (req: Request) => {
     // --- Vérifie le plan de l'utilisateur ---
     const { data: userProfile } = await supabase
       .from("users")
-      .select("plan")
+      .select("plan, trial_ends_at")
       .eq("id", user.id)
       .single();
 
-    const isPremium = userProfile?.plan === "premium";
+    const isPremium = userProfile?.plan === "premium" ||
+      (userProfile?.trial_ends_at && new Date(userProfile.trial_ends_at) > now);
 
     // --- Construit la réponse enrichie ---
     const result = (matches ?? []).map((match: MatchRow) => {
