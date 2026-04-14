@@ -25,6 +25,10 @@ export interface MatchContext {
   h2hTotal: number;
   h2hHomeGoalsAvg: number;
   h2hAwayGoalsAvg: number;
+  // Facteurs de qualité des compos (1.0 = compo type, <1 = affaiblie, >1 = renforcée)
+  // undefined = pas de compo dispo (mode initial)
+  homeLineupFactor?: number;     // 0.5–1.2 — impact sur les xG domicile
+  awayLineupFactor?: number;     // 0.5–1.2 — impact sur les xG extérieur
 }
 
 export interface ScoringResult {
@@ -137,9 +141,11 @@ export function computePrematchScores(
   // Blessures : pénalise proportionnellement à l'impact (max 30% de réduction)
   const injuryPenalty = Math.min(ctx.keyInjuries * 0.05, 0.3);
 
-  // XG attendus
-  const homeXG = expectedGoals(home.homeGoalsScored, away.homeGoalsConceded);
-  const awayXG = expectedGoals(away.awayGoalsScored, home.homeGoalsConceded);
+  // XG attendus (ajustés par la qualité de la compo si dispo)
+  const homeLineupMul = ctx.homeLineupFactor ?? 1.0;
+  const awayLineupMul = ctx.awayLineupFactor ?? 1.0;
+  const homeXG = expectedGoals(home.homeGoalsScored, away.homeGoalsConceded) * homeLineupMul;
+  const awayXG = expectedGoals(away.awayGoalsScored, home.homeGoalsConceded) * awayLineupMul;
 
   // ── 1. Résultat (1X2) ──────────────────────────────────────────
   const { homeWin, draw, awayWin } = computeResultProbs(homeXG, awayXG);

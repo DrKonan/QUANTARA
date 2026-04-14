@@ -12,9 +12,19 @@ import { apifootball } from "../_shared/api-football.ts";
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse, todayUTC } from "../_shared/helpers.ts";
 
+interface ApiLineupPlayer {
+  player: { id: number; name: string; number: number; pos: string };
+}
+
 interface ApiLineup {
   team: { id: number; name: string };
-  startXI: unknown[];
+  startXI: ApiLineupPlayer[];
+}
+
+interface ReadyMatch {
+  id: number;
+  homeLineup: Array<{ id: number; name: string; number: number; pos: string }>;
+  awayLineup: Array<{ id: number; name: string; number: number; pos: string }>;
 }
 
 Deno.serve(async (_req: Request) => {
@@ -42,7 +52,7 @@ Deno.serve(async (_req: Request) => {
 
     console.log(`[fetch-lineups] Checking ${matches.length} matches for lineup availability`);
 
-    const ready: number[] = [];
+    const readyMatches: ReadyMatch[] = [];
 
     for (const match of matches) {
       try {
@@ -58,7 +68,21 @@ Deno.serve(async (_req: Request) => {
           lineups[1].startXI?.length >= 11;
 
         if (hasLineups) {
-          ready.push(match.id);
+          // Extrait les données des titulaires pour le raffinement
+          const homeLineup = lineups[0].startXI.map(p => ({
+            id: p.player.id,
+            name: p.player.name,
+            number: p.player.number,
+            pos: p.player.pos,
+          }));
+          const awayLineup = lineups[1].startXI.map(p => ({
+            id: p.player.id,
+            name: p.player.name,
+            number: p.player.number,
+            pos: p.player.pos,
+          }));
+
+          readyMatches.push({ id: match.id, homeLineup, awayLineup });
         }
       } catch (err) {
         // On ne bloque pas la boucle si une fixture échoue
@@ -66,44 +90,49 @@ Deno.serve(async (_req: Request) => {
       }
     }
 
-    if (ready.length === 0) {
+    if (readyMatches.length === 0) {
       return jsonResponse({ message: "No new lineups available yet", checked: matches.length, ready: 0 });
     }
+
+    const readyIds = readyMatches.map(m => m.id);
 
     // Marque les matchs comme lineups_ready
     const { error: updateError } = await supabase
       .from("matches")
       .update({ lineups_ready: true })
-      .in("id", ready);
+      .in("id", readyIds);
 
     if (updateError) throw updateError;
 
-    console.log(`[fetch-lineups] Marked ${ready.length} matches as lineups_ready`);
+    console.log(`[fetch-lineups] Marked ${readyMatches.length} matches as lineups_ready`);
 
-    // Déclenche predict-prematch pour chaque match prêt
+    // Déclenche predict-prematch pour chaque match avec les compos
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const invokeResults = await Promise.allSettled(
-      ready.map((matchId) =>
+      readyMatches.map((rm) =>
         fetch(`${supabaseUrl}/functions/v1/predict-prematch`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${serviceKey}`,
           },
-          body: JSON.stringify({ match_id: matchId }),
+          body: JSON.stringify({
+            match_id: rm.id,
+            lineups: { home: rm.homeLineup, away: rm.awayLineup },
+          }),
         })
       ),
     );
 
     const triggered = invokeResults.filter((r) => r.status === "fulfilled").length;
-    console.log(`[fetch-lineups] Triggered predict-prematch for ${triggered}/${ready.length} matches`);
+    console.log(`[fetch-lineups] Triggered predict-prematch (refinement) for ${triggered}/${readyMatches.length} matches`);
 
     return jsonResponse({
       success: true,
       checked: matches.length,
-      ready: ready.length,
+      ready: readyMatches.length,
       triggered,
     });
   } catch (err) {

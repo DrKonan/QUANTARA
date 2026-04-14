@@ -55,7 +55,7 @@ async function getDashboardStats() {
       .single(),
     supabase
       .from("predictions")
-      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, created_at, matches(home_team, away_team, league)")
+      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_refined, created_at, matches(home_team, away_team, league)")
       .eq("is_published", true)
       .order("created_at", { ascending: false })
       .limit(10),
@@ -253,7 +253,12 @@ export default async function DashboardPage() {
                     <span className="text-[#6B6B80] mx-1.5">vs</span>
                     <span className="text-[#9B9BB0]">{(pred.matches as MatchRef)?.away_team}</span>
                   </td>
-                  <td className="p-4 font-medium">{pred.prediction}</td>
+                  <td className="p-4 font-medium">
+                    {pred.prediction}
+                    {pred.is_refined && (
+                      <span className="ml-1.5 text-[9px] font-bold text-[#60A5FA] uppercase">Affiné</span>
+                    )}
+                  </td>
                   <td className="p-4 text-[#6B6B80]">{pred.prediction_type.replace("_", " ")}</td>
                   <td className="p-4 text-right">
                     <ConfidenceBadge label={pred.confidence_label} value={pred.confidence} />
@@ -283,6 +288,7 @@ interface RecentPrediction {
   confidence_label: string;
   is_correct: boolean | null;
   is_live: boolean;
+  is_refined: boolean;
   created_at: string;
   matches: MatchRef | null;
 }

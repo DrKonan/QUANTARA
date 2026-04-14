@@ -31,6 +31,7 @@ interface Prediction {
   is_live: boolean;
   is_premium: boolean;
   is_published: boolean;
+  is_refined: boolean;
   created_at: string;
   match_id: number;
   matches: {
@@ -66,7 +67,7 @@ export default async function PredictionsPage() {
   const [{ data: predictions }, { data: leaguesMeta }] = await Promise.all([
     supabase
       .from("predictions")
-      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_premium, is_published, created_at, match_id, matches(home_team, away_team, league, league_id, match_date, status, home_score, away_score)")
+      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_premium, is_published, is_refined, created_at, match_id, matches(home_team, away_team, league, league_id, match_date, status, home_score, away_score)")
       .eq("is_published", true)
       .order("created_at", { ascending: false })
       .limit(200),
@@ -242,6 +243,7 @@ function PredictionChip({ prediction: p }: { prediction: Prediction }) {
         <div className="flex items-center gap-1.5">
           {p.is_live && <span className="text-[9px] font-bold text-[#F87171] uppercase">Live</span>}
           {p.is_premium && <span className="text-[9px] font-bold text-[#D4AF37] uppercase">Premium</span>}
+          {p.is_refined && <span className="text-[9px] font-bold text-[#60A5FA] uppercase">Affiné</span>}
         </div>
       </div>
       <div className="font-semibold text-sm mb-2">{p.prediction}</div>

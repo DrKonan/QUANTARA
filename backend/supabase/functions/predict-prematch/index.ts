@@ -1,16 +1,24 @@
 // ============================================================
 // QUANTARA — Edge Function : predict-prematch
-// Déclencheur : appelée par fetch-lineups dès qu'un match a
-//               ses compositions officielles.
-// Body attendu : { match_id: number }
-// Rôle : Collecte stats équipes + H2H + blessures (plan Ultra),
-//        calcule les scores de confiance, publie les pronos.
+// 
+// DEUX MODES DE FONCTIONNEMENT :
+// 
+// 1) Mode INITIAL (sans compo) :
+//    Appelé par le cron fetch-matches ou manuellement.
+//    Génère des pronos basés sur stats + H2H + blessures.
+//    → Pronos "de base" publiés immédiatement.
 //
-// Stratégie Ultra Plan :
-//   - /teams/statistics?team=&season=&league= → stats complètes
-//   - /fixtures/headtohead?h2h=&last=10 → 10 derniers duels
-//   - /injuries?fixture= → blessures du match
-//   - 4 appels API par match
+// 2) Mode RAFFINEMENT (avec compo) :
+//    Appelé par fetch-lineups quand les compos officielles arrivent.
+//    Body : { match_id, lineups: { home: [...], away: [...] } }
+//    Recalcule les pronos en tenant compte de la qualité des titulaires.
+//    → Les pronos existants sont MIS À JOUR (confiance, prédiction, etc.)
+//    → Marqués is_refined = true + refined_at
+//
+// Ce mécanisme de raffinement est la clé de la proposition de valeur
+// de QUANTARA : les infos de dernière minute changent tout.
+// Exemple : PSG-Brest, compo révèle des jeunes alignés →
+// prono passe de "victoire PSG" à confiance réduite.
 // ============================================================
 import { apifootball, apifootballSequential } from "../_shared/api-football.ts";
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
@@ -44,6 +52,18 @@ interface ApiTeamStats {
     for:     { total: { home: number; away: number }; average: { home: string; away: string } };
     against: { total: { home: number; away: number }; average: { home: string; away: string } };
   };
+}
+
+interface LineupPlayer {
+  id: number;
+  name: string;
+  number: number;
+  pos: string;       // G, D, M, F
+}
+
+interface LineupsPayload {
+  home: LineupPlayer[];
+  away: LineupPlayer[];
 }
 
 // ----------------------------------------------------------------
@@ -137,12 +157,57 @@ function parseH2HContext(
 }
 
 // ----------------------------------------------------------------
+// Calcul du facteur qualité de la compo
+// Compare les titulaires de ce match aux données stats de l'API.
+// Retourne un multiplicateur pour les xG : 
+//   1.0  = compo type attendue
+//   <1.0 = compo affaiblie (jeunes, rotations)
+//   >1.0 = compo renforcée (tous les meilleurs)
+// ----------------------------------------------------------------
+function computeLineupFactor(
+  lineup: LineupPlayer[],
+  squadPlayers: ApiSquadPlayer[] | null,
+): number {
+  if (!squadPlayers || squadPlayers.length === 0 || lineup.length === 0) {
+    return 1.0; // Pas assez de données → neutre
+  }
+
+  // Crée un set des titulaires du match (par ID)
+  const starterIds = new Set(lineup.map(p => p.id));
+
+  // Calcule combien de joueurs de l'effectif principal sont titulaires
+  // L'effectif est trié par apparitions — les premiers sont les plus réguliers
+  const regularPlayers = squadPlayers
+    .filter(p => p.statistics?.[0]?.games?.appearences != null)
+    .sort((a, b) => (b.statistics[0]?.games?.appearences ?? 0) - (a.statistics[0]?.games?.appearences ?? 0))
+    .slice(0, 15); // Top 15 joueurs les plus utilisés
+
+  if (regularPlayers.length === 0) return 1.0;
+
+  const regularsInLineup = regularPlayers.filter(p => starterIds.has(p.player.id)).length;
+  const regularityRatio = regularsInLineup / Math.min(regularPlayers.length, 11);
+
+  // Échelle : 0% des réguliers → 0.65, 100% → 1.05
+  // Un turnover massif (comme PSG avec des jeunes) = factor ~0.70
+  const factor = 0.65 + regularityRatio * 0.40;
+  return Math.max(0.50, Math.min(factor, 1.20));
+}
+
+interface ApiSquadPlayer {
+  player: { id: number; name: string };
+  statistics: Array<{
+    games?: { appearences?: number; lineups?: number; minutes?: number };
+  }>;
+}
+
+// ----------------------------------------------------------------
 // Handler principal
 // ----------------------------------------------------------------
 Deno.serve(async (req: Request) => {
   try {
-    const body = await req.json() as { match_id: number };
-    const { match_id } = body;
+    const body = await req.json() as { match_id: number; lineups?: LineupsPayload };
+    const { match_id, lineups } = body;
+    const isRefinement = !!lineups;
 
     if (!match_id) {
       return jsonResponse({ error: "match_id is required" }, 400);
@@ -178,17 +243,20 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Match kickoff is in the past", match_id, match_date: match.match_date }, 400);
     }
 
-    console.log(`[predict-prematch] Processing match ${match.home_team} vs ${match.away_team}`);
+    console.log(`[predict-prematch] Processing match ${match.home_team} vs ${match.away_team} (mode: ${isRefinement ? "REFINEMENT" : "INITIAL"})`);
 
-    // 2. Vérifie qu'on n'a pas déjà publié des pronos pré-match pour ce match
+    // 2. Vérifie les pronos existants
     const { count: existingCount } = await supabase
       .from("predictions")
       .select("id", { count: "exact", head: true })
       .eq("match_id", match_id)
       .eq("is_live", false);
 
-    if (existingCount && existingCount > 0) {
-      return jsonResponse({ message: "Predictions already exist for this match", match_id });
+    const hasExistingPredictions = existingCount && existingCount > 0;
+
+    // Mode initial : skip si des pronos existent déjà
+    if (!isRefinement && hasExistingPredictions) {
+      return jsonResponse({ message: "Predictions already exist for this match — waiting for lineup refinement", match_id });
     }
 
     // 3. Récupère les données depuis l'API (4 appels — plan Ultra)
@@ -219,6 +287,44 @@ Deno.serve(async (req: Request) => {
     const homeTeamStatsApi = homeStatsRaw as ApiTeamStats | null;
     const awayTeamStatsApi = awayStatsRaw as ApiTeamStats | null;
 
+    // 3b. Si mode raffinement, récupérer les effectifs pour évaluer la qualité des compos
+    let homeLineupFactor = 1.0;
+    let awayLineupFactor = 1.0;
+
+    if (isRefinement && lineups) {
+      try {
+        // Récupère les effectifs complets (avec stats d'apparitions) — 2 appels API supplémentaires
+        const [homeSquadRaw, awaySquadRaw] = await apifootballSequential([
+          () => apifootball("/players/squads", { team: match.home_team_id }),
+          () => apifootball("/players/squads", { team: match.away_team_id }),
+        ]);
+
+        // L'endpoint /players/squads retourne un array avec un objet par équipe
+        const homeSquadPlayers = Array.isArray(homeSquadRaw)
+          ? (homeSquadRaw[0] as { players?: ApiSquadPlayer[] })?.players ?? null
+          : null;
+        const awaySquadPlayers = Array.isArray(awaySquadRaw)
+          ? (awaySquadRaw[0] as { players?: ApiSquadPlayer[] })?.players ?? null
+          : null;
+
+        // Utilise /players?team=X&season=Y pour les stats d'apparitions (plus fiable)
+        const [homePlayersRaw, awayPlayersRaw] = await apifootballSequential([
+          () => apifootball("/players", { team: match.home_team_id, season: match.season, league: match.league_id }),
+          () => apifootball("/players", { team: match.away_team_id, season: match.season, league: match.league_id }),
+        ]);
+
+        const homePlayersStats = Array.isArray(homePlayersRaw) ? homePlayersRaw as ApiSquadPlayer[] : null;
+        const awayPlayersStats = Array.isArray(awayPlayersRaw) ? awayPlayersRaw as ApiSquadPlayer[] : null;
+
+        homeLineupFactor = computeLineupFactor(lineups.home, homePlayersStats);
+        awayLineupFactor = computeLineupFactor(lineups.away, awayPlayersStats);
+
+        console.log(`[predict-prematch] Lineup factors: home=${homeLineupFactor.toFixed(2)} away=${awayLineupFactor.toFixed(2)}`);
+      } catch (err) {
+        console.warn(`[predict-prematch] Failed to compute lineup factors, using 1.0:`, err);
+      }
+    }
+
     // 4. Récupère les ELO depuis la base (ou utilise 1500 par défaut)
     const { data: eloRows } = await supabase
       .from("team_elo")
@@ -236,6 +342,9 @@ Deno.serve(async (req: Request) => {
     const homeStats = parseTeamStats(homeTeamStatsApi, match.home_team_id, match.home_team, homeElo);
     const awayStats = parseTeamStats(awayTeamStatsApi, match.away_team_id, match.away_team, awayElo);
     const matchCtx = parseH2HContext(h2hFixtures, match.home_team_id, false, keyInjuries);
+    // Injecte les facteurs de compo dans le contexte
+    matchCtx.homeLineupFactor = homeLineupFactor;
+    matchCtx.awayLineupFactor = awayLineupFactor;
 
     // 7. Lance le moteur de scoring
     console.log(`[predict-prematch] homeStats:`, JSON.stringify(homeStats));
@@ -268,46 +377,110 @@ Deno.serve(async (req: Request) => {
     // 9. Sauvegarde les prédictions en base
     const PREMIUM_THRESHOLD = 0.70;
 
-    const predictions = scoringResults.map((r, i) => ({
-      match_id,
-      prediction_type: r.prediction_type,
-      prediction: r.prediction,
-      confidence: r.confidence,
-      confidence_label: confidenceLabel(r.confidence),
-      is_premium: r.confidence >= PREMIUM_THRESHOLD,
-      is_live: false,
-      analysis_text: analysisTexts[i],
-      score_breakdown: r.score_breakdown,
-      is_correct: null,
-      is_published: true,
-    }));
+    if (isRefinement && hasExistingPredictions) {
+      // ── MODE RAFFINEMENT : met à jour les pronos existants ──────
+      console.log(`[predict-prematch] REFINEMENT mode — updating existing predictions`);
 
-    const { error: insertError } = await supabase
-      .from("predictions")
-      .insert(predictions);
+      // Récupère les pronos existants pour ce match
+      const { data: existingPreds } = await supabase
+        .from("predictions")
+        .select("id, prediction_type, prediction")
+        .eq("match_id", match_id)
+        .eq("is_live", false);
 
-    if (insertError) throw insertError;
+      const existingMap = new Map(
+        (existingPreds ?? []).map((p: { id: number; prediction_type: string; prediction: string }) =>
+          [`${p.prediction_type}:${p.prediction}`, p.id]
+        )
+      );
 
-    console.log(`[predict-prematch] Published ${predictions.length} predictions for match ${match_id}`);
+      let updated = 0;
+      let inserted = 0;
+      let removed = 0;
 
-    // 10. Déclenche notify-users
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      for (let i = 0; i < scoringResults.length; i++) {
+        const r = scoringResults[i];
+        const key = `${r.prediction_type}:${r.prediction}`;
+        const existingId = existingMap.get(key);
 
-    fetch(`${supabaseUrl}/functions/v1/notify-users`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${serviceKey}`,
-      },
-      body: JSON.stringify({
-        type: "new_predictions",
+        const predData = {
+          confidence: r.confidence,
+          confidence_label: confidenceLabel(r.confidence),
+          is_premium: r.confidence >= PREMIUM_THRESHOLD,
+          analysis_text: analysisTexts[i],
+          score_breakdown: r.score_breakdown,
+          is_refined: true,
+          refined_at: new Date().toISOString(),
+        };
+
+        if (existingId) {
+          // Met à jour le prono existant avec la nouvelle confiance
+          await supabase.from("predictions").update(predData).eq("id", existingId);
+          existingMap.delete(key);
+          updated++;
+        } else {
+          // Nouveau type de prono qui n'existait pas avant → INSERT
+          await supabase.from("predictions").insert({
+            match_id,
+            prediction_type: r.prediction_type,
+            prediction: r.prediction,
+            is_live: false,
+            is_correct: null,
+            is_published: true,
+            ...predData,
+          });
+          inserted++;
+        }
+      }
+
+      // Pronos qui existaient avant mais ne sont plus au-dessus du seuil → on les dépublie
+      for (const [_key, id] of existingMap) {
+        await supabase.from("predictions")
+          .update({ is_published: false, is_refined: true, refined_at: new Date().toISOString() })
+          .eq("id", id);
+        removed++;
+      }
+
+      console.log(`[predict-prematch] Refinement done: ${updated} updated, ${inserted} new, ${removed} depublished`);
+
+      return jsonResponse({
+        success: true,
+        mode: "refinement",
         match_id,
-        count: predictions.length,
-      }),
-    }).catch((err) => console.warn("[predict-prematch] notify-users trigger failed:", err));
+        updated,
+        inserted,
+        removed,
+        lineup_factors: { home: homeLineupFactor, away: awayLineupFactor },
+      });
 
-    return jsonResponse({ success: true, match_id, predictions_count: predictions.length });
+    } else {
+      // ── MODE INITIAL : insert les pronos ─────────────────────────
+
+      const predictions = scoringResults.map((r, i) => ({
+        match_id,
+        prediction_type: r.prediction_type,
+        prediction: r.prediction,
+        confidence: r.confidence,
+        confidence_label: confidenceLabel(r.confidence),
+        is_premium: r.confidence >= PREMIUM_THRESHOLD,
+        is_live: false,
+        analysis_text: analysisTexts[i],
+        score_breakdown: r.score_breakdown,
+        is_correct: null,
+        is_published: true,
+        is_refined: false,
+      }));
+
+      const { error: insertError } = await supabase
+        .from("predictions")
+        .insert(predictions);
+
+      if (insertError) throw insertError;
+
+      console.log(`[predict-prematch] Published ${predictions.length} initial predictions for match ${match_id}`);
+
+      return jsonResponse({ success: true, mode: "initial", match_id, predictions_count: predictions.length });
+    }
   } catch (err) {
     console.error("[predict-prematch] Error:", err);
     return jsonResponse({ error: (err as Error).message }, 500);
