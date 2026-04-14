@@ -56,6 +56,7 @@ interface GroupedMatch {
   home_score: number | null;
   away_score: number | null;
   category: string;
+  country: string;
   predictions: Prediction[];
 }
 
@@ -72,9 +73,9 @@ export default async function PredictionsPage() {
     supabase.from("leagues_config").select("league_id, country, category"),
   ]);
 
-  const leagueMap = new Map<number, string>();
+  const leagueMap = new Map<number, { category: string; country: string }>();
   for (const l of (leaguesMeta ?? [])) {
-    leagueMap.set(l.league_id, l.category);
+    leagueMap.set(l.league_id, { category: l.category, country: l.country ?? "" });
   }
 
   const list = (predictions ?? []) as unknown as Prediction[];
@@ -94,7 +95,8 @@ export default async function PredictionsPage() {
         status: pred.matches.status,
         home_score: pred.matches.home_score,
         away_score: pred.matches.away_score,
-        category: leagueMap.get(pred.matches.league_id) ?? "other",
+        category: leagueMap.get(pred.matches.league_id)?.category ?? "other",
+        country: leagueMap.get(pred.matches.league_id)?.country ?? "",
         predictions: [],
       });
     }
@@ -108,9 +110,14 @@ export default async function PredictionsPage() {
     if (!byCategory.has(m.category)) byCategory.set(m.category, []);
     byCategory.get(m.category)!.push(m);
   }
-  // Sort matches within each category by date desc
+  // Sort matches within each category: live first, then by date desc
+  const statusPriority: Record<string, number> = { live: 0, scheduled: 1, finished: 2 };
   for (const matches of byCategory.values()) {
-    matches.sort((a, b) => b.match_date.localeCompare(a.match_date));
+    matches.sort((a, b) => {
+      const sp = (statusPriority[a.status] ?? 3) - (statusPriority[b.status] ?? 3);
+      if (sp !== 0) return sp;
+      return b.match_date.localeCompare(a.match_date);
+    });
   }
 
   const totalPreds = list.length;
@@ -179,7 +186,7 @@ function MatchPredictionCard({ match }: { match: GroupedMatch }) {
               <span className="font-semibold truncate">{match.away_team}</span>
             </div>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs text-[#6B6B80]">{match.league}</span>
+              <span className="text-xs text-[#6B6B80]">{match.league}{match.country ? ` · ${match.country}` : ""}</span>
               <span className="text-[#6B6B80]">·</span>
               <span className="text-xs text-[#6B6B80]">{date} {time}</span>
             </div>

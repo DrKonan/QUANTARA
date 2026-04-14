@@ -87,13 +87,15 @@ async function getDashboardStats() {
     predCountMap.set(p.match_id, (predCountMap.get(p.match_id) ?? 0) + 1);
   }
 
-  // Enrich matches
-  const enrichedMatches: MatchWithPredictions[] = (todayMatches ?? []).map((m: { id: number; home_team: string; away_team: string; league: string; league_id: number; match_date: string; status: string; home_score: number | null; away_score: number | null }) => ({
-    ...m,
-    prediction_count: predCountMap.get(m.id) ?? 0,
-    category: leagueMap.get(m.league_id)?.category ?? "other",
-    country: leagueMap.get(m.league_id)?.country ?? "",
-  }));
+  // Enrich matches — exclut les terminés sans prono (inutiles dans l'admin)
+  const enrichedMatches: MatchWithPredictions[] = (todayMatches ?? [])
+    .map((m: { id: number; home_team: string; away_team: string; league: string; league_id: number; match_date: string; status: string; home_score: number | null; away_score: number | null }) => ({
+      ...m,
+      prediction_count: predCountMap.get(m.id) ?? 0,
+      category: leagueMap.get(m.league_id)?.category ?? "other",
+      country: leagueMap.get(m.league_id)?.country ?? "",
+    }))
+    .filter((m) => !(m.status === "finished" && m.prediction_count === 0));
 
   return {
     totalUsers: totalUsers ?? 0,
@@ -112,13 +114,22 @@ export default async function DashboardPage() {
     ? `${(stats.globalStats.win_rate * 100).toFixed(1)}%`
     : "—";
 
-  // Group matches by category
+  // Group matches by category — tri : live d'abord, puis plus récent en haut
   const categoryOrder = ["major_international", "top5", "europe", "south_america", "rest_of_world", "other"];
   const matchesByCategory = new Map<string, MatchWithPredictions[]>();
   for (const m of stats.todayMatches) {
     const cat = m.category;
     if (!matchesByCategory.has(cat)) matchesByCategory.set(cat, []);
     matchesByCategory.get(cat)!.push(m);
+  }
+  // Tri intra-catégorie : live > scheduled > finished, puis par heure décroissante
+  const statusPriority: Record<string, number> = { live: 0, scheduled: 1, finished: 2 };
+  for (const matches of matchesByCategory.values()) {
+    matches.sort((a, b) => {
+      const sp = (statusPriority[a.status] ?? 3) - (statusPriority[b.status] ?? 3);
+      if (sp !== 0) return sp;
+      return b.match_date.localeCompare(a.match_date); // plus récent en haut
+    });
   }
 
   const liveCount = stats.todayMatches.filter(m => m.status === "live").length;
@@ -287,7 +298,7 @@ function MatchCard({ match }: { match: MatchWithPredictions }) {
   return (
     <div className={`glass-card p-4 animate-fade-up ${isLive ? "border-[#F87171]/30" : ""}`}>
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-[#6B6B80] truncate">{match.league}</span>
+        <span className="text-xs text-[#6B6B80] truncate">{match.league}{match.country ? ` · ${match.country}` : ""}</span>
         {isLive ? (
           <span className="flex items-center gap-1 text-xs font-medium text-[#F87171]">
             <span className="w-1.5 h-1.5 rounded-full bg-[#F87171] live-pulse" /> LIVE
