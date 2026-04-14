@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
+import 'match_model.dart';
 
 enum PredictionResult { pending, won, lost }
 
@@ -12,7 +13,9 @@ class Prediction {
   final String analysis;
   final PredictionResult result;
   final bool isLive;
+  final bool isPremium;
   final DateTime createdAt;
+  final Match? match; // populated when joined
 
   const Prediction({
     required this.id,
@@ -22,7 +25,9 @@ class Prediction {
     required this.analysis,
     this.result = PredictionResult.pending,
     this.isLive = false,
+    this.isPremium = false,
     required this.createdAt,
+    this.match,
   });
 
   int get confidencePercent => (confidence * 100).round();

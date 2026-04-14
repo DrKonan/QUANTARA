@@ -39,7 +39,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       await ref.read(authServiceProvider).signUp(
             email: _emailCtrl.text.trim(),
             password: _passwordCtrl.text,
-            fullName: _nameCtrl.text.trim(),
+            username: _nameCtrl.text.trim(),
           );
       if (mounted) setState(() => _registered = true);
     } catch (e) {
@@ -124,8 +124,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             // Full name
             AuthTextField(
               controller: _nameCtrl,
-              label: "Nom complet",
-              hint: "Jean Dupont",
+              label: "Nom d'utilisateur",
+              hint: "Ex: jean_dupont",
               prefixIcon: Icons.person_outline,
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return "Nom requis";
