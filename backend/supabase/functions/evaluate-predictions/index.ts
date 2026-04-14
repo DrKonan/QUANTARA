@@ -79,16 +79,15 @@ function evaluatePrediction(
 Deno.serve(async (_req: Request) => {
   try {
     const supabase = getSupabaseAdmin();
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-    // Matchs terminés récemment avec des prédictions non encore évaluées
+    // Matchs terminés avec des prédictions non encore évaluées
+    // Fenêtre large de 24h pour ne rater aucun match
     const { data: matches, error: matchError } = await supabase
       .from("matches")
-      .select("id, external_id, home_team, away_team")
+      .select("id, external_id, home_team, away_team, home_score, away_score")
       .eq("status", "finished")
-      .gte("updated_at", twoHoursAgo)
-      .lte("updated_at", oneHourAgo);
+      .gte("updated_at", twentyFourHoursAgo);
 
     if (matchError) throw matchError;
     if (!matches || matches.length === 0) {
@@ -109,6 +108,17 @@ Deno.serve(async (_req: Request) => {
 
       if (!fixtureData || fixtureData.length === 0) continue;
       const result = fixtureData[0];
+
+      // Backfill des scores si manquants sur la table matches
+      const apiHome = result.goals.home;
+      const apiAway = result.goals.away;
+      if (apiHome !== null && apiAway !== null &&
+          (match.home_score === null || match.away_score === null)) {
+        await supabase
+          .from("matches")
+          .update({ home_score: apiHome, away_score: apiAway })
+          .eq("id", match.id);
+      }
 
       // Récupère les prédictions non évaluées pour ce match
       const { data: predictions } = await supabase

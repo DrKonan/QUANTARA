@@ -94,11 +94,33 @@ Deno.serve(async (_req: Request) => {
         const minutesSinceKickoff = (now.getTime() - kickoff.getTime()) / 60000;
 
         if (minutesSinceKickoff > 100) {
-          const { error } = await supabase
-            .from("matches")
-            .update({ status: "finished" })
-            .eq("id", match.id);
-          if (!error) updatedCount++;
+          // Récupère le score final via API-Football avant de marquer "finished"
+          try {
+            const fixtureData = await apifootball("/fixtures", {
+              id: match.external_id,
+            }) as ApiFixture[];
+            const fix = fixtureData?.[0];
+            const finalHome = fix?.goals?.home ?? null;
+            const finalAway = fix?.goals?.away ?? null;
+            const { error } = await supabase
+              .from("matches")
+              .update({
+                status: "finished",
+                home_score: finalHome,
+                away_score: finalAway,
+              })
+              .eq("id", match.id);
+            if (!error) updatedCount++;
+            console.log(`[update-live-scores] ${match.external_id} finished: ${finalHome}-${finalAway}`);
+          } catch (fetchErr) {
+            // Fallback : marquer finished sans score, evaluate-predictions récupérera
+            console.warn(`[update-live-scores] Could not fetch final score for ${match.external_id}:`, fetchErr);
+            const { error } = await supabase
+              .from("matches")
+              .update({ status: "finished" })
+              .eq("id", match.id);
+            if (!error) updatedCount++;
+          }
         }
       }
       // scheduled + kick-off passé mais pas dans live → on attend
