@@ -100,8 +100,8 @@ class HomeScreen extends ConsumerWidget {
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                           child: SectionHeader(
-                            emoji: "📅",
-                            title: "AUJOURD'HUI",
+                            emoji: "📊",
+                            title: "PRONOS DISPONIBLES",
                             badge: "${todayPredictions.length} prono${todayPredictions.length > 1 ? 's' : ''}",
                             badgeColor: AppColors.info,
                           ),

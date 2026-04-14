@@ -10,6 +10,7 @@ import '../../features/home/presentation/screens/home_screen.dart';
 import '../../features/matches/presentation/screens/matches_screen.dart';
 import '../../features/history/presentation/screens/history_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
+import '../../features/subscription/presentation/screens/subscription_screen.dart';
 import '../../shared/widgets/main_shell.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -47,6 +48,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/', builder: (context, state) => const OnboardingScreen()),
       GoRoute(path: '/auth', builder: (context, state) => const AuthScreen()),
       GoRoute(path: '/auth/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),
+      GoRoute(path: '/subscription', builder: (context, state) => const SubscriptionScreen()),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
         routes: [

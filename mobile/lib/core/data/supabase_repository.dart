@@ -90,16 +90,14 @@ class SupabaseRepository {
   }
 
   Future<List<Prediction>> fetchTodayPredictions() async {
-    final now = DateTime.now().toUtc();
-    final startOfDay = DateTime.utc(now.year, now.month, now.day);
-    final endOfDay = startOfDay.add(const Duration(days: 1));
-
+    // Fetch all published predictions with pending result (upcoming/today)
     final data = await _client
         .from('predictions')
         .select('*, matches!inner(*)')
         .eq('is_published', true)
-        .gte('matches.match_date', startOfDay.toIso8601String())
-        .lt('matches.match_date', endOfDay.toIso8601String())
+        .eq('is_live', false)
+        .isFilter('is_correct', null)
+        .inFilter('matches.status', ['scheduled', 'finished'])
         .order('confidence', ascending: false);
 
     return (data as List).map((json) => _parsePrediction(json)).toList();
