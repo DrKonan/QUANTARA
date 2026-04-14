@@ -1,6 +1,25 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import { Filter } from "lucide-react";
 
 export const revalidate = 30;
+
+const CATEGORY_LABELS: Record<string, { label: string; emoji: string }> = {
+  major_international: { label: "Compétitions internationales", emoji: "🏆" },
+  top5: { label: "Top 5 européen", emoji: "⭐" },
+  europe: { label: "Europe", emoji: "🇪🇺" },
+  south_america: { label: "Amérique du Sud", emoji: "🌎" },
+  rest_of_world: { label: "Reste du monde", emoji: "🌍" },
+  other: { label: "Autres", emoji: "⚽" },
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  result: "Résultat",
+  over_under: "Buts",
+  btts: "Les 2 marquent",
+  home_win: "Victoire dom.",
+  away_win: "Victoire ext.",
+  draw: "Match nul",
+};
 
 interface Prediction {
   id: number;
@@ -10,87 +29,231 @@ interface Prediction {
   confidence_label: string;
   is_correct: boolean | null;
   is_live: boolean;
+  is_premium: boolean;
   is_published: boolean;
   created_at: string;
-  matches: { home_team: string; away_team: string; league: string; match_date: string } | null;
+  match_id: number;
+  matches: {
+    home_team: string;
+    away_team: string;
+    league: string;
+    league_id: number;
+    match_date: string;
+    status: string;
+    home_score: number | null;
+    away_score: number | null;
+  } | null;
+}
+
+interface GroupedMatch {
+  match_id: number;
+  home_team: string;
+  away_team: string;
+  league: string;
+  league_id: number;
+  match_date: string;
+  status: string;
+  home_score: number | null;
+  away_score: number | null;
+  category: string;
+  predictions: Prediction[];
 }
 
 export default async function PredictionsPage() {
   const supabase = await createSupabaseAdminClient();
 
-  const { data: predictions } = await supabase
-    .from("predictions")
-    .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_published, created_at, matches(home_team, away_team, league, match_date)")
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const [{ data: predictions }, { data: leaguesMeta }] = await Promise.all([
+    supabase
+      .from("predictions")
+      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_premium, is_published, created_at, match_id, matches(home_team, away_team, league, league_id, match_date, status, home_score, away_score)")
+      .eq("is_published", true)
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase.from("leagues_config").select("league_id, country, category"),
+  ]);
+
+  const leagueMap = new Map<number, string>();
+  for (const l of (leaguesMeta ?? [])) {
+    leagueMap.set(l.league_id, l.category);
+  }
 
   const list = (predictions ?? []) as unknown as Prediction[];
 
+  // Group by match
+  const matchMap = new Map<number, GroupedMatch>();
+  for (const pred of list) {
+    if (!pred.matches) continue;
+    if (!matchMap.has(pred.match_id)) {
+      matchMap.set(pred.match_id, {
+        match_id: pred.match_id,
+        home_team: pred.matches.home_team,
+        away_team: pred.matches.away_team,
+        league: pred.matches.league,
+        league_id: pred.matches.league_id,
+        match_date: pred.matches.match_date,
+        status: pred.matches.status,
+        home_score: pred.matches.home_score,
+        away_score: pred.matches.away_score,
+        category: leagueMap.get(pred.matches.league_id) ?? "other",
+        predictions: [],
+      });
+    }
+    matchMap.get(pred.match_id)!.predictions.push(pred);
+  }
+
+  // Group by category
+  const categoryOrder = ["major_international", "top5", "europe", "south_america", "rest_of_world", "other"];
+  const byCategory = new Map<string, GroupedMatch[]>();
+  for (const m of matchMap.values()) {
+    if (!byCategory.has(m.category)) byCategory.set(m.category, []);
+    byCategory.get(m.category)!.push(m);
+  }
+  // Sort matches within each category by date desc
+  for (const matches of byCategory.values()) {
+    matches.sort((a, b) => b.match_date.localeCompare(a.match_date));
+  }
+
+  const totalPreds = list.length;
+  const livePreds = list.filter(p => p.is_live).length;
+  const premiumPreds = list.filter(p => p.is_premium).length;
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <div className="mb-6 lg:mb-8">
-        <h2 className="text-xl sm:text-2xl font-bold">Pronos</h2>
-        <p className="text-[#A0A0B0] mt-1 text-sm sm:text-base">
-          {list.length} pronos affichés (100 derniers)
-        </p>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+      <div className="mb-8">
+        <h2 className="text-2xl sm:text-3xl font-bold">Pronos</h2>
+        <div className="flex items-center gap-4 mt-2">
+          <span className="text-sm text-[#6B6B80]">{totalPreds} pronos</span>
+          {livePreds > 0 && <span className="text-sm text-[#F87171]">{livePreds} live</span>}
+          <span className="text-sm text-[#D4AF37]">{premiumPreds} premium</span>
+        </div>
       </div>
 
-      <div className="bg-[#1A1A2E] rounded-xl border border-white/10 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-white/5 text-[#A0A0B0]">
-              <th className="text-left p-4 font-medium">Match</th>
-              <th className="text-left p-4 font-medium">Ligue</th>
-              <th className="text-left p-4 font-medium">Événement</th>
-              <th className="text-left p-4 font-medium">Type</th>
-              <th className="text-right p-4 font-medium">Confiance</th>
-              <th className="text-right p-4 font-medium">Live</th>
-              <th className="text-right p-4 font-medium">Résultat</th>
-              <th className="text-right p-4 font-medium">Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((pred) => (
-              <tr key={pred.id} className="border-b border-white/5 hover:bg-white/5">
-                <td className="p-4 font-medium whitespace-nowrap">
-                  {pred.matches?.home_team} vs {pred.matches?.away_team}
-                </td>
-                <td className="p-4 text-[#A0A0B0]">{pred.matches?.league}</td>
-                <td className="p-4">{pred.prediction}</td>
-                <td className="p-4 text-[#A0A0B0]">{pred.prediction_type}</td>
-                <td className="p-4 text-right">
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${confidenceColor(pred.confidence_label)}`}>
-                    {(pred.confidence * 100).toFixed(0)}%
-                  </span>
-                </td>
-                <td className="p-4 text-right">
-                  {pred.is_live && <span className="text-xs text-red-400 font-medium">🔴 Live</span>}
-                </td>
-                <td className="p-4 text-right">
-                  {pred.is_correct === null
-                    ? <span className="text-[#A0A0B0] text-xs">—</span>
-                    : pred.is_correct
-                    ? <span className="text-[#2ED573] text-xs font-medium">✅</span>
-                    : <span className="text-[#FF4757] text-xs font-medium">❌</span>
-                  }
-                </td>
-                <td className="p-4 text-right text-[#A0A0B0] text-xs whitespace-nowrap">
-                  {new Date(pred.created_at).toLocaleDateString("fr")}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {totalPreds === 0 ? (
+        <div className="glass-card p-12 text-center">
+          <Filter size={32} className="mx-auto mb-3 text-[#6B6B80]" />
+          <p className="text-[#6B6B80]">Aucun prono publié</p>
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {categoryOrder.map((cat) => {
+            const matches = byCategory.get(cat);
+            if (!matches || matches.length === 0) return null;
+            const info = CATEGORY_LABELS[cat] ?? CATEGORY_LABELS.other;
+            return (
+              <div key={cat}>
+                <div className="flex items-center gap-2 mb-4">
+                  <span>{info.emoji}</span>
+                  <h3 className="text-sm font-semibold text-[#9B9BB0] uppercase tracking-wider">{info.label}</h3>
+                  <div className="flex-1 h-px bg-white/5" />
+                  <span className="text-xs text-[#6B6B80]">{matches.length} match{matches.length > 1 ? "s" : ""}</span>
+                </div>
+                <div className="space-y-4">
+                  {matches.map((m) => (
+                    <MatchPredictionCard key={m.match_id} match={m} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MatchPredictionCard({ match }: { match: GroupedMatch }) {
+  const isLive = match.status === "live";
+  const isFinished = match.status === "finished";
+  const time = new Date(match.match_date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const date = new Date(match.match_date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+
+  return (
+    <div className={`glass-card animate-fade-up overflow-hidden ${isLive ? "border-[#F87171]/20" : ""}`}>
+      {/* Match header */}
+      <div className="px-5 py-4 flex items-center justify-between border-b border-white/[0.06]">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold truncate">{match.home_team}</span>
+              <span className="text-[#6B6B80] text-sm">vs</span>
+              <span className="font-semibold truncate">{match.away_team}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-xs text-[#6B6B80]">{match.league}</span>
+              <span className="text-[#6B6B80]">·</span>
+              <span className="text-xs text-[#6B6B80]">{date} {time}</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 ml-3">
+          {(isLive || isFinished) && match.home_score !== null && (
+            <span className={`text-lg font-bold ${isLive ? "text-[#F87171]" : "text-white"}`}>
+              {match.home_score} - {match.away_score}
+            </span>
+          )}
+          {isLive && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#F87171]/10 text-[#F87171] text-xs font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#F87171] live-pulse" /> LIVE
+            </span>
+          )}
+          {isFinished && (
+            <span className="px-2 py-0.5 rounded-full bg-[#34D399]/10 text-[#34D399] text-xs font-medium">Terminé</span>
+          )}
+        </div>
+      </div>
+
+      {/* Predictions grid */}
+      <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {match.predictions.map((pred) => (
+          <PredictionChip key={pred.id} prediction={pred} />
+        ))}
       </div>
     </div>
   );
 }
 
-function confidenceColor(label: string): string {
-  const m: Record<string, string> = {
-    excellence: "text-[#D4AF37] bg-[#D4AF37]/10",
-    high: "text-[#2ED573] bg-[#2ED573]/10",
-    elevated: "text-[#1E90FF] bg-[#1E90FF]/10",
-  };
-  return m[label] ?? "text-white bg-white/10";
+function PredictionChip({ prediction: p }: { prediction: Prediction }) {
+  const pct = Math.round(p.confidence * 100);
+  const typeLabel = TYPE_LABELS[p.prediction_type] ?? p.prediction_type.replace("_", " ");
+
+  const confColor =
+    p.confidence >= 0.8 ? "from-[#D4AF37] to-[#B8961F]" :
+    p.confidence >= 0.7 ? "from-[#34D399] to-[#059669]" :
+    p.confidence >= 0.6 ? "from-[#60A5FA] to-[#2563EB]" :
+    "from-[#6B6B80] to-[#4B4B60]";
+
+  const confText =
+    p.confidence >= 0.8 ? "text-[#D4AF37]" :
+    p.confidence >= 0.7 ? "text-[#34D399]" :
+    p.confidence >= 0.6 ? "text-[#60A5FA]" :
+    "text-[#9B9BB0]";
+
+  return (
+    <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04] hover:border-white/[0.08] transition-colors">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-[#6B6B80]">{typeLabel}</span>
+        <div className="flex items-center gap-1.5">
+          {p.is_live && <span className="text-[9px] font-bold text-[#F87171] uppercase">Live</span>}
+          {p.is_premium && <span className="text-[9px] font-bold text-[#D4AF37] uppercase">Premium</span>}
+        </div>
+      </div>
+      <div className="font-semibold text-sm mb-2">{p.prediction}</div>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full bg-gradient-to-r ${confColor} bar-fill`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <span className={`text-xs font-bold ${confText}`}>{pct}%</span>
+      </div>
+      {p.is_correct !== null && (
+        <div className="mt-2 pt-2 border-t border-white/[0.04]">
+          <span className={`text-xs font-medium ${p.is_correct ? "text-[#34D399]" : "text-[#F87171]"}`}>
+            {p.is_correct ? "✅ Gagné" : "❌ Perdu"}
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }

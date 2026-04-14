@@ -1,8 +1,32 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/stat-card";
-import { Users, ListChecks, TrendingUp, CreditCard } from "lucide-react";
+import { Users, ListChecks, TrendingUp, CreditCard, Trophy, Clock, CheckCircle2, Radio } from "lucide-react";
 
-export const revalidate = 60; // Revalide toutes les 60 secondes
+export const revalidate = 60;
+
+const CATEGORY_LABELS: Record<string, { label: string; emoji: string }> = {
+  major_international: { label: "Compétitions internationales", emoji: "🏆" },
+  top5: { label: "Top 5 européen", emoji: "⭐" },
+  europe: { label: "Europe", emoji: "🇪🇺" },
+  south_america: { label: "Amérique du Sud", emoji: "🌎" },
+  rest_of_world: { label: "Reste du monde", emoji: "🌍" },
+  other: { label: "Autres", emoji: "⚽" },
+};
+
+interface MatchWithPredictions {
+  id: number;
+  home_team: string;
+  away_team: string;
+  league: string;
+  league_id: number;
+  match_date: string;
+  status: string;
+  home_score: number | null;
+  away_score: number | null;
+  prediction_count: number;
+  category: string;
+  country: string;
+}
 
 async function getDashboardStats() {
   const supabase = await createSupabaseAdminClient();
@@ -14,6 +38,9 @@ async function getDashboardStats() {
     { count: activeSubs },
     { data: globalStats },
     { data: recentPredictions },
+    { data: todayMatches },
+    { data: todayPredictions },
+    { data: leaguesMeta },
   ] = await Promise.all([
     supabase.from("users").select("*", { count: "exact", head: true }),
     supabase.from("users").select("*", { count: "exact", head: true }).eq("plan", "premium"),
@@ -28,11 +55,45 @@ async function getDashboardStats() {
       .single(),
     supabase
       .from("predictions")
-      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, created_at, matches(home_team, away_team, league)")
+      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, created_at, matches(home_team, away_team, league)")
       .eq("is_published", true)
       .order("created_at", { ascending: false })
       .limit(10),
+    supabase
+      .from("matches")
+      .select("id, home_team, away_team, league, league_id, match_date, status, home_score, away_score")
+      .gte("match_date", new Date().toISOString().slice(0, 10) + "T00:00:00+00:00")
+      .lte("match_date", new Date().toISOString().slice(0, 10) + "T23:59:59+00:00")
+      .not("status", "eq", "cancelled")
+      .order("match_date"),
+    supabase
+      .from("predictions")
+      .select("match_id")
+      .eq("is_published", true),
+    supabase
+      .from("leagues_config")
+      .select("league_id, country, category"),
   ]);
+
+  // Build league metadata map
+  const leagueMap = new Map<number, { country: string; category: string }>();
+  for (const l of (leaguesMeta ?? [])) {
+    leagueMap.set(l.league_id, { country: l.country, category: l.category });
+  }
+
+  // Count predictions per match
+  const predCountMap = new Map<number, number>();
+  for (const p of (todayPredictions ?? [])) {
+    predCountMap.set(p.match_id, (predCountMap.get(p.match_id) ?? 0) + 1);
+  }
+
+  // Enrich matches
+  const enrichedMatches: MatchWithPredictions[] = (todayMatches ?? []).map((m: { id: number; home_team: string; away_team: string; league: string; league_id: number; match_date: string; status: string; home_score: number | null; away_score: number | null }) => ({
+    ...m,
+    prediction_count: predCountMap.get(m.id) ?? 0,
+    category: leagueMap.get(m.league_id)?.category ?? "other",
+    country: leagueMap.get(m.league_id)?.country ?? "",
+  }));
 
   return {
     totalUsers: totalUsers ?? 0,
@@ -41,6 +102,7 @@ async function getDashboardStats() {
     activeSubs: activeSubs ?? 0,
     globalStats: globalStats ?? { total: 0, correct: 0, win_rate: 0 },
     recentPredictions: (recentPredictions ?? []) as unknown as RecentPrediction[],
+    todayMatches: enrichedMatches,
   };
 }
 
@@ -50,69 +112,138 @@ export default async function DashboardPage() {
     ? `${(stats.globalStats.win_rate * 100).toFixed(1)}%`
     : "—";
 
+  // Group matches by category
+  const categoryOrder = ["major_international", "top5", "europe", "south_america", "rest_of_world", "other"];
+  const matchesByCategory = new Map<string, MatchWithPredictions[]>();
+  for (const m of stats.todayMatches) {
+    const cat = m.category;
+    if (!matchesByCategory.has(cat)) matchesByCategory.set(cat, []);
+    matchesByCategory.get(cat)!.push(m);
+  }
+
+  const liveCount = stats.todayMatches.filter(m => m.status === "live").length;
+  const finishedCount = stats.todayMatches.filter(m => m.status === "finished").length;
+  const scheduledCount = stats.todayMatches.filter(m => m.status === "scheduled").length;
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <div className="mb-6 lg:mb-8">
-        <h2 className="text-xl sm:text-2xl font-bold">Vue d&apos;ensemble</h2>
-        <p className="text-[#A0A0B0] mt-1 text-sm sm:text-base">Statistiques globales de Quantara</p>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="mb-8">
+        <h2 className="text-2xl sm:text-3xl font-bold">Vue d&apos;ensemble</h2>
+        <p className="text-[#6B6B80] mt-1">
+          {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+        </p>
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 lg:mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
         <StatCard
           title="Utilisateurs"
           value={stats.totalUsers.toLocaleString("fr")}
-          subtitle={`dont ${stats.premiumUsers} premium`}
-          icon={<Users size={20} />}
+          subtitle={`${stats.premiumUsers} premium`}
+          icon={<Users size={18} />}
           color="gold"
         />
         <StatCard
-          title="Taux de réussite"
+          title="Win rate"
           value={winRate}
-          subtitle={`${stats.globalStats.correct}/${stats.globalStats.total} pronos`}
-          icon={<TrendingUp size={20} />}
+          subtitle={`${stats.globalStats.correct}/${stats.globalStats.total}`}
+          icon={<TrendingUp size={18} />}
           color={stats.globalStats.win_rate >= 0.75 ? "green" : "default"}
         />
         <StatCard
           title="Pronos publiés"
           value={stats.totalPredictions.toLocaleString("fr")}
-          subtitle="tous temps"
-          icon={<ListChecks size={20} />}
+          subtitle="total"
+          icon={<ListChecks size={18} />}
           color="default"
         />
         <StatCard
-          title="Abonnements actifs"
+          title="Abonnements"
           value={stats.activeSubs.toLocaleString("fr")}
-          subtitle="abonnés premium"
-          icon={<CreditCard size={20} />}
+          subtitle="actifs"
+          icon={<CreditCard size={18} />}
           color="green"
         />
       </div>
 
+      {/* Matchs du jour */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <Trophy size={20} className="text-[#D4AF37]" />
+            <h3 className="text-lg font-semibold">Matchs du jour</h3>
+          </div>
+          <div className="flex items-center gap-3 text-xs">
+            {liveCount > 0 && (
+              <span className="flex items-center gap-1.5 text-[#F87171]">
+                <Radio size={12} className="live-pulse" /> {liveCount} live
+              </span>
+            )}
+            <span className="flex items-center gap-1.5 text-[#6B6B80]">
+              <Clock size={12} /> {scheduledCount} à venir
+            </span>
+            <span className="flex items-center gap-1.5 text-[#6B6B80]">
+              <CheckCircle2 size={12} /> {finishedCount} terminés
+            </span>
+          </div>
+        </div>
+
+        {stats.todayMatches.length === 0 ? (
+          <div className="glass-card p-8 text-center">
+            <p className="text-[#6B6B80]">Aucun match aujourd&apos;hui</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {categoryOrder.map((cat) => {
+              const matches = matchesByCategory.get(cat);
+              if (!matches || matches.length === 0) return null;
+              const info = CATEGORY_LABELS[cat] ?? CATEGORY_LABELS.other;
+              return (
+                <div key={cat}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-sm">{info.emoji}</span>
+                    <h4 className="text-sm font-semibold text-[#9B9BB0] uppercase tracking-wider">{info.label}</h4>
+                    <div className="flex-1 h-px bg-white/5" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {matches.map((m) => (
+                      <MatchCard key={m.id} match={m} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Pronos récents */}
-      <div className="bg-[#1A1A2E] rounded-xl border border-white/10">
-        <div className="p-5 border-b border-white/10">
-          <h3 className="font-semibold">Pronos récents</h3>
+      <div className="glass-card">
+        <div className="p-5 border-b border-white/[0.06]">
+          <h3 className="font-semibold">Derniers pronos</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/5 text-[#A0A0B0]">
-                <th className="text-left p-4 font-medium">Match</th>
-                <th className="text-left p-4 font-medium">Événement</th>
-                <th className="text-left p-4 font-medium">Type</th>
-                <th className="text-right p-4 font-medium">Confiance</th>
-                <th className="text-right p-4 font-medium">Résultat</th>
+              <tr className="border-b border-white/[0.04] text-[#6B6B80]">
+                <th className="text-left p-4 font-medium text-xs uppercase tracking-wider">Match</th>
+                <th className="text-left p-4 font-medium text-xs uppercase tracking-wider">Prono</th>
+                <th className="text-left p-4 font-medium text-xs uppercase tracking-wider">Type</th>
+                <th className="text-right p-4 font-medium text-xs uppercase tracking-wider">Confiance</th>
+                <th className="text-right p-4 font-medium text-xs uppercase tracking-wider">Résultat</th>
               </tr>
             </thead>
             <tbody>
               {stats.recentPredictions.map((pred: RecentPrediction) => (
-                <tr key={pred.id} className="border-b border-white/5 hover:bg-white/2">
-                  <td className="p-4 text-[#A0A0B0]">
-                    {(pred.matches as MatchRef)?.home_team} vs {(pred.matches as MatchRef)?.away_team}
+                <tr key={pred.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+                  <td className="p-4">
+                    <span className="text-[#9B9BB0]">{(pred.matches as MatchRef)?.home_team}</span>
+                    <span className="text-[#6B6B80] mx-1.5">vs</span>
+                    <span className="text-[#9B9BB0]">{(pred.matches as MatchRef)?.away_team}</span>
                   </td>
                   <td className="p-4 font-medium">{pred.prediction}</td>
-                  <td className="p-4 text-[#A0A0B0]">{pred.prediction_type}</td>
+                  <td className="p-4 text-[#6B6B80]">{pred.prediction_type.replace("_", " ")}</td>
                   <td className="p-4 text-right">
                     <ConfidenceBadge label={pred.confidence_label} value={pred.confidence} />
                   </td>
@@ -130,7 +261,7 @@ export default async function DashboardPage() {
 }
 
 // ----------------------------------------------------------------
-// Types locaux
+// Types
 // ----------------------------------------------------------------
 interface MatchRef { home_team: string; away_team: string; league: string }
 interface RecentPrediction {
@@ -140,30 +271,76 @@ interface RecentPrediction {
   confidence: number;
   confidence_label: string;
   is_correct: boolean | null;
+  is_live: boolean;
   created_at: string;
   matches: MatchRef | null;
 }
 
 // ----------------------------------------------------------------
-// Sub-composants inline
+// Sub-composants
 // ----------------------------------------------------------------
+function MatchCard({ match }: { match: MatchWithPredictions }) {
+  const isLive = match.status === "live";
+  const isFinished = match.status === "finished";
+  const time = new Date(match.match_date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <div className={`glass-card p-4 animate-fade-up ${isLive ? "border-[#F87171]/30" : ""}`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs text-[#6B6B80] truncate">{match.league}</span>
+        {isLive ? (
+          <span className="flex items-center gap-1 text-xs font-medium text-[#F87171]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#F87171] live-pulse" /> LIVE
+          </span>
+        ) : isFinished ? (
+          <span className="text-xs text-[#34D399] font-medium">Terminé</span>
+        ) : (
+          <span className="text-xs text-[#6B6B80]">{time}</span>
+        )}
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium truncate">{match.home_team}</div>
+          <div className="text-sm font-medium truncate text-[#9B9BB0]">{match.away_team}</div>
+        </div>
+        {(isLive || isFinished) && match.home_score !== null ? (
+          <div className="text-right ml-3">
+            <div className={`text-lg font-bold ${isLive ? "text-[#F87171]" : "text-white"}`}>
+              {match.home_score} - {match.away_score}
+            </div>
+          </div>
+        ) : (
+          <div className="text-right ml-3">
+            <div className="text-lg font-bold text-[#6B6B80]">vs</div>
+          </div>
+        )}
+      </div>
+      {match.prediction_count > 0 && (
+        <div className="mt-3 pt-3 border-t border-white/[0.06]">
+          <span className="text-xs text-[#D4AF37]">{match.prediction_count} prono{match.prediction_count > 1 ? "s" : ""}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ConfidenceBadge({ label, value }: { label: string; value: number }) {
   const colors: Record<string, string> = {
     excellence: "text-[#D4AF37] bg-[#D4AF37]/10",
-    high: "text-[#2ED573] bg-[#2ED573]/10",
-    elevated: "text-[#1E90FF] bg-[#1E90FF]/10",
+    high: "text-[#34D399] bg-[#34D399]/10",
+    elevated: "text-[#60A5FA] bg-[#60A5FA]/10",
   };
   return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium ${colors[label] ?? "text-white bg-white/10"}`}>
+    <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${colors[label] ?? "text-white bg-white/10"}`}>
       {(value * 100).toFixed(0)}%
     </span>
   );
 }
 
 function ResultBadge({ isCorrect }: { isCorrect: boolean | null }) {
-  if (isCorrect === null) return <span className="text-[#A0A0B0] text-xs">En attente</span>;
+  if (isCorrect === null) return <span className="text-[#6B6B80] text-xs">En attente</span>;
   return (
-    <span className={`text-xs font-medium ${isCorrect ? "text-[#2ED573]" : "text-[#FF4757]"}`}>
+    <span className={`text-xs font-medium ${isCorrect ? "text-[#34D399]" : "text-[#F87171]"}`}>
       {isCorrect ? "✅ Gagné" : "❌ Perdu"}
     </span>
   );

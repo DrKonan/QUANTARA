@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   Loader2,
+  Zap,
 } from "lucide-react";
 
 const navItems = [
@@ -47,16 +48,16 @@ function NavLink({
           onClick();
         });
       }}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+      className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 ${
         active
-          ? "text-[#D4AF37] bg-[#D4AF37]/10 font-medium"
-          : "text-[#A0A0B0] hover:text-white hover:bg-white/5"
+          ? "text-[#D4AF37] bg-[#D4AF37]/10 font-semibold shadow-[inset_0_0_0_1px_rgba(212,175,55,0.2)]"
+          : "text-[#6B6B80] hover:text-white hover:bg-white/5"
       }`}
     >
       {isPending ? (
         <Loader2 size={18} className="animate-spin text-[#D4AF37]" />
       ) : (
-        <item.icon size={18} />
+        <item.icon size={18} className={active ? "" : "group-hover:text-[#D4AF37] transition-colors"} />
       )}
       {item.label}
       {isPending && (
@@ -74,7 +75,6 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Fermer la sidebar quand on change de page (mobile)
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
@@ -83,35 +83,46 @@ export default function DashboardLayout({
     href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-[var(--bg-primary)]">
       {/* Overlay mobile */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#1A1A2E] border-r border-white/10 flex flex-col
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#0F0F1A] border-r border-white/[0.06] flex flex-col
           transform transition-transform duration-200 ease-out
           lg:relative lg:translate-x-0
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <div className="p-6 border-b border-white/10 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-[#D4AF37]">Quantara</h1>
-            <p className="text-xs text-[#A0A0B0] mt-1">Back-office admin</p>
+        {/* Logo */}
+        <div className="p-6 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#D4AF37] to-[#B8961F] flex items-center justify-center">
+              <Zap size={16} className="text-black" />
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-gold-gradient">Quantara</h1>
+              <p className="text-[10px] text-[#6B6B80] font-medium uppercase tracking-widest">Admin</p>
+            </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden text-[#A0A0B0] hover:text-white"
+            className="lg:hidden text-[#6B6B80] hover:text-white"
           >
             <X size={20} />
           </button>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
+
+        <div className="px-4 mb-2">
+          <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+        </div>
+
+        <nav className="flex-1 px-3 py-2 space-y-0.5">
           {navItems.map((item) => (
             <NavLink
               key={item.href}
@@ -121,22 +132,32 @@ export default function DashboardLayout({
             />
           ))}
         </nav>
-        <div className="p-4 border-t border-white/10">
-          <p className="text-xs text-[#A0A0B0]">v1.0.0 — Admin</p>
+
+        <div className="p-4">
+          <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-4" />
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-[#34D399] live-pulse" />
+            <p className="text-xs text-[#6B6B80]">v1.1 — Pipeline actif</p>
+          </div>
         </div>
       </aside>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar mobile */}
-        <header className="lg:hidden flex items-center gap-3 p-4 border-b border-white/10 bg-[#0D0D0D]">
+        <header className="lg:hidden flex items-center gap-3 p-4 border-b border-white/[0.06] bg-[var(--bg-primary)]">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="text-[#A0A0B0] hover:text-white"
+            className="text-[#6B6B80] hover:text-white transition-colors"
           >
             <Menu size={24} />
           </button>
-          <h1 className="text-lg font-bold text-[#D4AF37]">Quantara</h1>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#D4AF37] to-[#B8961F] flex items-center justify-center">
+              <Zap size={12} className="text-black" />
+            </div>
+            <h1 className="text-lg font-bold text-gold-gradient">Quantara</h1>
+          </div>
         </header>
         <main className="flex-1 overflow-auto">{children}</main>
       </div>

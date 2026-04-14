@@ -16,10 +16,10 @@ export default async function ConfigPage() {
   );
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <div className="mb-6 lg:mb-8">
-        <h2 className="text-xl sm:text-2xl font-bold">Configuration</h2>
-        <p className="text-[#A0A0B0] mt-1 text-sm sm:text-base">Paramètres dynamiques de l&apos;application</p>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+      <div className="mb-8">
+        <h2 className="text-2xl sm:text-3xl font-bold">Configuration</h2>
+        <p className="text-[#6B6B80] mt-1">Paramètres dynamiques de l&apos;application</p>
       </div>
       <ConfigForm configs={configMap} />
     </div>

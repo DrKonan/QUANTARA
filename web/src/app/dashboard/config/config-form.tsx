@@ -44,11 +44,11 @@ export function ConfigForm({ configs }: ConfigFormProps) {
   return (
     <div className="max-w-2xl space-y-4">
       {Object.entries(configs).map(([key, entry]) => (
-        <div key={key} className="bg-[#1A1A2E] rounded-xl border border-white/10 p-5">
+        <div key={key} className="glass-card p-5">
           <div className="mb-3">
             <label className="text-sm font-medium">{CONFIG_LABELS[key] ?? key}</label>
             {entry.description && (
-              <p className="text-xs text-[#A0A0B0] mt-0.5">{entry.description}</p>
+              <p className="text-xs text-[#6B6B80] mt-0.5">{entry.description}</p>
             )}
           </div>
           <div className="flex gap-3">
@@ -56,12 +56,12 @@ export function ConfigForm({ configs }: ConfigFormProps) {
               type="text"
               value={values[key] ?? ""}
               onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
-              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#D4AF37] transition-colors"
+              className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#D4AF37]/50 focus:ring-1 focus:ring-[#D4AF37]/20 transition-all"
             />
             <button
               onClick={() => handleSave(key)}
               disabled={saving === key}
-              className="px-4 py-2 bg-[#D4AF37] text-black text-sm font-medium rounded-lg hover:bg-[#c9a430] disabled:opacity-50 transition-colors"
+              className="px-5 py-2.5 bg-gradient-to-r from-[#D4AF37] to-[#B8961F] text-black text-sm font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 transition-all"
             >
               {saving === key ? "…" : saved === key ? "✓" : "Sauver"}
             </button>
