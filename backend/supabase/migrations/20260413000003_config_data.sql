@@ -37,9 +37,9 @@ insert into public.leagues_config (league_id, league_name, country, tier, sport)
   (2,   'UEFA Champions League','World',        1, 'football'),
   (3,   'UEFA Europa League',   'World',        1, 'football'),
   (1,   'Coupe du Monde',       'World',        1, 'football'),
-  (4,   'Euro',                 'Europe',       1, 'football'),
+  (4,   'Euro Championship',    'Europe',       1, 'football'),
   (6,   'CAN',                  'Africa',       1, 'football'),
-  (233, 'Ligue 1 CI',           'Ivory Coast',  1, 'football')  -- marché cible
+  (233, 'Premier League',        'Egypt',        1, 'football')  -- Egyptian Premier League
 on conflict (league_id) do nothing;
 
 -- ----------------------------------------------------------------

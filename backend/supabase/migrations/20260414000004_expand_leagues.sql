@@ -1,6 +1,6 @@
 -- ============================================================
 -- QUANTARA — Migration 004 : Extension des ligues
--- - Retire la Ligue 1 CI (233)
+-- - Corrige league 233 (Egyptian Premier League, pas CI)
 -- - Ajoute Conference League (C3) + championnats majeurs
 -- - Ajoute colonne 'category' pour le classement par pays/compétition
 -- ============================================================
@@ -12,8 +12,8 @@ ALTER TABLE public.leagues_config
 COMMENT ON COLUMN public.leagues_config.category IS
   'Catégorie de classement : major_international, top5, europe, south_america, rest_of_world';
 
--- 2) Désactive la Ligue 1 Côte d''Ivoire
-UPDATE public.leagues_config SET is_active = false WHERE league_id = 233;
+-- 2) Corrige league 233 : c'est la Premier League Égyptienne, pas la CI
+UPDATE public.leagues_config SET league_name = 'Premier League', country = 'Egypt', is_active = true, category = 'rest_of_world' WHERE league_id = 233;
 
 -- 3) Met à jour les catégories des ligues existantes
 UPDATE public.leagues_config SET category = 'major_international' WHERE league_id IN (1, 2, 3, 4, 6);
@@ -22,8 +22,8 @@ UPDATE public.leagues_config SET category = 'top5' WHERE league_id IN (39, 61, 7
 -- 4) Ajoute les nouvelles ligues
 INSERT INTO public.leagues_config (league_id, league_name, country, tier, sport, category, is_active) VALUES
   -- Compétitions internationales
-  (848, 'UEFA Conference League',     'World',       1, 'football', 'major_international', true),
-  (13,  'Copa Libertadores',          'World',       1, 'football', 'major_international', true),
+  (848, 'UEFA Europa Conference League', 'World',    1, 'football', 'major_international', true),
+  (13,  'CONMEBOL Libertadores',      'World',       1, 'football', 'major_international', true),
 
   -- Europe : championnats importants (Tier 1)
   (94,  'Primeira Liga',              'Portugal',    1, 'football', 'europe', true),
