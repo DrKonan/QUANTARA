@@ -14,11 +14,13 @@ import {
   X,
   Loader2,
   Zap,
+  History,
 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Vue d'ensemble", icon: LayoutDashboard },
   { href: "/dashboard/predictions", label: "Pronos", icon: ListChecks },
+  { href: "/dashboard/history", label: "Historique", icon: History },
   { href: "/dashboard/users", label: "Utilisateurs", icon: Users },
   { href: "/dashboard/revenue", label: "Revenus", icon: CreditCard },
   { href: "/dashboard/stats", label: "Performance", icon: TrendingUp },
