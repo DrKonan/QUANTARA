@@ -68,15 +68,14 @@ Deno.serve(async (req: Request) => {
     const dayStart = `${targetDate}T00:00:00+00:00`;
     const dayEnd = `${targetDate}T23:59:59+00:00`;
 
-    // --- Récupère les matchs éligibles du jour ---
-    // Éligible = leagues_config.is_active = true (déjà filtré via tier != null)
-    // Exclut les matchs terminés et annulés
+    // --- Récupère TOUS les matchs du jour (y compris terminés) ---
+    // On les regroupe ensuite par statut pour le client
     const { data: matches, error: matchError } = await supabase
       .from("matches")
       .select("id, external_id, home_team, away_team, home_team_id, away_team_id, league, league_id, tier, match_date, status, home_score, away_score, lineups_ready")
       .gte("match_date", dayStart)
       .lte("match_date", dayEnd)
-      .not("status", "in", '("finished","cancelled")')
+      .not("status", "eq", "cancelled")
       .not("tier", "is", null)
       .order("match_date", { ascending: true });
 
@@ -121,7 +120,13 @@ Deno.serve(async (req: Request) => {
       let prediction_message: string;
       let estimated_wait_minutes: number | null = null;
 
-      if (preds.length > 0) {
+      if (match.status === "finished") {
+        // Match terminé — on montre les résultats
+        prediction_status = "finished";
+        prediction_message = preds.length > 0
+          ? `Match terminé — ${preds.length} prédiction(s) à vérifier`
+          : "Match terminé";
+      } else if (preds.length > 0) {
         prediction_status = "available";
         prediction_message = `${preds.length} prédiction(s) disponible(s)`;
       } else if (match.status === "live") {
@@ -178,9 +183,19 @@ Deno.serve(async (req: Request) => {
       };
     });
 
+    // Regroupe par statut pour faciliter l'affichage côté client
+    const finished = result.filter((m: { status: string }) => m.status === "finished");
+    const live = result.filter((m: { status: string }) => m.status === "live");
+    const upcoming = result.filter((m: { status: string }) => m.status === "scheduled");
+
     return jsonResponse({
       date: targetDate,
       count: result.length,
+      summary: {
+        finished: finished.length,
+        live: live.length,
+        upcoming: upcoming.length,
+      },
       matches: result,
     });
   } catch (err) {

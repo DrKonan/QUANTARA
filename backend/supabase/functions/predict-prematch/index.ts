@@ -161,6 +161,23 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Match not found" }, 404);
     }
 
+    // Refuse de prédire sur un match déjà terminé, annulé, ou en cours
+    if (match.status === "finished") {
+      return jsonResponse({ error: "Match already finished", match_id }, 400);
+    }
+    if (match.status === "cancelled") {
+      return jsonResponse({ error: "Match cancelled", match_id }, 400);
+    }
+    if (match.status === "live") {
+      return jsonResponse({ error: "Match already in progress — use live predictions", match_id }, 400);
+    }
+
+    // Refuse de prédire si le match est dans le passé (safety net)
+    const kickoff = new Date(match.match_date);
+    if (kickoff.getTime() < Date.now()) {
+      return jsonResponse({ error: "Match kickoff is in the past", match_id, match_date: match.match_date }, 400);
+    }
+
     console.log(`[predict-prematch] Processing match ${match.home_team} vs ${match.away_team}`);
 
     // 2. Vérifie qu'on n'a pas déjà publié des pronos pré-match pour ce match
