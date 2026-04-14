@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/services/notification_service.dart';
 import '../../profile/domain/user_profile_model.dart';
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
@@ -54,6 +55,8 @@ class AuthService {
       password: password,
       data: {'username': username},
     );
+    // Register push token after successful signup
+    NotificationService().registerToken();
     return response;
   }
 
@@ -65,6 +68,8 @@ class AuthService {
       email: email,
       password: password,
     );
+    // Register push token after successful login
+    NotificationService().registerToken();
     return response;
   }
 

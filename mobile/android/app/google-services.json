@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "828179538034",
+    "project_id": "quantara-app-45ced",
+    "storage_bucket": "quantara-app-45ced.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:828179538034:android:9b2bf8045a8e90bf6562eb",
+        "android_client_info": {
+          "package_name": "com.quantara.quantara"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXkzPpGXj6oyb1A2ELH9Gx0UeGJW9FzOY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

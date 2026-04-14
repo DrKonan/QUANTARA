@@ -1,8 +1,11 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/auth/domain/auth_provider.dart';
 import '../../features/predictions/domain/match_model.dart';
 import '../../features/predictions/domain/prediction_model.dart';
+import '../../features/predictions/domain/today_match_model.dart';
 
 final supabaseRepoProvider = Provider<SupabaseRepository>((ref) {
   final client = ref.watch(supabaseClientProvider);
@@ -13,6 +16,167 @@ class SupabaseRepository {
   final SupabaseClient _client;
 
   SupabaseRepository(this._client);
+
+  // Cached league_id → {country, category} mapping from leagues_config
+  Map<int, Map<String, String>>? _leagueMetaCache;
+
+  Future<Map<int, Map<String, String>>> _getLeagueMetaMap() async {
+    if (_leagueMetaCache != null) return _leagueMetaCache!;
+    try {
+      final data = await _client
+          .from('leagues_config')
+          .select('league_id, country, category');
+      final map = <int, Map<String, String>>{};
+      for (final row in (data as List)) {
+        final leagueId = row['league_id'] as int;
+        map[leagueId] = {
+          'country': row['country'] as String? ?? '',
+          'category': row['category'] as String? ?? 'other',
+        };
+      }
+      _leagueMetaCache = map;
+      debugPrint('[Quantara] Loaded ${map.length} league configs');
+      return map;
+    } catch (e) {
+      debugPrint('[Quantara] Failed to load leagues_config: $e');
+      return {};
+    }
+  }
+
+  // ── Today Matches (Edge Function) ──
+
+  Future<List<TodayMatch>> fetchTodayEligibleMatches({String? date, bool useEdgeFunction = true}) async {
+    if (!useEdgeFunction) {
+      debugPrint('[Quantara] Skipping Edge Function (no auth), using DB fallback');
+      return _fetchTodayMatchesFallback(date);
+    }
+
+    try {
+      final response = await _client.functions.invoke(
+        'get-today-matches',
+        queryParameters: date != null ? {'date': date} : {},
+      );
+
+      if (response.status != 200) {
+        debugPrint('[Quantara] Edge function status: ${response.status}');
+        debugPrint('[Quantara] Edge function body: ${response.data}');
+        throw Exception('Edge function error: ${response.status}');
+      }
+
+      final body = response.data is String
+          ? jsonDecode(response.data as String) as Map<String, dynamic>
+          : response.data as Map<String, dynamic>;
+
+      final matchesList = body['matches'] as List<dynamic>? ?? [];
+      debugPrint('[Quantara] Edge function returned ${matchesList.length} matches');
+      return matchesList
+          .map((m) => TodayMatch.fromJson(m as Map<String, dynamic>))
+          .toList();
+    } catch (e, st) {
+      debugPrint('[Quantara] Edge function failed: $e');
+      debugPrint('[Quantara] Stack: $st');
+      // Fallback: query DB directly if Edge Function unavailable
+      try {
+        final result = await _fetchTodayMatchesFallback(date);
+        debugPrint('[Quantara] Fallback succeeded: ${result.length} matches');
+        return result;
+      } catch (e2) {
+        debugPrint('[Quantara] Fallback also failed: $e2');
+        rethrow;
+      }
+    }
+  }
+
+  Future<List<TodayMatch>> _fetchTodayMatchesFallback(String? date) async {
+    final now = DateTime.now().toUtc();
+    final targetDate = date ?? '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final dayStart = '${targetDate}T00:00:00+00:00';
+    final dayEnd = '${targetDate}T23:59:59+00:00';
+
+    final metaMap = await _getLeagueMetaMap();
+
+    // Fetch ALL matches (including finished, excluding cancelled)
+    final data = await _client
+        .from('matches')
+        .select()
+        .gte('match_date', dayStart)
+        .lte('match_date', dayEnd)
+        .not('status', 'eq', 'cancelled')
+        .order('match_date', ascending: true);
+
+    final matches = (data as List).map((json) => _parseMatch(json, metaMap: metaMap)).toList();
+    final nowMs = now.millisecondsSinceEpoch;
+
+    // Fetch predictions for finished matches in one query
+    final finishedIds = matches
+        .where((m) => m.status == MatchStatus.finished)
+        .map((m) => int.tryParse(m.id))
+        .where((id) => id != null)
+        .cast<int>()
+        .toList();
+
+    final predsByMatch = <int, List<TodayPrediction>>{};
+    if (finishedIds.isNotEmpty) {
+      try {
+        final predData = await _client
+            .from('predictions')
+            .select()
+            .inFilter('match_id', finishedIds)
+            .eq('is_published', true);
+        for (final p in (predData as List)) {
+          final matchId = p['match_id'] as int;
+          predsByMatch.putIfAbsent(matchId, () => []);
+          predsByMatch[matchId]!.add(TodayPrediction.fromPredRow(p));
+        }
+      } catch (e) {
+        debugPrint('[Quantara] Failed to fetch predictions for finished: $e');
+      }
+    }
+
+    return matches.map((match) {
+      final msUntil = match.dateTime.millisecondsSinceEpoch - nowMs;
+      final minUntil = (msUntil / 60000).round();
+      final leagueId = int.tryParse(match.league.id);
+      final meta = leagueId != null ? metaMap[leagueId] : null;
+      final category = meta?['category'] ?? 'other';
+
+      String status;
+      String message;
+      int? wait;
+      List<TodayPrediction> preds = [];
+
+      if (match.status == MatchStatus.finished) {
+        final matchPreds = predsByMatch[int.tryParse(match.id)] ?? [];
+        preds = matchPreds;
+        status = 'finished';
+        message = matchPreds.isNotEmpty
+            ? "Match termin\u00e9 \u2014 ${matchPreds.length} pr\u00e9diction(s) \u00e0 v\u00e9rifier"
+            : "Match termin\u00e9";
+      } else if (match.status == MatchStatus.live) {
+        status = 'pending_live';
+        message = "Analyse en cours \u2014 pr\u00e9dictions live bient\u00f4t";
+        wait = 5;
+      } else if (minUntil <= 90) {
+        status = 'waiting_lineups';
+        message = "En attente des compositions officielles";
+        wait = (minUntil - 60).clamp(0, 90);
+      } else {
+        status = 'too_early';
+        message = "Compositions ~1h avant le match";
+        wait = (minUntil - 60).clamp(0, 999);
+      }
+
+      return TodayMatch(
+        match: match,
+        predictionStatus: status,
+        predictionMessage: message,
+        estimatedWaitMinutes: wait,
+        minutesUntilKickoff: minUntil,
+        predictions: preds,
+        category: category,
+      );
+    }).toList();
+  }
 
   // ── Matches ──
 
@@ -122,6 +286,8 @@ class SupabaseRepository {
         .from('prediction_stats')
         .select()
         .eq('period', 'all_time')
+        .isFilter('league', null)
+        .isFilter('prediction_type', null)
         .maybeSingle();
 
     return data;
@@ -135,6 +301,8 @@ class SupabaseRepository {
         .from('prediction_stats')
         .select()
         .eq('period', period)
+        .isFilter('league', null)
+        .isFilter('prediction_type', null)
         .maybeSingle();
 
     return data;
@@ -166,10 +334,14 @@ class SupabaseRepository {
 
   // ── Parsers ──
 
-  Match _parseMatch(Map<String, dynamic> json) {
+  Match _parseMatch(Map<String, dynamic> json, {Map<int, Map<String, String>>? metaMap}) {
+    final leagueId = int.tryParse(json['league_id']?.toString() ?? '');
+    final meta = metaMap != null && leagueId != null ? metaMap[leagueId] : null;
+    final country = meta?['country'] ?? '';
+
     return Match(
       id: json['id'].toString(),
-      externalId: json['external_id'] as int?,
+      externalId: int.tryParse(json['external_id']?.toString() ?? ''),
       homeTeam: Team(
         id: json['home_team_id']?.toString() ?? '',
         name: json['home_team'] as String,
@@ -179,19 +351,25 @@ class SupabaseRepository {
         name: json['away_team'] as String,
       ),
       league: League(
-        id: json['league_id']?.toString() ?? '',
+        id: leagueId?.toString() ?? '',
         name: json['league'] as String? ?? 'Unknown',
-        country: '',
+        country: country,
       ),
       dateTime: DateTime.parse(json['match_date'] as String),
       status: _parseStatus(json['status'] as String),
       score: (json['home_score'] != null && json['away_score'] != null)
           ? MatchScore(
-              home: json['home_score'] as int,
-              away: json['away_score'] as int,
+              home: (json['home_score'] is int)
+                  ? json['home_score'] as int
+                  : int.tryParse(json['home_score'].toString()) ?? 0,
+              away: (json['away_score'] is int)
+                  ? json['away_score'] as int
+                  : int.tryParse(json['away_score'].toString()) ?? 0,
             )
           : null,
-      tier: json['tier'] as int? ?? 2,
+      tier: (json['tier'] is int)
+          ? json['tier'] as int
+          : int.tryParse(json['tier']?.toString() ?? '') ?? 2,
     );
   }
 

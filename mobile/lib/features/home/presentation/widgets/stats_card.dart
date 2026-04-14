@@ -12,10 +12,13 @@ class StatsCard extends ConsumerWidget {
 
     return statsAsync.when(
       data: (stats) {
-        final total = (stats?['total_predictions'] as int?) ?? 0;
-        final won = (stats?['won'] as int?) ?? 0;
-        final lost = (stats?['lost'] as int?) ?? 0;
-        final rate = total > 0 ? won / total : 0.0;
+        final total = (stats?['total'] as int?) ?? 0;
+        final won = (stats?['correct'] as int?) ?? 0;
+        final lost = (stats?['incorrect'] as int?) ?? 0;
+        final dbWinRate = stats?['win_rate'];
+        final rate = dbWinRate != null
+            ? (dbWinRate as num).toDouble()
+            : (total > 0 ? won / total : 0.0);
         final ratePercent = (rate * 100).round();
 
         return _buildCard(ratePercent, total, won, lost, rate);
