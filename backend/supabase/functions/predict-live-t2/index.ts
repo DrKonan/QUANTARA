@@ -5,7 +5,7 @@
 // Rôle : Une seule analyse live par match Tier 2 — publie
 //        uniquement si ≥ 75% de confiance.
 // ============================================================
-import { apifootball } from "../_shared/api-football.ts";
+import { apifootball, apifootballSequential } from "../_shared/api-football.ts";
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse, confidenceLabel } from "../_shared/helpers.ts";
 import { computeLiveScores, LiveStats } from "../_shared/live-engine.ts";
@@ -59,9 +59,9 @@ Deno.serve(async (_req: Request) => {
 
     for (const match of toAnalyze) {
       try {
-        const [liveData, fixtureData] = await Promise.all([
-          apifootball("/fixtures/statistics", { fixture: match.external_id }) as Promise<ApiLiveStat[]>,
-          apifootball("/fixtures", { id: match.external_id }) as Promise<Array<{
+        const [liveData, fixtureData] = await apifootballSequential([
+          () => apifootball("/fixtures/statistics", { fixture: match.external_id }) as Promise<ApiLiveStat[]>,
+          () => apifootball("/fixtures", { id: match.external_id }) as Promise<Array<{
             fixture: { status: { elapsed: number } };
             goals: { home: number | null; away: number | null };
           }>>,

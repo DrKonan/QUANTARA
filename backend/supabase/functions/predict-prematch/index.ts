@@ -6,7 +6,7 @@
 // Rôle : Collecte toutes les données, calcule les scores de
 //        confiance et publie les pronos pré-match en base.
 // ============================================================
-import { apifootball } from "../_shared/api-football.ts";
+import { apifootball, apifootballSequential } from "../_shared/api-football.ts";
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse, confidenceLabel } from "../_shared/helpers.ts";
 import {
@@ -179,23 +179,23 @@ Deno.serve(async (req: Request) => {
 
     const currentYear = new Date().getFullYear();
 
-    // 3. Récupère les stats des équipes et le H2H en parallèle
-    const [homeStatsRaw, awayStatsRaw, h2hRaw, injuriesRaw] = await Promise.all([
-      apifootball("/teams/statistics", {
+    // 3. Récupère les stats des équipes et le H2H séquentiellement (rate limit)
+    const [homeStatsRaw, awayStatsRaw, h2hRaw, injuriesRaw] = await apifootballSequential([
+      () => apifootball("/teams/statistics", {
         team: match.home_team_id,
         league: match.league_id,
         season: match.season ?? currentYear,
       }),
-      apifootball("/teams/statistics", {
+      () => apifootball("/teams/statistics", {
         team: match.away_team_id,
         league: match.league_id,
         season: match.season ?? currentYear,
       }),
-      apifootball("/fixtures/headtohead", {
+      () => apifootball("/fixtures/headtohead", {
         h2h: `${match.home_team_id}-${match.away_team_id}`,
         last: 10,
       }),
-      apifootball("/injuries", {
+      () => apifootball("/injuries", {
         fixture: match.external_id,
       }),
     ]);
