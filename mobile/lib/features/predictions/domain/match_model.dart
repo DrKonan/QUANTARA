@@ -31,16 +31,19 @@ class MatchScore {
 
 class Match {
   final String id;
+  final int? externalId;
   final Team homeTeam;
   final Team awayTeam;
   final League league;
   final DateTime dateTime;
   final MatchStatus status;
   final MatchScore? score;
-  final int? minute; // current minute if live
+  final int? minute;
+  final int tier;
 
   const Match({
     required this.id,
+    this.externalId,
     required this.homeTeam,
     required this.awayTeam,
     required this.league,
@@ -48,6 +51,7 @@ class Match {
     required this.status,
     this.score,
     this.minute,
+    this.tier = 2,
   });
 
   String get statusLabel {

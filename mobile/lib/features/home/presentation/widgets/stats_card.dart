@@ -1,15 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../predictions/domain/mock_data.dart';
+import '../../../predictions/domain/predictions_provider.dart';
 
-class StatsCard extends StatelessWidget {
+class StatsCard extends ConsumerWidget {
   const StatsCard({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final stats = mockStats;
-    final ratePercent = (stats.successRate * 100).round();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statsAsync = ref.watch(monthlyStatsProvider);
 
+    return statsAsync.when(
+      data: (stats) {
+        final total = (stats?['total_predictions'] as int?) ?? 0;
+        final won = (stats?['won'] as int?) ?? 0;
+        final lost = (stats?['lost'] as int?) ?? 0;
+        final rate = total > 0 ? won / total : 0.0;
+        final ratePercent = (rate * 100).round();
+
+        return _buildCard(ratePercent, total, won, lost, rate);
+      },
+      loading: () => _buildCard(0, 0, 0, 0, 0.0),
+      error: (e, st) => _buildCard(0, 0, 0, 0, 0.0),
+    );
+  }
+
+  Widget _buildCard(int ratePercent, int total, int won, int lost, double rate) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -60,19 +76,18 @@ class StatsCard extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              _buildStatItem("Pronos", "${stats.totalPredictions}", AppColors.textPrimary),
+              _buildStatItem("Pronos", "$total", AppColors.textPrimary),
               const SizedBox(width: 24),
-              _buildStatItem("Gagnés", "${stats.won}", AppColors.success),
+              _buildStatItem("Gagnés", "$won", AppColors.success),
               const SizedBox(width: 24),
-              _buildStatItem("Perdus", "${stats.lost}", AppColors.error),
+              _buildStatItem("Perdus", "$lost", AppColors.error),
             ],
           ),
           const SizedBox(height: 12),
-          // Progress bar
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: stats.successRate,
+              value: rate,
               backgroundColor: AppColors.error.withValues(alpha: 0.3),
               valueColor: const AlwaysStoppedAnimation<Color>(AppColors.success),
               minHeight: 6,
