@@ -100,7 +100,25 @@ Deno.serve(async (_req: Request) => {
           awayRedCards: extractStat(awayStats, "Red Cards"),
         };
 
-        const scoringResults = computeLiveScores(liveStats, { home: 1.2, away: 1.0 });
+        // Récupère les xG depuis les prédictions prematch (comme dans t1)
+        let prematchXG = { home: 1.2, away: 1.0 };
+        const { data: prematchPreds } = await supabase
+          .from("predictions")
+          .select("prediction_type, score_breakdown")
+          .eq("match_id", match.id)
+          .eq("is_live", false)
+          .in("prediction_type", ["over_under", "btts"]);
+        if (prematchPreds && prematchPreds.length > 0) {
+          for (const p of prematchPreds) {
+            const bd = p.score_breakdown as Record<string, number> | null;
+            if (bd?.home_xg && bd?.away_xg) {
+              prematchXG = { home: bd.home_xg, away: bd.away_xg };
+              break;
+            }
+          }
+        }
+
+        const scoringResults = computeLiveScores(liveStats, prematchXG);
 
         for (const result of scoringResults) {
           const analysisText = await generateAnalysis({

@@ -81,6 +81,19 @@ Deno.serve(async (req: Request) => {
 
     if (matchError) throw matchError;
 
+    // --- Récupère les catégories/pays depuis leagues_config ---
+    const leagueIds = [...new Set((matches ?? []).map((m: MatchRow) => m.league_id))];
+    let leagueMetaMap = new Map<number, { country: string; category: string }>();
+    if (leagueIds.length > 0) {
+      const { data: leagueMeta } = await supabase
+        .from("leagues_config")
+        .select("league_id, country, category")
+        .in("league_id", leagueIds);
+      for (const lm of (leagueMeta ?? []) as { league_id: number; country: string; category: string }[]) {
+        leagueMetaMap.set(lm.league_id, { country: lm.country, category: lm.category });
+      }
+    }
+
     // --- Récupère les prédictions existantes pour ces matchs ---
     const matchIds = (matches ?? []).map((m: MatchRow) => m.id);
     let predictionsMap = new Map<number, PredictionRow[]>();
@@ -164,12 +177,17 @@ Deno.serve(async (req: Request) => {
         analysis_text: (!p.is_premium || isPremium) ? p.analysis_text : null,
       }));
 
+      const meta = leagueMetaMap.get(match.league_id) ?? { country: "Unknown", category: "other" };
+
       return {
         id: match.id,
         external_id: match.external_id,
         home_team: match.home_team,
         away_team: match.away_team,
         league: match.league,
+        league_id: match.league_id,
+        country: meta.country,
+        category: meta.category,
         tier: match.tier,
         match_date: match.match_date,
         status: match.status,
@@ -181,6 +199,21 @@ Deno.serve(async (req: Request) => {
         estimated_wait_minutes,
         predictions: visiblePredictions,
       };
+    });
+
+    // Tri par catégorie (top5 et international d'abord) puis par heure
+    const categoryOrder: Record<string, number> = {
+      major_international: 0,
+      top5: 1,
+      europe: 2,
+      south_america: 3,
+      rest_of_world: 4,
+      other: 5,
+    };
+    result.sort((a: { category: string; match_date: string }, b: { category: string; match_date: string }) => {
+      const catDiff = (categoryOrder[a.category] ?? 5) - (categoryOrder[b.category] ?? 5);
+      if (catDiff !== 0) return catDiff;
+      return a.match_date.localeCompare(b.match_date);
     });
 
     // Regroupe par statut pour faciliter l'affichage côté client

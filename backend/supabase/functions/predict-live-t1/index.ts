@@ -101,8 +101,27 @@ Deno.serve(async (_req: Request) => {
           awayScore,
         );
 
-        // XG pré-match estimés (valeurs par défaut si pas disponibles)
-        const prematchXG = { home: 1.4, away: 1.1 };
+        // XG pré-match : cherche les prédictions pré-match pour estimer les xG
+        const { data: prematchPreds } = await supabase
+          .from("predictions")
+          .select("prediction, confidence, prediction_type, score_breakdown")
+          .eq("match_id", match.id)
+          .eq("is_live", false)
+          .in("prediction_type", ["over_under", "result"]);
+
+        // Estime xG depuis les predictions pré-match ou utilise les moyennes par défaut
+        let homeXG = 1.3, awayXG = 1.1;
+        if (prematchPreds && prematchPreds.length > 0) {
+          const overPred = prematchPreds.find((p: { prediction: string }) => p.prediction === "over_2.5");
+          if (overPred && overPred.confidence > 0.6) {
+            homeXG = 1.5; awayXG = 1.3;
+          }
+          const underPred = prematchPreds.find((p: { prediction: string }) => p.prediction === "under_2.5");
+          if (underPred && underPred.confidence > 0.6) {
+            homeXG = 0.9; awayXG = 0.8;
+          }
+        }
+        const prematchXG = { home: homeXG, away: awayXG };
 
         const scoringResults = computeLiveScores(liveStats, prematchXG);
 

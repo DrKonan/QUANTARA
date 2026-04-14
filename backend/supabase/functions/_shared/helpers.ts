@@ -19,7 +19,16 @@ export function todayUTC(): string {
 }
 
 /** Détermine si une ligue est Tier 1 à partir de son ID */
-const TIER1_LEAGUE_IDS = new Set([2, 3, 4, 6, 39, 61, 78, 135, 140, 233]);
+const TIER1_LEAGUE_IDS = new Set([
+  // Internationales
+  1, 2, 3, 4, 6, 848, 13,
+  // Top 5
+  39, 61, 78, 135, 140,
+  // Europe
+  94, 88, 144, 203,
+  // Amérique du Sud
+  71,
+]);
 
 export function getLeagueTier(leagueId: number): 1 | 2 {
   return TIER1_LEAGUE_IDS.has(leagueId) ? 1 : 2;
