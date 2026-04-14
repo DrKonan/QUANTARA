@@ -3,14 +3,14 @@
 // Déclencheur : appelée par fetch-lineups dès qu'un match a
 //               ses compositions officielles.
 // Body attendu : { match_id: number }
-// Rôle : Collecte H2H + blessures (free-plan compatible),
+// Rôle : Collecte stats équipes + H2H + blessures (plan Ultra),
 //        calcule les scores de confiance, publie les pronos.
 //
-// Stratégie Free Plan :
-//   - /fixtures/headtohead (sans last) → retourne ~30 duels → stats des 2 équipes
+// Stratégie Ultra Plan :
+//   - /teams/statistics?team=&season=&league= → stats complètes
+//   - /fixtures/headtohead?h2h=&last=10 → 10 derniers duels
 //   - /injuries?fixture= → blessures du match
-//   - PAS de /teams/statistics (bloqué season 2025+)
-//   - 2 appels API au lieu de 4
+//   - 4 appels API par match
 // ============================================================
 import { apifootball, apifootballSequential } from "../_shared/api-football.ts";
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
@@ -23,7 +23,7 @@ import {
 import { generateAnalysis } from "../_shared/openai.ts";
 
 // ----------------------------------------------------------------
-// Types H2H
+// Types API
 // ----------------------------------------------------------------
 interface ApiH2HFixture {
   teams: {
@@ -33,16 +33,29 @@ interface ApiH2HFixture {
   goals: { home: number | null; away: number | null };
 }
 
+interface ApiTeamStats {
+  form: string | null;  // ex: "WWDLW"
+  fixtures: {
+    wins:  { home: number; away: number; total: number };
+    draws: { home: number; away: number; total: number };
+    loses: { home: number; away: number; total: number };
+  };
+  goals: {
+    for:     { total: { home: number; away: number }; average: { home: string; away: string } };
+    against: { total: { home: number; away: number }; average: { home: string; away: string } };
+  };
+}
+
 // ----------------------------------------------------------------
-// Dérive les TeamStats et le MatchContext depuis le H2H
+// Parse les stats équipe depuis /teams/statistics
 // ----------------------------------------------------------------
-function deriveStatsFromH2H(
-  h2hFixtures: ApiH2HFixture[],
+function parseTeamStats(
+  raw: ApiTeamStats | null,
   teamId: number,
   teamName: string,
   eloRating: number,
 ): TeamStats {
-  if (!h2hFixtures || h2hFixtures.length === 0) {
+  if (!raw) {
     return {
       teamId, teamName, elo: eloRating,
       recentForm: Array(5).fill(0.5),
@@ -52,65 +65,35 @@ function deriveStatsFromH2H(
     };
   }
 
-  // Calcule les stats de l'équipe à partir de ses matchs dans le H2H
-  let wins = 0, draws = 0, played = 0;
-  let goalsFor = 0, goalsAgainst = 0;
-  let homeGames = 0, homeWins = 0, homeGoalsFor = 0, homeGoalsAgainst = 0;
-  let awayGames = 0, awayWins = 0, awayGoalsFor = 0, awayGoalsAgainst = 0;
+  // Form : "WWDLW" → [1, 1, 0.5, 0, 1]
   const recentForm: number[] = [];
-
-  const recent = h2hFixtures.slice(0, 20); // 20 derniers duels
-
-  for (const f of recent) {
-    const hGoals = f.goals.home ?? 0;
-    const aGoals = f.goals.away ?? 0;
-    const isHome = f.teams.home.id === teamId;
-
-    const teamGoals = isHome ? hGoals : aGoals;
-    const oppGoals = isHome ? aGoals : hGoals;
-
-    played++;
-    goalsFor += teamGoals;
-    goalsAgainst += oppGoals;
-
-    const won = teamGoals > oppGoals;
-    const drew = teamGoals === oppGoals;
-    if (won) wins++;
-    if (drew) draws++;
-
-    if (isHome) {
-      homeGames++;
-      if (won) homeWins++;
-      homeGoalsFor += teamGoals;
-      homeGoalsAgainst += oppGoals;
-    } else {
-      awayGames++;
-      if (won) awayWins++;
-      awayGoalsFor += teamGoals;
-      awayGoalsAgainst += oppGoals;
-    }
-
-    if (recentForm.length < 5) {
-      recentForm.push(won ? 1 : drew ? 0.5 : 0);
+  if (raw.form) {
+    for (const ch of raw.form.slice(-5)) {
+      recentForm.push(ch === "W" ? 1 : ch === "D" ? 0.5 : 0);
     }
   }
-
   while (recentForm.length < 5) recentForm.push(0.5);
+
+  const homeGames = raw.fixtures.wins.home + raw.fixtures.draws.home + raw.fixtures.loses.home;
+  const awayGames = raw.fixtures.wins.away + raw.fixtures.draws.away + raw.fixtures.loses.away;
 
   return {
     teamId,
     teamName,
     elo: eloRating,
     recentForm,
-    homeWinRate: homeGames > 0 ? homeWins / homeGames : 0.45,
-    awayWinRate: awayGames > 0 ? awayWins / awayGames : 0.35,
-    homeGoalsScored: homeGames > 0 ? homeGoalsFor / homeGames : 1.3,
-    awayGoalsScored: awayGames > 0 ? awayGoalsFor / awayGames : 1.0,
-    homeGoalsConceded: homeGames > 0 ? homeGoalsAgainst / homeGames : 1.2,
-    awayGoalsConceded: awayGames > 0 ? awayGoalsAgainst / awayGames : 1.3,
+    homeWinRate: homeGames > 0 ? raw.fixtures.wins.home / homeGames : 0.45,
+    awayWinRate: awayGames > 0 ? raw.fixtures.wins.away / awayGames : 0.35,
+    homeGoalsScored: parseFloat(raw.goals.for.average.home) || 1.3,
+    awayGoalsScored: parseFloat(raw.goals.for.average.away) || 1.0,
+    homeGoalsConceded: parseFloat(raw.goals.against.average.home) || 1.2,
+    awayGoalsConceded: parseFloat(raw.goals.against.average.away) || 1.3,
   };
 }
 
+// ----------------------------------------------------------------
+// Parse le contexte H2H
+// ----------------------------------------------------------------
 function parseH2HContext(
   h2hFixtures: ApiH2HFixture[],
   homeTeamId: number,
@@ -191,11 +174,22 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ message: "Predictions already exist for this match", match_id });
     }
 
-    // 3. Récupère H2H + blessures (2 appels API — compatible Free plan)
-    //    PAS de /teams/statistics (bloqué season 2025+ en Free)
-    const [h2hRaw, injuriesRaw] = await apifootballSequential([
+    // 3. Récupère les données depuis l'API (4 appels — plan Ultra)
+    //    /teams/statistics × 2 + H2H (last=10) + injuries
+    const [homeStatsRaw, awayStatsRaw, h2hRaw, injuriesRaw] = await apifootballSequential([
+      () => apifootball("/teams/statistics", {
+        team: match.home_team_id,
+        season: match.season,
+        league: match.league_id,
+      }),
+      () => apifootball("/teams/statistics", {
+        team: match.away_team_id,
+        season: match.season,
+        league: match.league_id,
+      }),
       () => apifootball("/fixtures/headtohead", {
         h2h: `${match.home_team_id}-${match.away_team_id}`,
+        last: 10,
       }),
       () => apifootball("/injuries", {
         fixture: match.external_id,
@@ -203,6 +197,10 @@ Deno.serve(async (req: Request) => {
     ]);
 
     const h2hFixtures = (h2hRaw ?? []) as ApiH2HFixture[];
+
+    // /teams/statistics retourne un objet (pas un tableau)
+    const homeTeamStatsApi = homeStatsRaw as ApiTeamStats | null;
+    const awayTeamStatsApi = awayStatsRaw as ApiTeamStats | null;
 
     // 4. Récupère les ELO depuis la base (ou utilise 1500 par défaut)
     const { data: eloRows } = await supabase
@@ -217,9 +215,9 @@ Deno.serve(async (req: Request) => {
     // 5. Compte les blessures
     const keyInjuries = Array.isArray(injuriesRaw) ? (injuriesRaw as unknown[]).length : 0;
 
-    // 6. Dérive les stats des équipes depuis le H2H (pas de /teams/statistics)
-    const homeStats = deriveStatsFromH2H(h2hFixtures, match.home_team_id, match.home_team, homeElo);
-    const awayStats = deriveStatsFromH2H(h2hFixtures, match.away_team_id, match.away_team, awayElo);
+    // 6. Parse les stats d'équipe depuis /teams/statistics (plan Ultra)
+    const homeStats = parseTeamStats(homeTeamStatsApi, match.home_team_id, match.home_team, homeElo);
+    const awayStats = parseTeamStats(awayTeamStatsApi, match.away_team_id, match.away_team, awayElo);
     const matchCtx = parseH2HContext(h2hFixtures, match.home_team_id, false, keyInjuries);
 
     // 7. Lance le moteur de scoring

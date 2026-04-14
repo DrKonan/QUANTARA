@@ -1,11 +1,10 @@
 // ============================================================
 // QUANTARA — Shared : client API-Football
-// Rate-limité : max 1 requête toutes les 2.5s (~24 req/min)
-// pour rester sous la limite du plan gratuit (30 req/min).
+// Rate-limité : pour rester safe sur le plan Ultra (75k/jour)
 // ============================================================
 
 const BASE_URL = "https://v3.football.api-sports.io";
-const MIN_INTERVAL_MS = 2500; // 2.5 secondes entre chaque appel
+const MIN_INTERVAL_MS = 500; // 0.5s entre chaque appel (Ultra = 75k/jour)
 let lastCallTime = 0;
 
 function sleep(ms: number): Promise<void> {
