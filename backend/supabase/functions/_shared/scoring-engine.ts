@@ -127,7 +127,7 @@ export function computePrematchScores(
   ctx: MatchContext,
   isHome: boolean,  // true = calcul pour la victoire domicile
 ): ScoringResult[] {
-  const PUBLISH_THRESHOLD = 0.75;
+  const PUBLISH_THRESHOLD = 0.50;
   const results: ScoringResult[] = [];
 
   const homeFormScore = formScore(home.recentForm);
@@ -255,6 +255,13 @@ export function computePrematchScores(
       score_breakdown: { poisson_no_btts: 1 - bttsProb, h2h_rate: 1 - h2hBttsRate },
     });
   }
+
+  // Debug : log tous les scores calculés (même ceux sous le seuil)
+  console.log(`[scoring-engine] homeXG=${homeXG.toFixed(2)} awayXG=${awayXG.toFixed(2)}`);
+  console.log(`[scoring-engine] homeWinComposite=${homeWinComposite.toFixed(3)} awayWinComposite=${awayWinComposite.toFixed(3)}`);
+  console.log(`[scoring-engine] over25=${over25Score.toFixed(3)} under25=${under25Score.toFixed(3)}`);
+  console.log(`[scoring-engine] btts=${bttsScore.toFixed(3)} noBtts=${noBttsScore.toFixed(3)}`);
+  console.log(`[scoring-engine] PUBLISH_THRESHOLD=${PUBLISH_THRESHOLD} → ${results.length} predictions passed`);
 
   // Tri par confiance décroissante, max 5 pronos par match
   return results
