@@ -23,6 +23,7 @@ interface HistoryPrediction {
   is_live: boolean;
   is_premium: boolean;
   is_refined: boolean;
+  is_top_pick: boolean;
   created_at: string;
   match_id: number;
   matches: {
@@ -58,9 +59,8 @@ export default async function HistoryPage() {
   const [{ data: predictions }, { data: leaguesMeta }] = await Promise.all([
     supabase
       .from("predictions")
-      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_premium, is_refined, created_at, match_id, matches(home_team, away_team, league, league_id, match_date, status, home_score, away_score)")
+      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_premium, is_refined, is_top_pick, created_at, match_id, matches(home_team, away_team, league, league_id, match_date, status, home_score, away_score)")
       .eq("is_published", true)
-      .eq("is_live", false)
       .not("matches.status", "eq", "scheduled")
       .order("created_at", { ascending: false })
       .limit(500),
@@ -108,9 +108,12 @@ export default async function HistoryPage() {
     (a, b) => b.match_date.localeCompare(a.match_date)
   );
 
-  // Stats globales
-  const totalPreds = list.filter(p => p.is_correct !== null).length;
-  const correctPreds = list.filter(p => p.is_correct === true).length;
+  // Stats globales — Winrate officiel : top picks prematch + toutes les live
+  const officialPreds = list.filter(p =>
+    p.is_correct !== null && (p.is_live || p.is_top_pick)
+  );
+  const totalPreds = officialPreds.length;
+  const correctPreds = officialPreds.filter(p => p.is_correct === true).length;
   const winRate = totalPreds > 0 ? ((correctPreds / totalPreds) * 100).toFixed(1) : "—";
 
   return (

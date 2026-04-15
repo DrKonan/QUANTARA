@@ -245,6 +245,36 @@ Match 436 — **Independiente del Valle vs UCV** (Copa Libertadores, 16/04 02h00
 
 ---
 
+## ⚠️ IMPORTANT — Calcul du Win Rate (Coupon Officiel)
+
+### Principe
+Le Win Rate ne doit **pas** être calculé sur toutes les prédictions. Il se base sur le **coupon officiel** que nous proposons à l'utilisateur :
+
+| Source | Quoi compter | Logique |
+|--------|-------------|---------|
+| **Prematch** | Seulement les `is_top_pick = true` | C'est notre prono officiel (1-2 par match). Les autres analyses sont informatives. |
+| **Live** | **Toutes** les prédictions live (`is_live = true`) | Les pronos live viennent par inspiration en temps réel, ils comptent tous. |
+
+### Implémentation
+```javascript
+// Filtrer les pronos qui comptent pour le winrate
+const officialPreds = predictions.filter(p =>
+  p.is_correct !== null && (p.is_live || p.is_top_pick)
+);
+const winRate = officialPreds.filter(p => p.is_correct).length / officialPreds.length;
+```
+
+### Ce qui ne compte PAS
+- Les prédictions prematch avec `is_top_pick = false` (analyses secondaires, faible confiance)
+- Les prédictions non encore évaluées (`is_correct = null`)
+
+### Affichage recommandé
+- Win rate global en haut de l'écran principal
+- Win rate par match dans l'historique (même logique : top picks + live)
+- Séparer visuellement pronos officiels vs analyses secondaires
+
+---
+
 **Questions ?** Contactez l'équipe backend. L'API est live et les données sont disponibles dès maintenant.
 
 ---
