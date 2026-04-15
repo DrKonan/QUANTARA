@@ -67,8 +67,16 @@ Deno.serve(async (req: Request) => {
 
     const now = new Date();
     const targetDate = dateParam ?? now.toISOString().slice(0, 10); // YYYY-MM-DD
-    const dayStart = `${targetDate}T00:00:00+00:00`;
-    const dayEnd = `${targetDate}T23:59:59+00:00`;
+
+    // Journée sportive : de 06:00 UTC aujourd'hui à 05:59 UTC demain.
+    // Cela garantit que les matchs d'Amérique du Sud en soirée locale
+    // (qui sont le lendemain en UTC, ex: 00:30, 02:00 UTC) restent
+    // affichés avec la bonne journée.
+    const dayStart = `${targetDate}T06:00:00+00:00`;
+    // Lendemain
+    const nextDay = new Date(new Date(targetDate + "T00:00:00Z").getTime() + 24 * 60 * 60 * 1000)
+      .toISOString().slice(0, 10);
+    const dayEnd = `${nextDay}T05:59:59+00:00`;
 
     // --- Récupère TOUS les matchs du jour (y compris terminés) ---
     // On les regroupe ensuite par statut pour le client

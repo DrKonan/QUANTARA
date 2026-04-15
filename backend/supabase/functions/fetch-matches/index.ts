@@ -2,12 +2,14 @@
 // QUANTARA — Edge Function : fetch-matches
 // Déclencheur : Cron 2×/jour — 3h UTC + 20h UTC
 // 
-// • 3h UTC  → récupère tous les matchs du jour (6h–23h UTC)
-// • 20h UTC → récupère les matchs de nuit : aujourd'hui 23h → demain 6h
+// • 3h UTC (morning) → récupère TOUS les matchs du jour UTC
+// • 20h UTC (evening) → récupère les matchs du lendemain UTC
+//   (captures Amérique du Sud nuit = lendemain en UTC)
 // 
+// Plus de filtre d'heures : on upsert TOUT ce qu'on trouve sur
+// nos ligues. L'upsert garantit qu'il n'y a pas de doublons.
 // Après l'upsert, déclenche automatiquement predict-prematch
-// pour chaque NOUVEAU match inséré (prédictions initiales).
-// Ainsi les users ont des pronos dès que les matchs apparaissent.
+// pour chaque NOUVEAU match inséré.
 // ============================================================
 import { apifootball } from "../_shared/api-football.ts";
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
@@ -64,9 +66,11 @@ Deno.serve(async (req: Request) => {
     const tomorrow = fmtDate(new Date(now.getTime() + 24 * 60 * 60 * 1000));
 
     // Dates à fetcher
+    // Morning : aujourd'hui (couvre 00:00–23:59 UTC)
+    // Evening : aujourd'hui + demain (rattrape les matchs manqués + prend les SA nuit)
     const datesToFetch = mode === "morning"
-      ? [today]                    // 3h UTC → matchs du jour
-      : [today, tomorrow];         // 20h UTC → fin de soirée + nuit/matin suivant
+      ? [today]
+      : [today, tomorrow];
 
     console.log(`[fetch-matches] Mode: ${mode} | Fetching dates: ${datesToFetch.join(", ")} | Current UTC hour: ${currentHourUTC}`);
 
@@ -103,25 +107,16 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[fetch-matches] API returned ${allFixtures.length} total fixtures for ${datesToFetch.join("+")}`);
 
-    // 3. Filtre : nos ligues actives + équipes valides + plage horaire
+    // 3. Filtre : nos ligues actives + équipes valides (plus de filtre horaire)
     const filtered = allFixtures.filter((f) => {
       if (!leagueIdSet.has(f.league.id)) return false;
       if (!f.teams.home.id || !f.teams.away.id) return false;
-
-      // Filtre par plage horaire selon le mode
-      const matchHour = new Date(f.fixture.date).getUTCHours();
-      if (mode === "morning") {
-        // 3h UTC run → matchs entre 6h et 23h UTC
-        return matchHour >= 6 && matchHour < 23;
-      } else {
-        // 20h UTC run → matchs entre 23h (aujourd'hui) et 6h (demain)
-        return matchHour >= 23 || matchHour < 6;
-      }
+      return true;
     });
 
     if (filtered.length === 0) {
       return jsonResponse({
-        message: `No fixtures in ${mode} window for our leagues`,
+        message: `No fixtures for our leagues`,
         dates: datesToFetch,
         totalFromApi: allFixtures.length,
         count: 0,

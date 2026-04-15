@@ -59,13 +59,18 @@ async function getDashboardStats() {
       .eq("is_published", true)
       .order("created_at", { ascending: false })
       .limit(10),
-    supabase
-      .from("matches")
-      .select("id, home_team, away_team, league, league_id, match_date, status, home_score, away_score")
-      .gte("match_date", new Date().toISOString().slice(0, 10) + "T00:00:00+00:00")
-      .lte("match_date", new Date().toISOString().slice(0, 10) + "T23:59:59+00:00")
-      .not("status", "eq", "cancelled")
-      .order("match_date"),
+    (() => {
+      // Sports day: 06:00 UTC today → 05:59 UTC tomorrow (captures SA night matches)
+      const today = new Date().toISOString().slice(0, 10);
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+      return supabase
+        .from("matches")
+        .select("id, home_team, away_team, league, league_id, match_date, status, home_score, away_score")
+        .gte("match_date", `${today}T06:00:00+00:00`)
+        .lte("match_date", `${tomorrow}T05:59:59+00:00`)
+        .not("status", "eq", "cancelled")
+        .order("match_date");
+    })(),
     supabase
       .from("predictions")
       .select("match_id")
