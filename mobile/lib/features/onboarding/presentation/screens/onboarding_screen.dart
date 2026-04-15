@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../domain/onboarding_slide.dart';
@@ -6,14 +7,14 @@ import '../../domain/onboarding_provider.dart';
 import '../widgets/onboarding_slide_widget.dart';
 import '../widgets/dot_indicator.dart';
 
-class OnboardingScreen extends StatefulWidget {
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _pageController = PageController();
   int _currentPage = 0;
 
@@ -30,6 +31,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   void _finish() async {
     await markOnboardingDone();
+    ref.invalidate(onboardingDoneProvider);
     if (mounted) context.go('/auth');
   }
 
