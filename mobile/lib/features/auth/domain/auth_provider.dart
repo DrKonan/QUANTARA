@@ -60,6 +60,34 @@ class AuthService {
     return response;
   }
 
+  /// Send OTP to phone number for signup/login
+  Future<void> signInWithPhone({required String phone}) async {
+    await _client.auth.signInWithOtp(phone: phone);
+  }
+
+  /// Verify phone OTP and create session
+  Future<AuthResponse> verifyPhoneOtp({
+    required String phone,
+    required String token,
+    String? username,
+  }) async {
+    final response = await _client.auth.verifyOTP(
+      phone: phone,
+      token: token,
+      type: OtpType.sms,
+    );
+    // If username provided (new signup), update profile
+    if (username != null && response.user != null) {
+      await _client.from('users').upsert({
+        'id': response.user!.id,
+        'username': username,
+        'plan': 'free',
+      });
+    }
+    NotificationService().registerToken();
+    return response;
+  }
+
   Future<AuthResponse> signIn({
     required String email,
     required String password,
