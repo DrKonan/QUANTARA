@@ -82,10 +82,11 @@ export default async function PredictionsPage() {
 
   const list = (predictions ?? []) as unknown as Prediction[];
 
-  // Group by match
+  // Group by match (exclude finished matches)
   const matchMap = new Map<number, GroupedMatch>();
   for (const pred of list) {
     if (!pred.matches) continue;
+    if (pred.matches.status === "finished") continue;
     if (!matchMap.has(pred.match_id)) {
       matchMap.set(pred.match_id, {
         match_id: pred.match_id,
