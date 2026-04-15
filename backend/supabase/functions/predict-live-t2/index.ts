@@ -145,6 +145,7 @@ Deno.serve(async (_req: Request) => {
             score_breakdown: result.score_breakdown,
             is_correct: null,
             is_published: true,
+            is_top_pick: result.is_top_pick ?? false,
           });
 
           totalPublished++;

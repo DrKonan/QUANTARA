@@ -2,8 +2,9 @@
 // QUANTARA — Shared : moteur de scoring live
 // Indicateurs : possession, tirs cadrés, corners, cartons,
 //               score actuel, xG ajustés
-// Plan Ultra : 3 analyses par match Tier 1 (HT, 60', 75')
+// Marchés : result, over_under, btts, corners, cards
 // ============================================================
+import { selectTopPicks } from "./scoring-engine.ts";
 
 export interface LiveStats {
   minute: number;
@@ -27,6 +28,7 @@ export interface LiveScoringResult {
   prediction_type: string;
   confidence: number;
   score_breakdown: Record<string, number>;
+  is_top_pick?: boolean;
 }
 
 const PUBLISH_THRESHOLD = 0.60;
@@ -236,7 +238,96 @@ export function computeLiveScores(
     }
   }
 
-  return results
-    .sort((a, b) => b.confidence - a.confidence)
-    .slice(0, 5);
+  // ── Corners Over/Under 9.5 live ───────────────────────────────
+  const totalCorners = stats.homeCorners + stats.awayCorners;
+  const projectedCorners = stats.minute > 5
+    ? (totalCorners / stats.minute) * 90
+    : 10.5; // pas assez de données
+  const cornerLine = 9.5;
+
+  if (stats.minute >= 30) {
+    const overCornersLive = 1 / (1 + Math.exp(-(projectedCorners - cornerLine) / 1.5));
+    // Pondérer par la certitude (plus on est avancé, plus la projection est fiable)
+    const cornerCertainty = 0.50 + 0.50 * minuteRatio;
+    const overCornersScore = overCornersLive * cornerCertainty;
+
+    if (overCornersScore >= PUBLISH_THRESHOLD) {
+      results.push({
+        prediction: "over_9.5",
+        prediction_type: "corners",
+        confidence: Math.min(overCornersScore, 0.99),
+        score_breakdown: {
+          current_corners: totalCorners,
+          projected_corners: projectedCorners,
+          minute: stats.minute,
+        },
+      });
+    }
+
+    // Under corners : si rythme bas en 2ème mi-temps
+    if (stats.minute >= 60 && totalCorners <= 7) {
+      const underCornersScore = (1 - overCornersLive) * cornerCertainty;
+      if (underCornersScore >= PUBLISH_THRESHOLD) {
+        results.push({
+          prediction: "under_9.5",
+          prediction_type: "corners",
+          confidence: Math.min(underCornersScore, 0.99),
+          score_breakdown: {
+            current_corners: totalCorners,
+            projected_corners: projectedCorners,
+            minute: stats.minute,
+          },
+        });
+      }
+    }
+  }
+
+  // ── Cards Over/Under 3.5 live ─────────────────────────────────
+  const totalCards = stats.homeYellowCards + stats.awayYellowCards +
+    stats.homeRedCards + stats.awayRedCards;
+  const projectedCards = stats.minute > 10
+    ? (totalCards / stats.minute) * 90
+    : 4.0;
+  const cardLine = 3.5;
+
+  if (stats.minute >= 30) {
+    const overCardsLive = 1 / (1 + Math.exp(-(projectedCards - cardLine) / 1.0));
+    const cardCertainty = 0.50 + 0.50 * minuteRatio;
+    const overCardsScore = overCardsLive * cardCertainty;
+
+    if (overCardsScore >= PUBLISH_THRESHOLD) {
+      results.push({
+        prediction: "over_3.5",
+        prediction_type: "cards",
+        confidence: Math.min(overCardsScore, 0.99),
+        score_breakdown: {
+          current_cards: totalCards,
+          projected_cards: projectedCards,
+          minute: stats.minute,
+        },
+      });
+    }
+
+    // Under cards : si match calme en fin de partie
+    if (stats.minute >= 60 && totalCards <= 2) {
+      const underCardsScore = (1 - overCardsLive) * cardCertainty;
+      if (underCardsScore >= PUBLISH_THRESHOLD) {
+        results.push({
+          prediction: "under_3.5",
+          prediction_type: "cards",
+          confidence: Math.min(underCardsScore, 0.99),
+          score_breakdown: {
+            current_cards: totalCards,
+            projected_cards: projectedCards,
+            minute: stats.minute,
+          },
+        });
+      }
+    }
+  }
+
+  // Tri + sélection des top picks (max 2 pour le live, seuil plus bas)
+  results.sort((a, b) => b.confidence - a.confidence);
+  selectTopPicks(results, 2, 0.60);
+  return results;
 }

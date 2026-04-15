@@ -35,6 +35,8 @@ interface PredictionRow {
   confidence_label: string;
   is_premium: boolean;
   is_live: boolean;
+  is_top_pick: boolean;
+  is_refined: boolean;
   analysis_text: string | null;
 }
 
@@ -101,7 +103,7 @@ Deno.serve(async (req: Request) => {
     if (matchIds.length > 0) {
       const { data: predictions } = await supabase
         .from("predictions")
-        .select("id, match_id, prediction_type, prediction, confidence, confidence_label, is_premium, is_live, analysis_text")
+        .select("id, match_id, prediction_type, prediction, confidence, confidence_label, is_premium, is_live, is_top_pick, is_refined, analysis_text")
         .in("match_id", matchIds)
         .eq("is_published", true);
 
@@ -175,6 +177,8 @@ Deno.serve(async (req: Request) => {
         is_premium: p.is_premium,
         is_locked: p.is_premium && !isPremium,
         is_live: p.is_live,
+        is_top_pick: p.is_top_pick ?? false,
+        is_refined: p.is_refined ?? false,
         analysis_text: (!p.is_premium || isPremium) ? p.analysis_text : null,
       }));
 

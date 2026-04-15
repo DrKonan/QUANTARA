@@ -52,6 +52,10 @@ interface ApiTeamStats {
     for:     { total: { home: number; away: number }; average: { home: string; away: string } };
     against: { total: { home: number; away: number }; average: { home: string; away: string } };
   };
+  cards?: {
+    yellow: Record<string, { total: number | null; percentage: string | null }>;
+    red: Record<string, { total: number | null; percentage: string | null }>;
+  };
 }
 
 interface LineupPlayer {
@@ -82,6 +86,7 @@ function parseTeamStats(
       homeWinRate: 0.45, awayWinRate: 0.35,
       homeGoalsScored: 1.3, awayGoalsScored: 1.0,
       homeGoalsConceded: 1.2, awayGoalsConceded: 1.3,
+      totalMatches: 0, avgYellowCards: 2.0, avgRedCards: 0.15,
     };
   }
 
@@ -96,6 +101,23 @@ function parseTeamStats(
 
   const homeGames = raw.fixtures.wins.home + raw.fixtures.draws.home + raw.fixtures.loses.home;
   const awayGames = raw.fixtures.wins.away + raw.fixtures.draws.away + raw.fixtures.loses.away;
+  const totalMatches = raw.fixtures.wins.total + raw.fixtures.draws.total + raw.fixtures.loses.total;
+
+  // Parse cartons depuis les données API
+  let avgYellowCards = 2.0;
+  let avgRedCards = 0.15;
+  if (raw.cards && totalMatches > 0) {
+    let totalYellow = 0;
+    let totalRed = 0;
+    for (const period of Object.values(raw.cards.yellow ?? {})) {
+      totalYellow += period?.total ?? 0;
+    }
+    for (const period of Object.values(raw.cards.red ?? {})) {
+      totalRed += period?.total ?? 0;
+    }
+    avgYellowCards = totalYellow / totalMatches;
+    avgRedCards = totalRed / totalMatches;
+  }
 
   return {
     teamId,
@@ -108,6 +130,9 @@ function parseTeamStats(
     awayGoalsScored: parseFloat(raw.goals.for.average.away) || 1.0,
     homeGoalsConceded: parseFloat(raw.goals.against.average.home) || 1.2,
     awayGoalsConceded: parseFloat(raw.goals.against.average.away) || 1.3,
+    totalMatches,
+    avgYellowCards,
+    avgRedCards,
   };
 }
 
@@ -411,6 +436,7 @@ Deno.serve(async (req: Request) => {
           score_breakdown: r.score_breakdown,
           is_refined: true,
           refined_at: new Date().toISOString(),
+          is_top_pick: r.is_top_pick ?? false,
         };
 
         if (existingId) {
@@ -434,9 +460,10 @@ Deno.serve(async (req: Request) => {
       }
 
       // Pronos qui existaient avant mais ne sont plus au-dessus du seuil → on les dépublie
+      // ET on reset leur top_pick
       for (const [_key, id] of existingMap) {
         await supabase.from("predictions")
-          .update({ is_published: false, is_refined: true, refined_at: new Date().toISOString() })
+          .update({ is_published: false, is_refined: true, refined_at: new Date().toISOString(), is_top_pick: false })
           .eq("id", id);
         removed++;
       }
@@ -469,6 +496,7 @@ Deno.serve(async (req: Request) => {
         is_correct: null,
         is_published: true,
         is_refined: false,
+        is_top_pick: r.is_top_pick ?? false,
       }));
 
       const { error: insertError } = await supabase

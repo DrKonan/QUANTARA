@@ -142,6 +142,7 @@ Deno.serve(async (_req: Request) => {
                 confidence: result.confidence,
                 confidence_label: confidenceLabel(result.confidence),
                 score_breakdown: result.score_breakdown,
+                is_top_pick: result.is_top_pick ?? false,
               })
               .eq("match_id", match.id)
               .eq("prediction_type", result.prediction_type)
@@ -173,6 +174,7 @@ Deno.serve(async (_req: Request) => {
             score_breakdown: result.score_breakdown,
             is_correct: null,
             is_published: true,
+            is_top_pick: result.is_top_pick ?? false,
           });
 
           totalPublished++;
