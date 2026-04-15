@@ -599,7 +599,6 @@ class _MatchTile extends StatelessWidget {
 
   Widget _buildStatusIcon() {
     if (todayMatch.isFinished) {
-      // For finished matches: show result of predictions
       final preds = todayMatch.predictions;
       if (preds.isEmpty) {
         return Icon(Icons.sports_score_rounded, color: AppColors.textSecondary.withValues(alpha: 0.4), size: 18);
@@ -627,11 +626,32 @@ class _MatchTile extends StatelessWidget {
           child: const Icon(Icons.remove_rounded, color: AppColors.warning, size: 14),
         );
       }
-      // Pending evaluation
       return Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(color: AppColors.textSecondary.withValues(alpha: 0.1), shape: BoxShape.circle),
         child: const Icon(Icons.hourglass_empty_rounded, color: AppColors.textSecondary, size: 14),
+      );
+    }
+
+    // Show Top Pick star if available
+    if (todayMatch.topPicks.isNotEmpty) {
+      final best = todayMatch.bestTopPick!;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text("⭐", style: TextStyle(fontSize: 14)),
+          Text("${best.confidencePercent}%",
+            style: TextStyle(
+              color: best.confidence != null && best.confidence! >= 0.80
+                  ? AppColors.gold
+                  : best.confidence != null && best.confidence! >= 0.65
+                      ? AppColors.success
+                      : AppColors.warning,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       );
     }
 

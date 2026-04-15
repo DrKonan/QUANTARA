@@ -355,7 +355,7 @@ class SupabaseRepository {
         name: json['league'] as String? ?? 'Unknown',
         country: country,
       ),
-      dateTime: DateTime.parse(json['match_date'] as String),
+      dateTime: DateTime.parse(json['match_date'] as String).toUtc(),
       status: _parseStatus(json['status'] as String),
       score: (json['home_score'] != null && json['away_score'] != null)
           ? MatchScore(

@@ -64,7 +64,7 @@ class PredictionCard extends StatelessWidget {
 
   Widget _buildHeader() {
     final timeStr = match.status == MatchStatus.upcoming
-        ? DateFormat('HH:mm').format(match.dateTime)
+        ? DateFormat('HH:mm').format(match.dateTime.toLocal())
         : match.statusLabel;
 
     return Row(

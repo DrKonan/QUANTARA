@@ -310,9 +310,10 @@ class _HomeMatchCard extends StatelessWidget {
         ? match.statusLabel
         : DateFormat('HH:mm').format(match.dateTime.toLocal());
     final preds = todayMatch.predictions;
-    final bestPred = preds.isNotEmpty
+    final topPick = todayMatch.bestTopPick;
+    final bestPred = topPick ?? (preds.isNotEmpty
         ? preds.reduce((a, b) => (a.confidence ?? 0) >= (b.confidence ?? 0) ? a : b)
-        : null;
+        : null);
 
     return GestureDetector(
       onTap: () => showModalBottomSheet(
@@ -375,9 +376,24 @@ class _HomeMatchCard extends StatelessWidget {
               if (bestPred != null && !bestPred.isLocked)
                 Row(
                   children: [
-                    const Icon(Icons.gps_fixed_rounded, color: AppColors.gold, size: 14),
+                    if (topPick != null) ...[
+                      const Text("⭐", style: TextStyle(fontSize: 12)),
+                      const SizedBox(width: 4),
+                    ],
+                    Text(bestPred.typeIcon, style: const TextStyle(fontSize: 12)),
                     const SizedBox(width: 6),
-                    Expanded(child: Text(bestPred.eventLabel, style: const TextStyle(color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.w600))),
+                    Expanded(child: Text(
+                      bestPred.eventLabelWith(home: match.homeTeam.name, away: match.awayTeam.name),
+                      style: const TextStyle(color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.w600),
+                    )),
+                    if (bestPred.isRefined) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(3)),
+                        child: const Text("Affiné", style: TextStyle(color: AppColors.info, fontSize: 8, fontWeight: FontWeight.w700)),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
                     Text("${bestPred.confidencePercent}%", style: TextStyle(color: _confidenceColor(bestPred.confidence ?? 0), fontSize: 12, fontWeight: FontWeight.w700)),
                     if (preds.length > 1) ...[
                       const SizedBox(width: 6),

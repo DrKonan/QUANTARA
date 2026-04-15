@@ -24,6 +24,15 @@ class TodayMatch {
   bool get isLive => match.status == MatchStatus.live;
   bool get isFinished => match.status == MatchStatus.finished || predictionStatus == 'finished';
 
+  List<TodayPrediction> get topPicks => predictions.where((p) => p.isTopPick).toList();
+  List<TodayPrediction> get otherPredictions => predictions.where((p) => !p.isTopPick).toList();
+  TodayPrediction? get bestTopPick {
+    final picks = topPicks;
+    if (picks.isEmpty) return null;
+    picks.sort((a, b) => (b.confidence ?? 0).compareTo(a.confidence ?? 0));
+    return picks.first;
+  }
+
   /// True if match kickoff was > 150 min ago and not explicitly live
   bool get isEffectivelyFinished {
     if (isFinished) return true;
@@ -57,7 +66,7 @@ class TodayMatch {
         name: json['league'] as String? ?? 'Unknown',
         country: json['country'] as String? ?? '',
       ),
-      dateTime: DateTime.parse(json['match_date'] as String),
+      dateTime: DateTime.parse(json['match_date'] as String).toUtc(),
       status: _parseStatus(json['status'] as String),
       score: (json['home_score'] != null && json['away_score'] != null)
           ? MatchScore(
@@ -110,6 +119,8 @@ class TodayPrediction {
   final bool isPremium;
   final bool isLocked;
   final bool isLive;
+  final bool isTopPick;
+  final bool isRefined;
   final String? analysisText;
   final bool? isCorrect;
 
@@ -122,46 +133,93 @@ class TodayPrediction {
     this.isPremium = false,
     this.isLocked = false,
     this.isLive = false,
+    this.isTopPick = false,
+    this.isRefined = false,
     this.analysisText,
     this.isCorrect,
   });
 
-  String get eventLabel {
+  String get typeIcon {
+    switch (predictionType) {
+      case 'result': return '⚽';
+      case 'double_chance': return '🎯';
+      case 'over_under': return '📊';
+      case 'btts': return '🤝';
+      case 'corners': return '🚩';
+      case 'cards': return '🟨';
+      default: return '📈';
+    }
+  }
+
+  String get typeLabel {
+    switch (predictionType) {
+      case 'result': return 'RÉSULTAT';
+      case 'double_chance': return 'DOUBLE CHANCE';
+      case 'btts': return 'BTTS';
+      case 'over_under': return 'BUTS';
+      case 'corners': return 'CORNERS';
+      case 'cards': return 'CARTONS';
+      case 'halftime': return 'MI-TEMPS';
+      default: return predictionType.toUpperCase();
+    }
+  }
+
+  /// Human-readable label with optional team name substitution
+  String eventLabelWith({String? home, String? away}) {
     switch (predictionType) {
       case 'result':
         switch (prediction) {
-          case 'home_win': return 'Victoire domicile';
-          case 'away_win': return 'Victoire ext\u00e9rieur';
+          case 'home_win': return home != null ? 'Victoire $home' : 'Victoire domicile';
+          case 'away_win': return away != null ? 'Victoire $away' : 'Victoire extérieur';
           case 'draw': return 'Match nul';
-          default: return prediction ?? '\ud83d\udd12';
+          default: return prediction ?? '🔒';
+        }
+      case 'double_chance':
+        switch (prediction) {
+          case '1X': return home != null ? '$home ou Nul' : 'Domicile ou Nul';
+          case 'X2': return away != null ? 'Nul ou $away' : 'Nul ou Extérieur';
+          case '12': return 'Pas de match nul';
+          default: return prediction ?? '🔒';
         }
       case 'btts':
-        if (prediction == null) return '\ud83d\udd12';
+        if (prediction == null) return '🔒';
         return prediction == 'yes'
-            ? 'Les deux \u00e9quipes marquent'
-            : 'Les deux ne marquent pas';
+            ? 'Les deux marquent'
+            : 'Au moins un ne marque pas';
       case 'over_under':
-        if (prediction == null) return '\ud83d\udd12';
+        if (prediction == null) return '🔒';
         final parts = prediction!.split('_');
         if (parts.length >= 2) {
-          return '${parts[0] == "over" ? "Plus de" : "Moins de"} ${parts[1]} buts';
+          return '${parts[0] == "over" ? "+" : "-"}${parts[1]} Buts';
         }
         return prediction!;
       case 'corners':
-        return prediction != null ? 'Corners: $prediction' : '\ud83d\udd12';
+        if (prediction == null) return '🔒';
+        final parts = prediction!.split('_');
+        if (parts.length >= 2) {
+          return '${parts[0] == "over" ? "+" : "-"}${parts[1]} Corners';
+        }
+        return prediction!;
       case 'cards':
-        return prediction != null ? 'Cartons: $prediction' : '\ud83d\udd12';
+        if (prediction == null) return '🔒';
+        final parts = prediction!.split('_');
+        if (parts.length >= 2) {
+          return '${parts[0] == "over" ? "+" : "-"}${parts[1]} Cartons';
+        }
+        return prediction!;
       case 'halftime':
         switch (prediction) {
           case 'home_win': return 'Mi-temps: Avantage domicile';
-          case 'away_win': return 'Mi-temps: Avantage ext\u00e9rieur';
-          case 'draw': return 'Mi-temps: \u00c9galit\u00e9';
-          default: return prediction != null ? 'Mi-temps: $prediction' : '\ud83d\udd12';
+          case 'away_win': return 'Mi-temps: Avantage extérieur';
+          case 'draw': return 'Mi-temps: Égalité';
+          default: return prediction != null ? 'Mi-temps: $prediction' : '🔒';
         }
       default:
-        return prediction ?? '\ud83d\udd12';
+        return prediction ?? '🔒';
     }
   }
+
+  String get eventLabel => eventLabelWith();
 
   int get confidencePercent => ((confidence ?? 0) * 100).round();
 
@@ -175,6 +233,8 @@ class TodayPrediction {
       isPremium: json['is_premium'] as bool? ?? false,
       isLocked: json['is_locked'] as bool? ?? false,
       isLive: json['is_live'] as bool? ?? false,
+      isTopPick: json['is_top_pick'] as bool? ?? false,
+      isRefined: json['is_refined'] as bool? ?? false,
       analysisText: json['analysis_text'] as String?,
       isCorrect: json['is_correct'] as bool?,
     );
@@ -191,6 +251,8 @@ class TodayPrediction {
       isPremium: json['is_premium'] as bool? ?? false,
       isLocked: false,
       isLive: json['is_live'] as bool? ?? false,
+      isTopPick: json['is_top_pick'] as bool? ?? false,
+      isRefined: json['is_refined'] as bool? ?? false,
       analysisText: json['analysis_text'] as String?,
       isCorrect: json['is_correct'] as bool?,
     );
