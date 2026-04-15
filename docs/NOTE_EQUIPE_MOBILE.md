@@ -1,6 +1,6 @@
 # QUANTARA — Note Technique pour l'Équipe Mobile
 **Date** : 15 avril 2026  
-**Version API** : v2.1 — Top Picks, Marchés Élargis & Fuseaux Horaires  
+**Version API** : v2.2 — Top Picks, Marchés Élargis, Fuseaux Horaires & Auth Téléphone  
 **Auteur** : Backend Team
 
 ---
@@ -335,3 +335,49 @@ val time = sdf.format(matchDate)
 - [ ] Ne pas hardcoder de locale (`"fr-FR"`) — utiliser la locale de l'appareil
 - [ ] Tester avec un appareil/simulateur en GMT-5 et en GMT+9
 - [ ] Vérifier les matchs SA nocturnes (ex: 02:00 UTC → 22:00 à NYC, 04:00 à Paris)
+
+---
+
+## 13. 📱 Authentification Téléphone + Email
+
+### Deux modes de connexion
+
+| Mode | Flow | Priorité |
+|------|------|----------|
+| **📱 Téléphone (principal)** | Numéro → OTP SMS → Vérifié | Mode par défaut |
+| **📧 Email (fallback)** | Email + mot de passe | Fallback classique |
+
+### Flow inscription téléphone
+1. L'utilisateur saisit **nom d'utilisateur** + **numéro** (préfixe +225 auto)
+2. Appel `signInWithOtp(phone: '+225XXXXXXXXXX', data: {'username': 'Pseudo'})`
+3. SMS OTP 6 chiffres reçu
+4. Appel `verifyOTP(phone: '+225XXXXXXXXXX', token: '123456', type: OtpType.sms)`
+5. Compte créé auto → trigger copie vers `public.users` (avec essai 3 jours)
+
+### Ce que fait le backend automatiquement
+- **Trigger INSERT** : crée `public.users` avec `username`, `phone`, essai premium 3 jours
+- **Trigger UPDATE** : si phone ajouté/modifié après coup, met à jour `public.users.phone`
+- **Pas d'Edge Function custom** — tout est Supabase Auth natif
+
+### Important pour le mobile
+- Le `username` **DOIT** être dans `data` lors du `signInWithOtp` :
+  ```dart
+  await supabase.auth.signInWithOtp(
+    phone: '+225$numero',
+    data: {'username': monUsername},
+  );
+  ```
+- Si `username` absent → "Utilisateur" par défaut
+- `phone` est **UNIQUE** — un numéro = un compte
+
+### Statut : ⏳ En attente de Twilio
+Le code backend est prêt. Twilio doit être configuré dans Supabase Dashboard.
+
+### Checklist auth
+- [x] Flow inscription téléphone (OTP)
+- [x] Flow connexion téléphone (OTP)
+- [x] Flow connexion email + mot de passe
+- [x] Préfixe +225 automatique
+- [ ] Tester avec un vrai numéro (après config Twilio)
+- [ ] Gérer erreur "numéro déjà utilisé" (`user_already_exists`)
+- [ ] Gérer erreur "code OTP invalide/expiré"
