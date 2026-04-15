@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import { LocalTime } from "@/components/local-time";
 import { Crown, UserCheck } from "lucide-react";
 
 export const revalidate = 60;
@@ -99,7 +100,7 @@ export default async function UsersPage() {
                     </span>
                   </td>
                   <td className="p-4 text-right text-[#6B6B80] text-xs">
-                    {new Date(user.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}
+                    <LocalTime date={user.created_at} format="date-long" />
                   </td>
                 </tr>
               ))}

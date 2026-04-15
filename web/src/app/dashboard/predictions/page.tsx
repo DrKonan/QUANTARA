@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import { LocalTime } from "@/components/local-time";
 import { Filter } from "lucide-react";
 
 export const revalidate = 30;
@@ -172,8 +173,7 @@ export default async function PredictionsPage() {
 function MatchPredictionCard({ match }: { match: GroupedMatch }) {
   const isLive = match.status === "live";
   const isFinished = match.status === "finished";
-  const time = new Date(match.match_date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  const date = new Date(match.match_date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+
 
   return (
     <div className={`glass-card animate-fade-up overflow-hidden ${isLive ? "border-[#F87171]/20" : ""}`}>
@@ -189,7 +189,7 @@ function MatchPredictionCard({ match }: { match: GroupedMatch }) {
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-xs text-[#6B6B80]">{match.league}{match.country ? ` · ${match.country}` : ""}</span>
               <span className="text-[#6B6B80]">·</span>
-              <span className="text-xs text-[#6B6B80]">{date} {time}</span>
+              <LocalTime date={match.match_date} format="datetime" className="text-xs text-[#6B6B80]" />
             </div>
           </div>
         </div>

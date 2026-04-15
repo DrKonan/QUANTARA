@@ -1,5 +1,6 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/stat-card";
+import { LocalTime } from "@/components/local-time";
 import { Users, ListChecks, TrendingUp, CreditCard, Trophy, Clock, CheckCircle2, Radio } from "lucide-react";
 
 export const revalidate = 60;
@@ -147,7 +148,7 @@ export default async function DashboardPage() {
       <div className="mb-8">
         <h2 className="text-2xl sm:text-3xl font-bold">Vue d&apos;ensemble</h2>
         <p className="text-[#6B6B80] mt-1">
-          {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          <LocalTime date={new Date().toISOString()} format="full" />
         </p>
       </div>
 
@@ -304,8 +305,6 @@ interface RecentPrediction {
 function MatchCard({ match }: { match: MatchWithPredictions }) {
   const isLive = match.status === "live";
   const isFinished = match.status === "finished";
-  const time = new Date(match.match_date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-
   return (
     <div className={`glass-card p-4 animate-fade-up ${isLive ? "border-[#F87171]/30" : ""}`}>
       <div className="flex items-center justify-between mb-3">
@@ -317,7 +316,7 @@ function MatchCard({ match }: { match: MatchWithPredictions }) {
         ) : isFinished ? (
           <span className="text-xs text-[#34D399] font-medium">Terminé</span>
         ) : (
-          <span className="text-xs text-[#6B6B80]">{time}</span>
+          <LocalTime date={match.match_date} format="time" className="text-xs text-[#6B6B80]" />
         )}
       </div>
       <div className="flex items-center justify-between">

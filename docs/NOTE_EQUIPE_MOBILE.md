@@ -1,6 +1,6 @@
 # QUANTARA — Note Technique pour l'Équipe Mobile
 **Date** : 15 avril 2026  
-**Version API** : v2.0 — Top Picks & Marchés Élargis  
+**Version API** : v2.1 — Top Picks, Marchés Élargis & Fuseaux Horaires  
 **Auteur** : Backend Team
 
 ---
@@ -246,3 +246,62 @@ Match 436 — **Independiente del Valle vs UCV** (Copa Libertadores, 16/04 02h00
 ---
 
 **Questions ?** Contactez l'équipe backend. L'API est live et les données sont disponibles dès maintenant.
+
+---
+
+## 12. ⏰ Fuseaux Horaires — Affichage Local des Heures
+
+### Règle fondamentale
+Le champ `match_date` est **toujours en UTC (GMT+0)** dans l'API (ex: `2026-04-15T19:00:00+00:00`).  
+Les heures doivent être affichées **dans le fuseau horaire local de l'appareil de l'utilisateur**.
+
+### Exemples concrets
+Un match avec `match_date = "2026-04-15T19:00:00+00:00"` :
+| Localisation | Heure affichée |
+|-------------|---------------|
+| Paris (GMT+2) | 21:00 |
+| New York (GMT-4) | 15:00 |
+| Londres (GMT+1) | 20:00 |
+| Tokyo (GMT+9) | 04:00 (16 avril) |
+
+### Implémentation côté mobile
+
+**Flutter :**
+```dart
+final matchDate = DateTime.parse(matchDateStr).toLocal();
+final formatted = DateFormat('HH:mm').format(matchDate);
+```
+
+**React Native :**
+```javascript
+const date = new Date(match.match_date);
+const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const dateStr = date.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+```
+
+**Swift (iOS) :**
+```swift
+let formatter = DateFormatter()
+formatter.dateFormat = "HH:mm"
+formatter.timeZone = TimeZone.current
+let time = formatter.string(from: matchDate)
+```
+
+**Kotlin (Android) :**
+```kotlin
+val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+sdf.timeZone = TimeZone.getDefault()
+val time = sdf.format(matchDate)
+```
+
+### Points importants
+- **NE PAS forcer un fuseau horaire fixe** (ex: ne pas utiliser "Europe/Berlin" ou "fr-FR"). Laisser le système de l'appareil décider.
+- **Utiliser `navigator.language` ou l'équivalent mobile** pour le format (24h vs 12h AM/PM).
+- Le champ `match_date` ne change JAMAIS côté serveur. C'est **uniquement l'affichage** qui s'adapte.
+- Pour les dates (jour du match), attention : un match à 02:00 UTC du 16 avril sera affiché le **15 avril** à 22:00 pour un utilisateur à New York (GMT-4).
+
+### Checklist fuseau horaire
+- [ ] Convertir `match_date` en heure locale avant affichage
+- [ ] Ne pas hardcoder de locale (`"fr-FR"`) — utiliser la locale de l'appareil
+- [ ] Tester avec un appareil/simulateur en GMT-5 et en GMT+9
+- [ ] Vérifier les matchs SA nocturnes (ex: 02:00 UTC → 22:00 à NYC, 04:00 à Paris)

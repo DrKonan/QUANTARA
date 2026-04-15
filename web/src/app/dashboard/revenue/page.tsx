@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import { LocalTime } from "@/components/local-time";
 import { Wallet, TrendingUp, Receipt } from "lucide-react";
 
 export const revalidate = 60;
@@ -103,10 +104,10 @@ export default async function RevenuePage() {
                     {sub.amount ? `${sub.amount.toLocaleString("fr")} ${sub.currency}` : "—"}
                   </td>
                   <td className="p-4 text-right text-[#6B6B80] text-xs">
-                    {new Date(sub.start_date).toLocaleDateString("fr")}
+                    <LocalTime date={sub.start_date} format="date" />
                   </td>
                   <td className="p-4 text-right text-[#6B6B80] text-xs">
-                    {new Date(sub.end_date).toLocaleDateString("fr")}
+                    <LocalTime date={sub.end_date} format="date" />
                   </td>
                   <td className="p-4 text-right font-mono text-xs text-[#6B6B80]">
                     {sub.payment_ref ?? "—"}

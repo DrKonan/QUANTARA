@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import { LocalTime } from "@/components/local-time";
 import { History, CheckCircle2, XCircle, Clock, Filter } from "lucide-react";
 
 export const revalidate = 60;
@@ -160,15 +161,7 @@ export default async function HistoryPage() {
 }
 
 function MatchHistoryCard({ match }: { match: GroupedMatch }) {
-  const date = new Date(match.match_date).toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-  const time = new Date(match.match_date).toLocaleTimeString("fr-FR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+
 
   const totalEval = match.correct + match.incorrect;
   const matchWinRate = totalEval > 0 ? Math.round((match.correct / totalEval) * 100) : null;
@@ -179,8 +172,8 @@ function MatchHistoryCard({ match }: { match: GroupedMatch }) {
       <div className="px-5 py-4 flex items-center justify-between border-b border-white/[0.06]">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="text-center shrink-0">
-            <div className="text-xs text-[#6B6B80]">{date}</div>
-            <div className="text-[10px] text-[#6B6B80]">{time}</div>
+            <LocalTime date={match.match_date} format="date-long" className="text-xs text-[#6B6B80] block" />
+            <LocalTime date={match.match_date} format="time" className="text-[10px] text-[#6B6B80] block" />
           </div>
           <div className="h-8 w-px bg-white/[0.06]" />
           <div className="min-w-0">
