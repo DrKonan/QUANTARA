@@ -51,7 +51,7 @@ class StatsCard extends ConsumerWidget {
               const Icon(Icons.insights_rounded, color: AppColors.gold, size: 20),
               const SizedBox(width: 8),
               const Text(
-                "Stats Quantara ce mois",
+                "Win Rate — Coupon Officiel",
                 style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 14,
@@ -79,7 +79,7 @@ class StatsCard extends ConsumerWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              _buildStatItem("Pronos", "$total", AppColors.textPrimary),
+              _buildStatItem("Officiels", "$total", AppColors.textPrimary),
               const SizedBox(width: 24),
               _buildStatItem("Gagnés", "$won", AppColors.success),
               const SizedBox(width: 24),
