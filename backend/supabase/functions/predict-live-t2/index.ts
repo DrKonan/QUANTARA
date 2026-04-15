@@ -1,9 +1,9 @@
 // ============================================================
 // QUANTARA — Edge Function : predict-live-t2
-// Déclencheur : Cron vérifiant les matchs Tier 2 autour de la
-//               58ème minute (analyse unique en 2ème mi-temps).
-// Rôle : Une seule analyse live par match Tier 2 — publie
-//        uniquement si ≥ 75% de confiance.
+// Déclencheur : Cron toutes les 5 minutes
+// Rôle : Une seule analyse live par match Tier 2 — fenêtre
+//        élargie 45–80 minutes (2ème mi-temps).
+//        Publie uniquement si ≥ 75% de confiance.
 // ============================================================
 import { apifootball, apifootballSequential } from "../_shared/api-football.ts";
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
@@ -69,9 +69,9 @@ Deno.serve(async (_req: Request) => {
 
         const currentMinute = fixtureData?.[0]?.fixture?.status?.elapsed ?? 60;
 
-        // Tier 2 : n'analyse qu'autour de la 58ème minute (55–65)
-        if (currentMinute < 55 || currentMinute > 65) {
-          console.log(`[predict-live-t2] Match ${match.id} at minute ${currentMinute}, skipping (not in 55-65 window)`);
+        // Tier 2 : analyse entre la 45ème et la 80ème minute (2ème mi-temps)
+        if (currentMinute < 45 || currentMinute > 80) {
+          console.log(`[predict-live-t2] Match ${match.id} at minute ${currentMinute}, skipping (not in 45-80 window)`);
           continue;
         }
 
