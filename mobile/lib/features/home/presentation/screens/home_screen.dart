@@ -93,9 +93,9 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildContent(BuildContext context, List<TodayMatch> allMatches, int finishedCount) {
     final liveMatches = allMatches.where((m) => m.isLive).toList();
-    final withPredictions = allMatches.where((m) => m.hasPredictions && !m.isLive).toList();
+    final withPredictions = allMatches.where((m) => m.hasOfficialPredictions && !m.isLive).toList();
     final upcoming = allMatches
-        .where((m) => !m.isLive && !m.hasPredictions)
+        .where((m) => !m.isLive && !m.hasOfficialPredictions)
         .toList()
       ..sort((a, b) => a.match.dateTime.compareTo(b.match.dateTime));
     final upcomingSoon = upcoming.take(5).toList();
@@ -309,10 +309,10 @@ class _HomeMatchCard extends StatelessWidget {
     final timeStr = isLive
         ? match.statusLabel
         : DateFormat('HH:mm').format(match.dateTime.toLocal());
-    final preds = todayMatch.predictions;
-    final topPick = todayMatch.bestTopPick;
-    final bestPred = topPick ?? (preds.isNotEmpty
-        ? preds.reduce((a, b) => (a.confidence ?? 0) >= (b.confidence ?? 0) ? a : b)
+    // Only show official predictions on cards (tendances visible only on match detail)
+    final officialPreds = todayMatch.officialPredictions;
+    final bestPred = todayMatch.bestTopPick ?? (officialPreds.isNotEmpty
+        ? officialPreds.reduce((a, b) => (a.confidence ?? 0) >= (b.confidence ?? 0) ? a : b)
         : null);
 
     return GestureDetector(
@@ -376,10 +376,8 @@ class _HomeMatchCard extends StatelessWidget {
               if (bestPred != null && !bestPred.isLocked)
                 Row(
                   children: [
-                    if (topPick != null) ...[
-                      const Text("⭐", style: TextStyle(fontSize: 12)),
-                      const SizedBox(width: 4),
-                    ],
+                    const Text("⭐", style: TextStyle(fontSize: 12)),
+                    const SizedBox(width: 4),
                     Text(bestPred.typeIcon, style: const TextStyle(fontSize: 12)),
                     const SizedBox(width: 6),
                     Expanded(child: Text(
@@ -395,9 +393,9 @@ class _HomeMatchCard extends StatelessWidget {
                       const SizedBox(width: 4),
                     ],
                     Text("${bestPred.confidencePercent}%", style: TextStyle(color: _confidenceColor(bestPred.confidence ?? 0), fontSize: 12, fontWeight: FontWeight.w700)),
-                    if (preds.length > 1) ...[
+                    if (officialPreds.length > 1) ...[
                       const SizedBox(width: 6),
-                      Text("+${preds.length - 1}", style: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.6), fontSize: 10)),
+                      Text("+${officialPreds.length - 1}", style: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.6), fontSize: 10)),
                     ],
                   ],
                 )

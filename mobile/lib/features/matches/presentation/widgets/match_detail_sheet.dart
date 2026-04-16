@@ -13,8 +13,6 @@ class MatchDetailSheet extends StatefulWidget {
 }
 
 class _MatchDetailSheetState extends State<MatchDetailSheet> {
-  bool _showAllPredictions = false;
-
   TodayMatch get todayMatch => widget.todayMatch;
 
   @override
@@ -175,136 +173,124 @@ class _MatchDetailSheetState extends State<MatchDetailSheet> {
     final home = todayMatch.match.homeTeam.name;
     final away = todayMatch.match.awayTeam.name;
 
-    if (todayMatch.isFinished && todayMatch.hasPredictions) {
+    // ── FINISHED ──
+    if (todayMatch.isFinished && todayMatch.hasOfficialPredictions) {
       return [
         const Text(
-          "Résultats des prédictions",
+          "Résultats — Coupon Officiel",
           style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 12),
-        ...todayMatch.predictions.map((pred) => _buildFinishedPredictionTile(pred, home, away)),
+        ...todayMatch.officialPredictions.map((pred) => _buildFinishedPredictionTile(pred, home, away)),
       ];
     }
 
-    if (todayMatch.isFinished && !todayMatch.hasPredictions) {
+    if (todayMatch.isFinished && !todayMatch.hasOfficialPredictions) {
       return [_buildFinishedNoPredCard()];
     }
 
-    if (!todayMatch.hasPredictions) {
-      return [_buildWaitingCard()];
+    // ── LIVE or POST-COMPO with official predictions ──
+    if (todayMatch.hasOfficialPredictions) {
+      return _buildOfficialSection(home, away);
     }
 
-    // Active match with predictions — split Top Picks vs Others
-    final topPicks = todayMatch.topPicks;
-    final others = todayMatch.otherPredictions;
-    final livePicks = topPicks.where((p) => p.isLive).toList();
-    final prematchPicks = topPicks.where((p) => !p.isLive).toList();
-
-    final widgets = <Widget>[];
-
-    // Top Picks section
-    if (topPicks.isNotEmpty) {
-      widgets.addAll([
+    // ── PRE-COMPO: show tendances if available ──
+    if (!todayMatch.hasLineup && todayMatch.hasTendances) {
+      return [
+        _buildWaitingCard(),
+        const SizedBox(height: 16),
         Row(
           children: [
-            const Text("⭐", style: TextStyle(fontSize: 18)),
+            const Text("📊", style: TextStyle(fontSize: 16)),
             const SizedBox(width: 8),
-            const Text(
-              "Top Picks",
-              style: TextStyle(color: AppColors.gold, fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.gold.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
-              ),
+            const Expanded(
               child: Text(
-                "${topPicks.length} sélection${topPicks.length > 1 ? 's' : ''}",
-                style: const TextStyle(color: AppColors.gold, fontSize: 10, fontWeight: FontWeight.w700),
+                "Tendances fortes détectées",
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
-      ]);
-
-      // Live top picks first
-      if (livePicks.isNotEmpty) {
-        widgets.add(
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text("💡", style: TextStyle(fontSize: 14)),
-                SizedBox(width: 6),
-                Text(
-                  "Pari Live Suggéré",
-                  style: TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-          ),
-        );
-        widgets.addAll(livePicks.map((p) => _buildTopPickTile(p, home, away)));
-      }
-
-      // Prematch top picks
-      widgets.addAll(prematchPicks.map((p) => _buildTopPickTile(p, home, away)));
-    }
-
-    // Other predictions (collapsible)
-    if (others.isNotEmpty) {
-      widgets.addAll([
-        const SizedBox(height: 16),
-        GestureDetector(
-          onTap: () => setState(() => _showAllPredictions = !_showAllPredictions),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Text(
-                  "Voir toutes les analyses (${others.length})",
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-                const Spacer(),
-                Icon(
-                  _showAllPredictions ? Icons.expand_less : Icons.expand_more,
-                  color: AppColors.textSecondary, size: 20,
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (_showAllPredictions) ...[
-          const SizedBox(height: 10),
-          ...others.map((p) => _buildPredictionTile(p, home, away)),
-        ],
-      ]);
-    }
-
-    // Fallback if no top picks — show all predictions flat
-    if (topPicks.isEmpty) {
-      return [
+        const SizedBox(height: 4),
         const Text(
-          "Prédictions",
-          style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+          "Sera confirmé ou ajusté avec les compositions officielles",
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
         ),
-        const SizedBox(height: 12),
-        ...todayMatch.predictions.map((p) => _buildPredictionTile(p, home, away)),
+        const SizedBox(height: 10),
+        ...todayMatch.tendancePredictions.map((p) => _buildHintTile(p, home, away)),
       ];
     }
+
+    // ── No prediction available yet ──
+    return [_buildWaitingCard()];
+  }
+
+  /// Build the official "Notre Pronostic" section (post-compo / live)
+  List<Widget> _buildOfficialSection(String home, String away) {
+    final livePreds = todayMatch.officialPredictions.where((p) => p.isLive).toList();
+    final prematchPreds = todayMatch.officialPredictions.where((p) => !p.isLive).toList();
+
+    final widgets = <Widget>[];
+
+    widgets.addAll([
+      Row(
+        children: [
+          const Text("⭐", style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
+          const Text(
+            "Notre Pronostic",
+            style: TextStyle(color: AppColors.gold, fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.gold.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              "${todayMatch.officialPredictions.length} pari${todayMatch.officialPredictions.length > 1 ? 's' : ''}",
+              style: const TextStyle(color: AppColors.gold, fontSize: 10, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 6),
+      const Text(
+        "Sélection validée par notre IA — à jouer en confiance",
+        style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+      ),
+      const SizedBox(height: 12),
+    ]);
+
+    // Live predictions first
+    if (livePreds.isNotEmpty) {
+      widgets.add(
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.error.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text("💡", style: TextStyle(fontSize: 14)),
+              SizedBox(width: 6),
+              Text(
+                "Pari Live",
+                style: TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      );
+      widgets.addAll(livePreds.map((p) => _buildTopPickTile(p, home, away)));
+    }
+
+    // Prematch refined picks
+    widgets.addAll(prematchPreds.map((p) => _buildTopPickTile(p, home, away)));
 
     return widgets;
   }
@@ -403,145 +389,35 @@ class _MatchDetailSheetState extends State<MatchDetailSheet> {
     );
   }
 
-  Widget _buildPredictionTile(TodayPrediction pred, String home, String away) {
-    if (pred.isLocked) {
-      return Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.lock_rounded, color: AppColors.gold, size: 18),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    pred.typeLabel,
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    "Réservé aux abonnés Premium",
-                    style: TextStyle(color: AppColors.gold, fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
+  /// Subtle hint tile for strong secondary signals (≥75%) — not an official bet
+  Widget _buildHintTile(TodayPrediction pred, String home, String away) {
     final confidence = pred.confidencePercent;
-    final color = _confidenceColor(pred.confidence ?? 0);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.textSecondary.withValues(alpha: 0.1)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Text(pred.typeIcon, style: const TextStyle(fontSize: 14)),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceLight,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  pred.typeLabel,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.w600),
-                ),
-              ),
-              if (pred.isRefined) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.info.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    "Affiné ✓",
-                    style: TextStyle(color: AppColors.info, fontSize: 9, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-              const Spacer(),
-              if (pred.isLive)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    "LIVE",
-                    style: TextStyle(color: AppColors.error, fontSize: 9, fontWeight: FontWeight.w700),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  pred.eventLabelWith(home: home, away: away),
-                  style: const TextStyle(
-                    color: AppColors.gold, fontSize: 14, fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: pred.confidence ?? 0,
-                    backgroundColor: AppColors.surfaceLight,
-                    valueColor: AlwaysStoppedAnimation<Color>(color),
-                    minHeight: 5,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                "$confidence%",
-                style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700),
-              ),
-              if (pred.confidenceLabel != null) ...[
-                const SizedBox(width: 4),
-                Text(
-                  pred.confidenceLabel!,
-                  style: TextStyle(color: color, fontSize: 10),
-                ),
-              ],
-            ],
-          ),
-          if (pred.analysisText != null && pred.analysisText!.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              pred.analysisText!,
-              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, height: 1.5),
+          Text(pred.typeIcon, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              pred.eventLabelWith(home: home, away: away),
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
             ),
-          ],
+          ),
+          Text(
+            "$confidence%",
+            style: TextStyle(
+              color: AppColors.textSecondary.withValues(alpha: 0.7),
+              fontSize: 12, fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );

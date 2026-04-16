@@ -7,20 +7,58 @@ import 'match_model.dart';
 import 'prediction_model.dart';
 import 'today_match_model.dart';
 
-// ── Auto-refresh interval (60s for live match detection) ──
-const _autoRefreshInterval = Duration(seconds: 60);
+// ── Adaptive polling intervals ──
+// Aligned with backend cron schedules:
+//   - update-live-scores: every 5 min
+//   - fetch-lineups: every 5 min (matches < 90 min from KO)
+//   - predict-live: every 5 min during live
+const _intervalLive = Duration(seconds: 30);      // Live match → catch score/prono updates fast
+const _intervalPreKickoff = Duration(seconds: 45); // < 1h before KO → lineups & refined pronos
+const _intervalCalm = Duration(minutes: 3);        // > 1h before KO → routine check
+const _intervalIdle = Duration(minutes: 5);        // No match or all finished → minimal
+
+/// Determines optimal polling interval based on current match states.
+Duration _computePollingInterval(List<TodayMatch> matches) {
+  if (matches.isEmpty) return _intervalIdle;
+
+  bool hasLive = false;
+  bool hasPreKickoff = false;
+  bool hasUpcoming = false;
+
+  for (final m in matches) {
+    if (m.isLive) {
+      hasLive = true;
+      break; // Live = highest priority, no need to check further
+    }
+    if (!m.isEffectivelyFinished && m.minutesUntilKickoff > 0 && m.minutesUntilKickoff <= 60) {
+      hasPreKickoff = true;
+    } else if (!m.isEffectivelyFinished && m.minutesUntilKickoff > 60) {
+      hasUpcoming = true;
+    }
+  }
+
+  if (hasLive) return _intervalLive;
+  if (hasPreKickoff) return _intervalPreKickoff;
+  if (hasUpcoming) return _intervalCalm;
+  return _intervalIdle; // All finished
+}
 
 // ── Today eligible matches (Edge Function with auth, fallback without) ──
-// Auto-refreshes every 60s so live status, scores & predictions stay current.
+// Auto-refreshes with adaptive polling: 30s (live) → 45s (pre-KO) → 3min → 5min
 
 final todayEligibleMatchesProvider = FutureProvider<List<TodayMatch>>((ref) async {
   final repo = ref.watch(supabaseRepoProvider);
   final user = Supabase.instance.client.auth.currentUser;
   final result = await repo.fetchTodayEligibleMatches(useEdgeFunction: user != null);
 
-  // Schedule next auto-refresh
-  final timer = Timer(_autoRefreshInterval, () {
-    debugPrint('[Quantara] Auto-refresh matches');
+  // Adaptive polling: interval depends on current match context
+  final interval = _computePollingInterval(result);
+  debugPrint('[Quantara] Next refresh in ${interval.inSeconds}s '
+      '(${result.where((m) => m.isLive).length} live, '
+      '${result.where((m) => !m.isEffectivelyFinished && !m.isLive && m.minutesUntilKickoff <= 60 && m.minutesUntilKickoff > 0).length} pre-KO)');
+
+  final timer = Timer(interval, () {
+    debugPrint('[Quantara] Auto-refresh matches (adaptive)');
     ref.invalidateSelf();
   });
   ref.onDispose(timer.cancel);

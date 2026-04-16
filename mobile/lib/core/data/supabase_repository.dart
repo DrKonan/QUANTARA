@@ -107,29 +107,29 @@ class SupabaseRepository {
     final matches = (data as List).map((json) => _parseMatch(json, metaMap: metaMap)).toList();
     final nowMs = now.millisecondsSinceEpoch;
 
-    // Fetch predictions for finished matches in one query
-    final finishedIds = matches
-        .where((m) => m.status == MatchStatus.finished)
+    // Fetch predictions for ALL matches (not just finished) so upcoming/live show pronos too
+    final allIds = matches
         .map((m) => int.tryParse(m.id))
         .where((id) => id != null)
         .cast<int>()
         .toList();
 
     final predsByMatch = <int, List<TodayPrediction>>{};
-    if (finishedIds.isNotEmpty) {
+    if (allIds.isNotEmpty) {
       try {
         final predData = await _client
             .from('predictions')
             .select()
-            .inFilter('match_id', finishedIds)
+            .inFilter('match_id', allIds)
             .eq('is_published', true);
         for (final p in (predData as List)) {
           final matchId = p['match_id'] as int;
           predsByMatch.putIfAbsent(matchId, () => []);
           predsByMatch[matchId]!.add(TodayPrediction.fromPredRow(p));
         }
+        debugPrint('[Quantara] Loaded predictions for ${predsByMatch.length} matches');
       } catch (e) {
-        debugPrint('[Quantara] Failed to fetch predictions for finished: $e');
+        debugPrint('[Quantara] Failed to fetch predictions: $e');
       }
     }
 
@@ -145,17 +145,35 @@ class SupabaseRepository {
       int? wait;
       List<TodayPrediction> preds = [];
 
+      // Always attach predictions if available
+      final matchPreds = predsByMatch[int.tryParse(match.id)] ?? [];
+      preds = matchPreds;
+      // Official = refined top picks ≥75% + live ≥75%
+      final officialCount = matchPreds.where((p) =>
+        (p.confidence ?? 0) >= 0.75 && ((p.isTopPick && p.isRefined) || p.isLive)
+      ).length;
+      final hasTendances = matchPreds.any((p) =>
+        (p.confidence ?? 0) >= 0.75 && !p.isRefined && !p.isLive
+      );
+
       if (match.status == MatchStatus.finished) {
-        final matchPreds = predsByMatch[int.tryParse(match.id)] ?? [];
-        preds = matchPreds;
         status = 'finished';
-        message = matchPreds.isNotEmpty
-            ? "Match termin\u00e9 \u2014 ${matchPreds.length} pr\u00e9diction(s) \u00e0 v\u00e9rifier"
-            : "Match termin\u00e9";
+        message = officialCount > 0
+            ? "Match terminé — $officialCount pronostic${officialCount > 1 ? 's' : ''}"
+            : "Match terminé";
       } else if (match.status == MatchStatus.live) {
-        status = 'pending_live';
-        message = "Analyse en cours \u2014 pr\u00e9dictions live bient\u00f4t";
-        wait = 5;
+        status = officialCount > 0 ? 'available' : 'pending_live';
+        message = officialCount > 0
+            ? "$officialCount pronostic${officialCount > 1 ? 's' : ''} — Match en cours"
+            : "Analyse en cours — prédictions live bientôt";
+        wait = officialCount == 0 ? 5 : null;
+      } else if (officialCount > 0) {
+        status = 'available';
+        message = "$officialCount pronostic${officialCount > 1 ? 's' : ''} officiel${officialCount > 1 ? 's' : ''}";
+      } else if (hasTendances) {
+        status = 'waiting_lineups';
+        message = "Tendances détectées — en attente de la compo";
+        wait = minUntil > 60 ? (minUntil - 60).clamp(0, 999) : null;
       } else if (minUntil <= 90) {
         status = 'waiting_lineups';
         message = "En attente des compositions officielles";
@@ -268,15 +286,40 @@ class SupabaseRepository {
   }
 
   Future<List<Prediction>> fetchRecentResults({int limit = 50}) async {
-    final data = await _client
+    // Only fetch official predictions (refined top picks ≥75% + live ≥75%) for history/winrate
+    final topPickData = await _client
         .from('predictions')
         .select('*, matches!inner(*)')
         .eq('is_published', true)
+        .eq('is_top_pick', true)
+        .eq('is_refined', true)
+        .gte('confidence', 0.75)
         .not('is_correct', 'is', null)
         .order('created_at', ascending: false)
         .limit(limit);
 
-    return (data as List).map((json) => _parsePrediction(json)).toList();
+    final liveData = await _client
+        .from('predictions')
+        .select('*, matches!inner(*)')
+        .eq('is_published', true)
+        .eq('is_live', true)
+        .gte('confidence', 0.75)
+        .not('is_correct', 'is', null)
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    // Merge & deduplicate by id, sort by created_at desc
+    final allRows = <String, Map<String, dynamic>>{};
+    for (final row in (topPickData as List)) {
+      allRows[row['id'].toString()] = row as Map<String, dynamic>;
+    }
+    for (final row in (liveData as List)) {
+      allRows[row['id'].toString()] = row as Map<String, dynamic>;
+    }
+    final merged = allRows.values.toList()
+      ..sort((a, b) => (b['created_at'] as String).compareTo(a['created_at'] as String));
+
+    return merged.take(limit).map((json) => _parsePrediction(json)).toList();
   }
 
   // ── Stats ──
@@ -400,6 +443,7 @@ class SupabaseRepository {
       result: _parseResult(json['is_correct']),
       isLive: json['is_live'] as bool? ?? false,
       isPremium: json['is_premium'] as bool? ?? false,
+      isTopPick: json['is_top_pick'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
       match: matchData != null ? _parseMatch(matchData) : null,
     );

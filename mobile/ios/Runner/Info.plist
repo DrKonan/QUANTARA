@@ -47,6 +47,10 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Quantara a besoin d'accéder à vos photos pour votre avatar de profil.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Quantara a besoin de l'appareil photo pour prendre votre photo de profil.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

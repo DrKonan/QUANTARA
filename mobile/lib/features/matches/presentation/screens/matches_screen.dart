@@ -151,7 +151,7 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> with SingleTicker
         }
 
         final live = filtered.where((m) => m.isLive).length;
-        final withPred = filtered.where((m) => m.hasPredictions).length;
+        final withPred = filtered.where((m) => m.hasOfficialPredictions).length;
         final groups = _groupByCategoryCountryLeague(filtered);
 
         return CustomScrollView(
@@ -168,7 +168,7 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> with SingleTicker
                     if (withPred > 0) _badge("$withPred pronos", AppColors.emerald),
                     if (isFinished) ...[
                       _badge(
-                        "${filtered.where((m) => m.predictions.any((p) => p.isCorrect == true)).length} \u2705",
+                        "${filtered.where((m) => m.officialPredictions.any((p) => p.isCorrect == true)).length} \u2705",
                         AppColors.success,
                       ),
                     ],
@@ -393,7 +393,7 @@ class _LeagueGroup {
   _LeagueGroup({required this.leagueName, required this.tier, required this.matches});
 
   int get liveCount => matches.where((m) => m.isLive).length;
-  int get predCount => matches.where((m) => m.hasPredictions).length;
+  int get predCount => matches.where((m) => m.hasOfficialPredictions).length;
 }
 
 // ── Category header ──
@@ -599,7 +599,8 @@ class _MatchTile extends StatelessWidget {
 
   Widget _buildStatusIcon() {
     if (todayMatch.isFinished) {
-      final preds = todayMatch.predictions;
+      // Only evaluate official predictions (top picks + live) for result status
+      final preds = todayMatch.officialPredictions;
       if (preds.isEmpty) {
         return Icon(Icons.sports_score_rounded, color: AppColors.textSecondary.withValues(alpha: 0.4), size: 18);
       }
@@ -633,9 +634,9 @@ class _MatchTile extends StatelessWidget {
       );
     }
 
-    // Show Top Pick star if available
-    if (todayMatch.topPicks.isNotEmpty) {
-      final best = todayMatch.bestTopPick!;
+    // Show Top Pick star if available (official only: refined + ≥75%)
+    final best = todayMatch.bestTopPick;
+    if (best != null) {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [

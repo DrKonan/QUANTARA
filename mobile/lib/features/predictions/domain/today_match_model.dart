@@ -20,17 +20,52 @@ class TodayMatch {
     this.category = 'other',
   });
 
+  /// Minimum confidence to show any prediction to the user
+  static const double minConfidence = 0.75;
+
   bool get hasPredictions => predictions.isNotEmpty;
   bool get isLive => match.status == MatchStatus.live;
   bool get isFinished => match.status == MatchStatus.finished || predictionStatus == 'finished';
 
+  /// Has lineup been received? (at least one refined prediction exists)
+  bool get hasLineup => predictions.any((p) => p.isRefined);
+
+  /// Official coupon: refined top picks ≥75% + live ≥75%
+  /// Only shown after lineup confirmation or during live
+  List<TodayPrediction> get officialPredictions =>
+      predictions.where((p) =>
+        (p.confidence ?? 0) >= minConfidence &&
+        ((p.isTopPick && p.isRefined) || p.isLive)
+      ).toList();
+  bool get hasOfficialPredictions => officialPredictions.isNotEmpty;
+
+  /// Tendances: pre-lineup signals ≥75% (shown as hints before compo)
+  List<TodayPrediction> get tendancePredictions {
+    final list = predictions.where((p) =>
+      (p.confidence ?? 0) >= minConfidence && !p.isRefined && !p.isLive
+    ).toList()
+      ..sort((a, b) => (b.confidence ?? 0).compareTo(a.confidence ?? 0));
+    return list.take(2).toList(); // Max 2 tendances
+  }
+  bool get hasTendances => tendancePredictions.isNotEmpty;
+
+  /// Everything visible to the user (official + tendances depending on state)
+  bool get hasVisibleContent =>
+      hasOfficialPredictions || (!hasLineup && hasTendances);
+
   List<TodayPrediction> get topPicks => predictions.where((p) => p.isTopPick).toList();
   List<TodayPrediction> get otherPredictions => predictions.where((p) => !p.isTopPick).toList();
   TodayPrediction? get bestTopPick {
-    final picks = topPicks;
+    final picks = officialPredictions.where((p) => p.isTopPick).toList();
     if (picks.isEmpty) return null;
     picks.sort((a, b) => (b.confidence ?? 0).compareTo(a.confidence ?? 0));
     return picks.first;
+  }
+  /// Best visible prediction (official if available, else best tendance)
+  TodayPrediction? get bestVisiblePrediction {
+    if (hasOfficialPredictions) return bestTopPick ?? officialPredictions.first;
+    if (!hasLineup && hasTendances) return tendancePredictions.first;
+    return null;
   }
 
   /// True if match kickoff was > 150 min ago and not explicitly live

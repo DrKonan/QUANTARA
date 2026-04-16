@@ -14,6 +14,7 @@ class Prediction {
   final PredictionResult result;
   final bool isLive;
   final bool isPremium;
+  final bool isTopPick;
   final DateTime createdAt;
   final Match? match; // populated when joined
 
@@ -26,6 +27,7 @@ class Prediction {
     this.result = PredictionResult.pending,
     this.isLive = false,
     this.isPremium = false,
+    this.isTopPick = false,
     required this.createdAt,
     this.match,
   });
