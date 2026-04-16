@@ -232,7 +232,14 @@ class ProfileScreen extends ConsumerWidget {
                 _buildMenuItem(
                   icon: Icons.notifications_outlined,
                   title: "Notifications",
-                  onTap: () => _showComingSoon(context, "Paramètres de notifications"),
+                  subtitle: "Gérer les alertes et catégories",
+                  onTap: () => context.push('/profile/notifications'),
+                ),
+                _buildMenuItem(
+                  icon: Icons.lock_outline_rounded,
+                  title: "Mot de passe",
+                  subtitle: "Changer votre mot de passe",
+                  onTap: () => context.push('/profile/password'),
                 ),
                 _buildMenuItem(
                   icon: Icons.language_rounded,
@@ -246,17 +253,19 @@ class ProfileScreen extends ConsumerWidget {
                 _buildMenuItem(
                   icon: Icons.shield_outlined,
                   title: "Confidentialité",
-                  onTap: () => _showComingSoon(context, "Politique de confidentialité"),
+                  subtitle: "Politique de protection des données",
+                  onTap: () => context.push('/profile/privacy'),
                 ),
                 _buildMenuItem(
                   icon: Icons.help_outline_rounded,
                   title: "Aide & Support",
-                  onTap: () => _showComingSoon(context, "Centre d'aide"),
+                  subtitle: "FAQ et contact",
+                  onTap: () => context.push('/profile/help'),
                 ),
                 _buildMenuItem(
                   icon: Icons.info_outline_rounded,
                   title: "À propos de Quantara",
-                  onTap: () => _showAbout(context),
+                  onTap: () => context.push('/profile/about'),
                 ),
 
                 const SizedBox(height: 16),
@@ -365,55 +374,6 @@ class ProfileScreen extends ConsumerWidget {
         backgroundColor: AppColors.surface,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
-  }
-
-  void _showAbout(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64, height: 64,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppColors.gold, AppColors.gold.withValues(alpha: 0.6)],
-                ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(Icons.analytics_rounded, color: Colors.white, size: 32),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              "Quantara",
-              style: TextStyle(color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 4),
-            const Text("v1.0.0", style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-            const SizedBox(height: 16),
-            const Text(
-              "Prédictions sportives alimentées par l'Intelligence Artificielle.\n\nFoot · Basket · Hockey",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.6),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "© 2026 Quantara — Tous droits réservés",
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 10),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Fermer", style: TextStyle(color: AppColors.gold)),
-          ),
-        ],
       ),
     );
   }

@@ -11,6 +11,11 @@ import '../../features/matches/presentation/screens/matches_screen.dart';
 import '../../features/history/presentation/screens/history_screen.dart';
 import '../../features/profile/presentation/screens/profile_screen.dart';
 import '../../features/profile/presentation/screens/edit_profile_screen.dart';
+import '../../features/profile/presentation/screens/notification_settings_screen.dart';
+import '../../features/profile/presentation/screens/change_password_screen.dart';
+import '../../features/profile/presentation/screens/privacy_policy_screen.dart';
+import '../../features/profile/presentation/screens/help_support_screen.dart';
+import '../../features/profile/presentation/screens/about_screen.dart';
 import '../../features/subscription/presentation/screens/subscription_screen.dart';
 import '../../shared/widgets/main_shell.dart';
 
@@ -51,6 +56,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/auth/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),
       GoRoute(path: '/subscription', builder: (context, state) => const SubscriptionScreen()),
       GoRoute(path: '/profile/edit', builder: (context, state) => const EditProfileScreen()),
+      GoRoute(path: '/profile/notifications', builder: (context, state) => const NotificationSettingsScreen()),
+      GoRoute(path: '/profile/password', builder: (context, state) => const ChangePasswordScreen()),
+      GoRoute(path: '/profile/privacy', builder: (context, state) => const PrivacyPolicyScreen()),
+      GoRoute(path: '/profile/help', builder: (context, state) => const HelpSupportScreen()),
+      GoRoute(path: '/profile/about', builder: (context, state) => const AboutScreen()),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
         routes: [
