@@ -30,6 +30,28 @@ interface ApiFixtureResult {
 }
 
 // ----------------------------------------------------------------
+// Extrait une stat numérique depuis les statistics API-Football
+// ----------------------------------------------------------------
+function getStatValue(
+  stats: ApiFixtureResult["statistics"],
+  statType: string,
+): { home: number; away: number } | null {
+  if (!stats || stats.length < 2) return null;
+  const findVal = (teamStats: typeof stats[0]) => {
+    const s = teamStats.statistics.find(
+      (st) => st.type.toLowerCase().replace(/\s+/g, "_") === statType ||
+              st.type.toLowerCase() === statType.replace(/_/g, " "),
+    );
+    if (!s || s.value === null) return null;
+    return typeof s.value === "number" ? s.value : parseInt(String(s.value), 10) || 0;
+  };
+  const homeVal = findVal(stats[0]);
+  const awayVal = findVal(stats[1]);
+  if (homeVal === null || awayVal === null) return null;
+  return { home: homeVal, away: awayVal };
+}
+
+// ----------------------------------------------------------------
 // Évalue si une prédiction est correcte selon le résultat réel
 // ----------------------------------------------------------------
 function evaluatePrediction(
@@ -71,6 +93,42 @@ function evaluatePrediction(
       if (prediction === "draw") return htHome === htAway;
       return null;
     }
+    case "double_chance": {
+      const homeWin = homeGoals > awayGoals;
+      const isDraw = homeGoals === awayGoals;
+      const awayWin = awayGoals > homeGoals;
+      if (prediction === "1X") return homeWin || isDraw;
+      if (prediction === "X2") return awayWin || isDraw;
+      if (prediction === "12") return homeWin || awayWin;  // = pas de nul
+      return null;
+    }
+    case "corners": {
+      const cornerStats = getStatValue(result.statistics, "corner_kicks");
+      if (!cornerStats) return null;  // pas de stats dispo → on ne peut pas évaluer
+      const totalCorners = cornerStats.home + cornerStats.away;
+      const match = prediction.match(/^(over|under)_(\d+(?:\.\d+)?)$/);
+      if (!match) return null;
+      const direction = match[1];
+      const line = parseFloat(match[2]);
+      if (direction === "over") return totalCorners > line;
+      if (direction === "under") return totalCorners < line;
+      return null;
+    }
+    case "cards": {
+      // Cartons jaunes + rouges (un rouge = un carton dans le décompte)
+      const yellowStats = getStatValue(result.statistics, "yellow_cards");
+      const redStats = getStatValue(result.statistics, "red_cards");
+      if (!yellowStats) return null;  // pas de stats dispo
+      const totalCards = yellowStats.home + yellowStats.away +
+        (redStats ? redStats.home + redStats.away : 0);
+      const match = prediction.match(/^(over|under)_(\d+(?:\.\d+)?)$/);
+      if (!match) return null;
+      const direction = match[1];
+      const line = parseFloat(match[2]);
+      if (direction === "over") return totalCards > line;
+      if (direction === "under") return totalCards < line;
+      return null;
+    }
     default:
       return null;
   }
@@ -108,6 +166,24 @@ Deno.serve(async (_req: Request) => {
 
       if (!fixtureData || fixtureData.length === 0) continue;
       const result = fixtureData[0];
+
+      // Récupère les statistiques du match (corners, cartons…)
+      // L'endpoint /fixtures ne renvoie pas toujours les stats, on doit utiliser /fixtures/statistics
+      if (!result.statistics || result.statistics.length === 0) {
+        try {
+          const statsData = await apifootball("/fixtures/statistics", {
+            fixture: match.external_id,
+          }) as Array<{
+            team: { id: number };
+            statistics: Array<{ type: string; value: string | number | null }>;
+          }>;
+          if (statsData && statsData.length >= 2) {
+            result.statistics = statsData;
+          }
+        } catch (e) {
+          console.warn(`[evaluate-predictions] Could not fetch statistics for fixture ${match.external_id}:`, e);
+        }
+      }
 
       // Backfill des scores si manquants sur la table matches
       const apiHome = result.goals.home;

@@ -4,7 +4,7 @@
 //               score actuel, xG ajustés
 // Marchés : result, over_under, btts, corners, cards
 // ============================================================
-import { selectTopPicks } from "./scoring-engine.ts";
+import { selectTopPicks, selectBestLine } from "./scoring-engine.ts";
 
 export interface LiveStats {
   minute: number;
@@ -139,7 +139,7 @@ export function computeLiveScores(
     }
   }
 
-  // ── Over/Under buts restants ──────────────────────────────────
+  // ── Over/Under buts restants (ligne dynamique) ─────────────────
   const totalCurrentGoals = stats.homeScore + stats.awayScore;
   const remainingMinutes = Math.max(90 - stats.minute, 0);
   const totalShotsOnTarget = stats.homeShotsOnTarget + stats.awayShotsOnTarget;
@@ -150,40 +150,44 @@ export function computeLiveScores(
   // Shots on target comme proxy de "pression" offensive
   const shotsRatio = stats.minute > 0 ? totalShotsOnTarget / stats.minute * 90 : 0;
 
-  const over25LiveScore =
-    normalize(projectedTotalGoals, 1.5, 4.5) * 0.50 +
+  const goalLineLive = selectBestLine(projectedTotalGoals, [1.5, 2.5, 3.5, 4.5]);
+
+  const overGoalsLiveScore =
+    normalize(projectedTotalGoals, goalLineLive - 1, goalLineLive + 2) * 0.50 +
     normalize(shotsRatio, 5, 20) * 0.25 +
     normalize(totalCurrentGoals, 0, 4) * 0.25;
 
-  if (over25LiveScore >= PUBLISH_THRESHOLD) {
+  if (overGoalsLiveScore >= PUBLISH_THRESHOLD) {
     results.push({
-      prediction: "over_2.5",
+      prediction: `over_${goalLineLive}`,
       prediction_type: "over_under",
-      confidence: Math.min(over25LiveScore, 0.99),
+      confidence: Math.min(overGoalsLiveScore, 0.99),
       score_breakdown: {
         current_goals: totalCurrentGoals,
         projected_goals: projectedTotalGoals,
         shots_on_target_ratio: shotsRatio,
+        line: goalLineLive,
         minute: stats.minute,
       },
     });
   }
 
-  // Under 2.5 — si on approche de la fin avec peu de buts
-  if (totalCurrentGoals <= 2 && stats.minute >= 60) {
-    const under25LiveScore =
-      (1 - normalize(projectedTotalGoals, 1.5, 4.5)) * 0.40 +
+  // Under — si on approche de la fin avec peu de buts
+  if (totalCurrentGoals <= Math.floor(goalLineLive) && stats.minute >= 60) {
+    const underGoalsLiveScore =
+      (1 - normalize(projectedTotalGoals, goalLineLive - 1, goalLineLive + 2)) * 0.40 +
       minuteRatio * 0.35 +
       (1 - normalize(shotsRatio, 5, 20)) * 0.25;
 
-    if (under25LiveScore >= PUBLISH_THRESHOLD) {
+    if (underGoalsLiveScore >= PUBLISH_THRESHOLD) {
       results.push({
-        prediction: "under_2.5",
+        prediction: `under_${goalLineLive}`,
         prediction_type: "over_under",
-        confidence: Math.min(under25LiveScore, 0.99),
+        confidence: Math.min(underGoalsLiveScore, 0.99),
         score_breakdown: {
           current_goals: totalCurrentGoals,
           projected_goals: projectedTotalGoals,
+          line: goalLineLive,
           minute: stats.minute,
         },
       });
@@ -238,12 +242,12 @@ export function computeLiveScores(
     }
   }
 
-  // ── Corners Over/Under 9.5 live ───────────────────────────────
+  // ── Corners Over/Under live (ligne dynamique) ──────────────────
   const totalCorners = stats.homeCorners + stats.awayCorners;
   const projectedCorners = stats.minute > 5
     ? (totalCorners / stats.minute) * 90
     : 10.5; // pas assez de données
-  const cornerLine = 9.5;
+  const cornerLine = selectBestLine(projectedCorners, [7.5, 8.5, 9.5, 10.5, 11.5, 12.5]);
 
   if (stats.minute >= 30) {
     const overCornersLive = 1 / (1 + Math.exp(-(projectedCorners - cornerLine) / 1.5));
@@ -253,28 +257,30 @@ export function computeLiveScores(
 
     if (overCornersScore >= PUBLISH_THRESHOLD) {
       results.push({
-        prediction: "over_9.5",
+        prediction: `over_${cornerLine}`,
         prediction_type: "corners",
         confidence: Math.min(overCornersScore, 0.99),
         score_breakdown: {
           current_corners: totalCorners,
           projected_corners: projectedCorners,
+          line: cornerLine,
           minute: stats.minute,
         },
       });
     }
 
     // Under corners : si rythme bas en 2ème mi-temps
-    if (stats.minute >= 60 && totalCorners <= 7) {
+    if (stats.minute >= 60 && totalCorners <= Math.floor(cornerLine * 0.7)) {
       const underCornersScore = (1 - overCornersLive) * cornerCertainty;
       if (underCornersScore >= PUBLISH_THRESHOLD) {
         results.push({
-          prediction: "under_9.5",
+          prediction: `under_${cornerLine}`,
           prediction_type: "corners",
           confidence: Math.min(underCornersScore, 0.99),
           score_breakdown: {
             current_corners: totalCorners,
             projected_corners: projectedCorners,
+            line: cornerLine,
             minute: stats.minute,
           },
         });
@@ -282,13 +288,13 @@ export function computeLiveScores(
     }
   }
 
-  // ── Cards Over/Under 3.5 live ─────────────────────────────────
+  // ── Cards Over/Under live (ligne dynamique) ────────────────────
   const totalCards = stats.homeYellowCards + stats.awayYellowCards +
     stats.homeRedCards + stats.awayRedCards;
   const projectedCards = stats.minute > 10
     ? (totalCards / stats.minute) * 90
     : 4.0;
-  const cardLine = 3.5;
+  const cardLine = selectBestLine(projectedCards, [2.5, 3.5, 4.5, 5.5, 6.5]);
 
   if (stats.minute >= 30) {
     const overCardsLive = 1 / (1 + Math.exp(-(projectedCards - cardLine) / 1.0));
@@ -297,28 +303,30 @@ export function computeLiveScores(
 
     if (overCardsScore >= PUBLISH_THRESHOLD) {
       results.push({
-        prediction: "over_3.5",
+        prediction: `over_${cardLine}`,
         prediction_type: "cards",
         confidence: Math.min(overCardsScore, 0.99),
         score_breakdown: {
           current_cards: totalCards,
           projected_cards: projectedCards,
+          line: cardLine,
           minute: stats.minute,
         },
       });
     }
 
     // Under cards : si match calme en fin de partie
-    if (stats.minute >= 60 && totalCards <= 2) {
+    if (stats.minute >= 60 && totalCards <= Math.floor(cardLine * 0.6)) {
       const underCardsScore = (1 - overCardsLive) * cardCertainty;
       if (underCardsScore >= PUBLISH_THRESHOLD) {
         results.push({
-          prediction: "under_3.5",
+          prediction: `under_${cardLine}`,
           prediction_type: "cards",
           confidence: Math.min(underCardsScore, 0.99),
           score_breakdown: {
             current_cards: totalCards,
             projected_cards: projectedCards,
+            line: cardLine,
             minute: stats.minute,
           },
         });

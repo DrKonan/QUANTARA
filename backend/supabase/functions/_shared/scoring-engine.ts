@@ -82,6 +82,24 @@ function expectedGoals(
 }
 
 // ----------------------------------------------------------------
+// Sélectionne la meilleure ligne de pari parmi les options
+// Logique : choisit la ligne la plus proche de l'estimation, avec un
+// léger biais vers l'écart (on veut une ligne où on a un avantage)
+// Ex: estimatedCorners=11.2 → parmi [7.5, 8.5, 9.5, 10.5, 11.5, 12.5] → 10.5
+// (en dessous de l'estimation = on parie over avec confiance)
+// ----------------------------------------------------------------
+export function selectBestLine(estimated: number, lines: number[]): number {
+  // Choisit la ligne juste en dessous de l'estimation (pour un meilleur edge)
+  // Si l'estimation est pile sur une ligne, on la prend
+  let bestLine = lines[0];
+  for (const line of lines) {
+    if (line <= estimated) bestLine = line;
+    else break;
+  }
+  return bestLine;
+}
+
+// ----------------------------------------------------------------
 // Proba résultat (1X2) via modèle de Poisson (jusqu'à 10 buts)
 // ----------------------------------------------------------------
 export function computeResultProbs(
@@ -216,29 +234,32 @@ export function computePrematchScores(
     });
   }
 
-  // ── 2. Over/Under 2.5 buts ─────────────────────────────────────
-  const { over: over25, under: under25 } = computeOverUnderProb(homeXG, awayXG, 2.5);
+  // ── 2. Over/Under buts (ligne dynamique) ────────────────────────
+  // Choix de la ligne la plus pertinente selon l'estimation xG
+  const totalXG = homeXG + awayXG;
+  const goalLine = selectBestLine(totalXG, [1.5, 2.5, 3.5, 4.5]);
+  const { over: overGoals, under: underGoals } = computeOverUnderProb(homeXG, awayXG, goalLine);
   const h2hGoalsAvg = ctx.h2hTotal > 0
     ? (ctx.h2hHomeGoalsAvg + ctx.h2hAwayGoalsAvg)
     : (homeXG + awayXG);
 
-  const over25Score = over25 * 0.6 + (h2hGoalsAvg > 2.5 ? 0.3 : 0.1) + homeFormScore * 0.1;
-  const under25Score = under25 * 0.6 + (h2hGoalsAvg < 2.5 ? 0.3 : 0.1) + (1 - homeFormScore) * 0.1;
+  const overGoalsScore = overGoals * 0.6 + (h2hGoalsAvg > goalLine ? 0.3 : 0.1) + homeFormScore * 0.1;
+  const underGoalsScore = underGoals * 0.6 + (h2hGoalsAvg < goalLine ? 0.3 : 0.1) + (1 - homeFormScore) * 0.1;
 
-  if (over25Score >= PUBLISH_THRESHOLD) {
+  if (overGoalsScore >= PUBLISH_THRESHOLD) {
     results.push({
-      prediction: "over_2.5",
+      prediction: `over_${goalLine}`,
       prediction_type: "over_under",
-      confidence: Math.min(over25Score, 0.99),
-      score_breakdown: { poisson_over: over25, h2h_goals: h2hGoalsAvg, form: homeFormScore * 0.1 },
+      confidence: Math.min(overGoalsScore, 0.99),
+      score_breakdown: { poisson_over: overGoals, h2h_goals: h2hGoalsAvg, form: homeFormScore * 0.1, line: goalLine, estimated_total: totalXG },
     });
   }
-  if (under25Score >= PUBLISH_THRESHOLD) {
+  if (underGoalsScore >= PUBLISH_THRESHOLD) {
     results.push({
-      prediction: "under_2.5",
+      prediction: `under_${goalLine}`,
       prediction_type: "over_under",
-      confidence: Math.min(under25Score, 0.99),
-      score_breakdown: { poisson_under: under25, h2h_goals: h2hGoalsAvg },
+      confidence: Math.min(underGoalsScore, 0.99),
+      score_breakdown: { poisson_under: underGoals, h2h_goals: h2hGoalsAvg, line: goalLine, estimated_total: totalXG },
     });
   }
 
@@ -311,14 +332,14 @@ export function computePrematchScores(
     });
   }
 
-  // ── 5. Corners Over/Under 9.5 ─────────────────────────────────
+  // ── 5. Corners Over/Under (ligne dynamique) ─────────────────────
   // Estimation basée sur l'intensité offensive des deux équipes
   const leagueAvgCorners = ctx.leagueAvgCorners ?? 10.5;
   const leagueAvgGoals = 1.35;
   const homeIntensity = ((home.homeGoalsScored + home.homeGoalsConceded) / 2) / leagueAvgGoals;
   const awayIntensity = ((away.awayGoalsScored + away.awayGoalsConceded) / 2) / leagueAvgGoals;
   const estimatedCorners = leagueAvgCorners * (homeIntensity + awayIntensity) / 2;
-  const cornerLine = 9.5;
+  const cornerLine = selectBestLine(estimatedCorners, [7.5, 8.5, 9.5, 10.5, 11.5, 12.5]);
 
   // Sigmoid : plus l'estimation s'éloigne de la ligne, plus la confiance est forte
   const overCornersRaw = 1 / (1 + Math.exp(-(estimatedCorners - cornerLine) / 1.5));
@@ -333,11 +354,12 @@ export function computePrematchScores(
 
   if (overCornersScore >= PUBLISH_THRESHOLD) {
     results.push({
-      prediction: "over_9.5",
+      prediction: `over_${cornerLine}`,
       prediction_type: "corners",
       confidence: Math.min(overCornersScore, 0.99),
       score_breakdown: {
         estimated_corners: estimatedCorners,
+        line: cornerLine,
         home_intensity: homeIntensity,
         away_intensity: awayIntensity,
         h2h_intensity_bonus: h2hIntensityBonus,
@@ -346,11 +368,12 @@ export function computePrematchScores(
   }
   if (underCornersScore >= PUBLISH_THRESHOLD) {
     results.push({
-      prediction: "under_9.5",
+      prediction: `under_${cornerLine}`,
       prediction_type: "corners",
       confidence: Math.min(underCornersScore, 0.99),
       score_breakdown: {
         estimated_corners: estimatedCorners,
+        line: cornerLine,
         home_intensity: homeIntensity,
         away_intensity: awayIntensity,
         h2h_intensity_bonus: -h2hIntensityBonus,
@@ -358,12 +381,12 @@ export function computePrematchScores(
     });
   }
 
-  // ── 6. Cards Over/Under 3.5 ───────────────────────────────────
+  // ── 6. Cards Over/Under (ligne dynamique) ───────────────────────
   // Basé sur les cartons jaunes moyens par match de chaque équipe
   const homeAvgCards = home.avgYellowCards ?? 2.0;
   const awayAvgCards = away.avgYellowCards ?? 2.0;
   const estimatedCards = homeAvgCards + awayAvgCards;
-  const cardLine = 3.5;
+  const cardLine = selectBestLine(estimatedCards, [2.5, 3.5, 4.5, 5.5, 6.5]);
 
   // Sigmoid centrée sur la ligne
   const overCardsRaw = 1 / (1 + Math.exp(-(estimatedCards - cardLine) / 1.0));
@@ -377,11 +400,12 @@ export function computePrematchScores(
 
   if (overCardsScore >= PUBLISH_THRESHOLD) {
     results.push({
-      prediction: "over_3.5",
+      prediction: `over_${cardLine}`,
       prediction_type: "cards",
       confidence: Math.min(overCardsScore, 0.99),
       score_breakdown: {
         estimated_cards: estimatedCards,
+        line: cardLine,
         home_avg_cards: homeAvgCards,
         away_avg_cards: awayAvgCards,
         stakes_bonus: stakesCardBonus,
@@ -390,11 +414,12 @@ export function computePrematchScores(
   }
   if (underCardsScore >= PUBLISH_THRESHOLD) {
     results.push({
-      prediction: "under_3.5",
+      prediction: `under_${cardLine}`,
       prediction_type: "cards",
       confidence: Math.min(underCardsScore, 0.99),
       score_breakdown: {
         estimated_cards: estimatedCards,
+        line: cardLine,
         home_avg_cards: homeAvgCards,
         away_avg_cards: awayAvgCards,
       },
@@ -404,10 +429,10 @@ export function computePrematchScores(
   // Debug : log tous les scores calculés
   console.log(`[scoring-engine] homeXG=${homeXG.toFixed(2)} awayXG=${awayXG.toFixed(2)}`);
   console.log(`[scoring-engine] homeWinComposite=${homeWinComposite.toFixed(3)} awayWinComposite=${awayWinComposite.toFixed(3)}`);
-  console.log(`[scoring-engine] over25=${over25Score.toFixed(3)} under25=${under25Score.toFixed(3)}`);
+  console.log(`[scoring-engine] over_under: line=${goalLine} estimated=${totalXG.toFixed(2)}`);
   console.log(`[scoring-engine] btts=${bttsScore.toFixed(3)} noBtts=${noBttsScore.toFixed(3)}`);
   console.log(`[scoring-engine] DC: 1X=${dcHomeOrDraw.toFixed(3)} X2=${dcAwayOrDraw.toFixed(3)} 12=${dcNoDraw.toFixed(3)}`);
-  console.log(`[scoring-engine] corners=${estimatedCorners.toFixed(1)} cards=${estimatedCards.toFixed(1)}`);
+  console.log(`[scoring-engine] corners=${estimatedCorners.toFixed(1)} line=${cornerLine} | cards=${estimatedCards.toFixed(1)} line=${cardLine}`);
   console.log(`[scoring-engine] PUBLISH_THRESHOLD=${PUBLISH_THRESHOLD} → ${results.length} predictions passed`);
 
   // Tri par confiance décroissante + sélection des top picks
