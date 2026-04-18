@@ -6,11 +6,20 @@ import '../../features/auth/domain/auth_provider.dart';
 import '../../features/predictions/domain/match_model.dart';
 import '../../features/predictions/domain/prediction_model.dart';
 import '../../features/predictions/domain/today_match_model.dart';
+import '../../features/predictions/domain/combo_prediction_model.dart';
 
 final supabaseRepoProvider = Provider<SupabaseRepository>((ref) {
   final client = ref.watch(supabaseClientProvider);
   return SupabaseRepository(client);
 });
+
+/// Response wrapper for the daily data (matches + combos)
+class DailyResponse {
+  final List<TodayMatch> matches;
+  final List<ComboPrediction> combos;
+
+  const DailyResponse({required this.matches, required this.combos});
+}
 
 class SupabaseRepository {
   final SupabaseClient _client;
@@ -43,12 +52,13 @@ class SupabaseRepository {
     }
   }
 
-  // ── Today Matches (Edge Function) ──
+  // ── Today Matches + Combos (Edge Function) ──
 
-  Future<List<TodayMatch>> fetchTodayEligibleMatches({String? date, bool useEdgeFunction = true}) async {
+  Future<DailyResponse> fetchTodayEligibleMatches({String? date, bool useEdgeFunction = true}) async {
     if (!useEdgeFunction) {
       debugPrint('[Quantara] Skipping Edge Function (no auth), using DB fallback');
-      return _fetchTodayMatchesFallback(date);
+      final matches = await _fetchTodayMatchesFallback(date);
+      return DailyResponse(matches: matches, combos: const []);
     }
 
     try {
@@ -69,17 +79,26 @@ class SupabaseRepository {
 
       final matchesList = body['matches'] as List<dynamic>? ?? [];
       debugPrint('[Quantara] Edge function returned ${matchesList.length} matches');
-      return matchesList
+      final matches = matchesList
           .map((m) => TodayMatch.fromJson(m as Map<String, dynamic>))
           .toList();
+
+      // Parse combos from the response
+      final combosList = body['combos'] as List<dynamic>? ?? [];
+      final combos = combosList
+          .map((c) => ComboPrediction.fromJson(c as Map<String, dynamic>))
+          .toList();
+      debugPrint('[Quantara] Edge function returned ${combos.length} combos');
+
+      return DailyResponse(matches: matches, combos: combos);
     } catch (e, st) {
       debugPrint('[Quantara] Edge function failed: $e');
       debugPrint('[Quantara] Stack: $st');
       // Fallback: query DB directly if Edge Function unavailable
       try {
-        final result = await _fetchTodayMatchesFallback(date);
-        debugPrint('[Quantara] Fallback succeeded: ${result.length} matches');
-        return result;
+        final matches = await _fetchTodayMatchesFallback(date);
+        debugPrint('[Quantara] Fallback succeeded: ${matches.length} matches');
+        return DailyResponse(matches: matches, combos: const []);
       } catch (e2) {
         debugPrint('[Quantara] Fallback also failed: $e2');
         rethrow;

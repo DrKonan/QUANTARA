@@ -17,10 +17,32 @@ final activeSubscriptionProvider = FutureProvider<Subscription?>((ref) async {
   return service.getActiveSubscription();
 });
 
-// ── Is Premium ──
+// ── Is Premium (any paid plan: starter, pro, vip) ──
 final isPremiumProvider = Provider<bool>((ref) {
+  // Check active subscription first
   final sub = ref.watch(activeSubscriptionProvider).valueOrNull;
-  return sub?.isActive ?? false;
+  if (sub?.isActive ?? false) return true;
+  // Fallback to user profile plan
+  final profile = ref.watch(userProfileProvider).valueOrNull;
+  return profile?.isPremium ?? false;
+});
+
+// ── Current plan tier ──
+final currentPlanProvider = Provider<String>((ref) {
+  final profile = ref.watch(userProfileProvider).valueOrNull;
+  return profile?.plan ?? 'free';
+});
+
+// ── Has combo access (pro or vip) ──
+final hasComboAccessProvider = Provider<bool>((ref) {
+  final profile = ref.watch(userProfileProvider).valueOrNull;
+  return profile?.hasComboAccess ?? false;
+});
+
+// ── Has LIVE access (pro or vip) ──
+final hasLiveAccessProvider = Provider<bool>((ref) {
+  final profile = ref.watch(userProfileProvider).valueOrNull;
+  return profile?.hasLiveAccess ?? false;
 });
 
 // ── Payment State ──

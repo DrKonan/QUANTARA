@@ -5,10 +5,13 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/league_utils.dart';
 import '../../../auth/domain/auth_provider.dart';
+import '../../../predictions/domain/combo_prediction_model.dart';
 import '../../../predictions/domain/predictions_provider.dart';
 import '../../../predictions/domain/today_match_model.dart';
 import '../../../predictions/domain/match_model.dart';
 import '../../../matches/presentation/widgets/match_detail_sheet.dart';
+import '../../../matches/presentation/widgets/combo_card.dart';
+import '../../../profile/domain/user_profile_model.dart';
 import '../widgets/stats_card.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -18,7 +21,9 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final matchesAsync = ref.watch(activeMatchesProvider);
     final allMatchesAsync = ref.watch(todayEligibleMatchesProvider);
+    final combosAsync = ref.watch(todayCombosProvider);
     final profile = ref.watch(userProfileProvider);
+    final userProfile = profile.valueOrNull;
 
     return Scaffold(
       body: SafeArea(
@@ -27,12 +32,13 @@ class HomeScreen extends ConsumerWidget {
           backgroundColor: AppColors.surface,
           onRefresh: () async {
             ref.invalidate(todayEligibleMatchesProvider);
+            ref.invalidate(todayCombosProvider);
             ref.invalidate(monthlyStatsProvider);
             ref.invalidate(userProfileProvider);
           },
           child: CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(child: _buildHeader(profile.valueOrNull?.username)),
+              SliverToBoxAdapter(child: _buildHeader(userProfile?.username)),
               const SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -82,6 +88,15 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+              ),
+              // Combos section
+              combosAsync.when(
+                data: (combos) {
+                  if (combos.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+                  return _buildCombosSection(context, combos, userProfile);
+                },
+                loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
+                error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
             ],
@@ -291,6 +306,110 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  SliverMainAxisGroup _buildCombosSection(BuildContext context, List<ComboPrediction> combos, UserProfile? profile) {
+    final safeCombos = combos.where((c) => c.isSafe).toList();
+    final boldCombos = combos.where((c) => c.isBold).toList();
+    final hasComboAccess = profile?.hasComboAccess ?? false;
+
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverToBoxAdapter(
+          child: _sectionHeader("🎰 COMBINÉS DU JOUR", "${combos.length}", const Color(0xFFD4AF37)),
+        ),
+        if (safeCombos.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Text(
+                "🛡️ Combinés Sûrs · ${safeCombos.length}",
+                style: TextStyle(
+                  color: const Color(0xFF00C896).withAlpha(200),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 210,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: safeCombos.length,
+                itemBuilder: (_, i) => ComboCard(
+                  combo: safeCombos[i],
+                  isLocked: !hasComboAccess || safeCombos[i].isLocked,
+                  onUpgradeTap: () => context.go('/subscription'),
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (boldCombos.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Text(
+                "🔥 Combinés Audacieux · ${boldCombos.length}",
+                style: TextStyle(
+                  color: const Color(0xFFFF6B35).withAlpha(200),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 210,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: boldCombos.length,
+                itemBuilder: (_, i) => ComboCard(
+                  combo: boldCombos[i],
+                  isLocked: !(profile?.isVip ?? false) || boldCombos[i].isLocked,
+                  onUpgradeTap: () => context.go('/subscription'),
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (!hasComboAccess)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: GestureDetector(
+                onTap: () => context.go('/subscription'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD4AF37).withAlpha(15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFD4AF37).withAlpha(40)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Text("💎", style: TextStyle(fontSize: 16)),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Débloquez les combinés avec Pro ou VIP",
+                          style: TextStyle(color: Color(0xFFD4AF37), fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFD4AF37), size: 14),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

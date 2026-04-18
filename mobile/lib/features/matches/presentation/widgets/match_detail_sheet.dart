@@ -367,6 +367,19 @@ class _MatchDetailSheetState extends State<MatchDetailSheet> {
               color: AppColors.gold, fontSize: 15, fontWeight: FontWeight.w700,
             ),
           ),
+          if (pred.bookmakerOdds != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.auto_graph_rounded, color: AppColors.textSecondary, size: 13),
+                const SizedBox(width: 4),
+                Text(
+                  "Cote @${pred.bookmakerOdds!.toStringAsFixed(2)}",
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 11, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),

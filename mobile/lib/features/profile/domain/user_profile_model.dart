@@ -3,7 +3,7 @@ class UserProfile {
   final String? username;
   final String? avatarUrl;
   final String? phone;
-  final String plan; // 'free' | 'premium'
+  final String plan; // 'free' | 'starter' | 'pro' | 'vip'
   final bool trialUsed;
   final DateTime? trialEndsAt;
   final DateTime createdAt;
@@ -19,7 +19,19 @@ class UserProfile {
     required this.createdAt,
   });
 
-  bool get isPremium => plan == 'premium';
+  bool get isFree => plan == 'free';
+  bool get isStarter => plan == 'starter';
+  bool get isPro => plan == 'pro';
+  bool get isVip => plan == 'vip';
+
+  /// Has any paid subscription (starter, pro, or vip)
+  bool get isPremium => isStarter || isPro || isVip;
+
+  /// Has access to combo predictions (pro + vip)
+  bool get hasComboAccess => isPro || isVip;
+
+  /// Has access to live predictions (pro + vip)
+  bool get hasLiveAccess => isPro || isVip;
 
   bool get isTrialActive {
     if (!trialUsed || trialEndsAt == null) return false;
@@ -27,6 +39,34 @@ class UserProfile {
   }
 
   bool get hasAccess => isPremium || isTrialActive;
+
+  /// Daily match limit based on plan (-1 = unlimited)
+  int get dailyMatchLimit {
+    switch (plan) {
+      case 'starter': return 5;
+      case 'pro': return 15;
+      case 'vip': return -1;
+      default: return 1;
+    }
+  }
+
+  String get planLabel {
+    switch (plan) {
+      case 'starter': return 'Starter';
+      case 'pro': return 'Pro';
+      case 'vip': return 'VIP';
+      default: return 'Gratuit';
+    }
+  }
+
+  String get planEmoji {
+    switch (plan) {
+      case 'starter': return '⚡';
+      case 'pro': return '💎';
+      case 'vip': return '👑';
+      default: return '🆓';
+    }
+  }
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(

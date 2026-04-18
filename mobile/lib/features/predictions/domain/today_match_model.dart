@@ -158,6 +158,7 @@ class TodayPrediction {
   final bool isRefined;
   final String? analysisText;
   final bool? isCorrect;
+  final double? bookmakerOdds;
 
   const TodayPrediction({
     required this.id,
@@ -172,6 +173,7 @@ class TodayPrediction {
     this.isRefined = false,
     this.analysisText,
     this.isCorrect,
+    this.bookmakerOdds,
   });
 
   String get typeIcon {
@@ -272,6 +274,7 @@ class TodayPrediction {
       isRefined: json['is_refined'] as bool? ?? false,
       analysisText: json['analysis_text'] as String?,
       isCorrect: json['is_correct'] as bool?,
+      bookmakerOdds: (json['bookmaker_odds'] as num?)?.toDouble(),
     );
   }
 
@@ -290,6 +293,7 @@ class TodayPrediction {
       isRefined: json['is_refined'] as bool? ?? false,
       analysisText: json['analysis_text'] as String?,
       isCorrect: json['is_correct'] as bool?,
+      bookmakerOdds: (json['bookmaker_odds'] as num?)?.toDouble(),
     );
   }
 }

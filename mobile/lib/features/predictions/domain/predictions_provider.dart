@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/data/supabase_repository.dart';
+import 'combo_prediction_model.dart';
 import 'match_model.dart';
 import 'prediction_model.dart';
 import 'today_match_model.dart';
@@ -46,24 +47,41 @@ Duration _computePollingInterval(List<TodayMatch> matches) {
 // ── Today eligible matches (Edge Function with auth, fallback without) ──
 // Auto-refreshes with adaptive polling: 30s (live) → 45s (pre-KO) → 3min → 5min
 
-final todayEligibleMatchesProvider = FutureProvider<List<TodayMatch>>((ref) async {
+// ── Daily response (matches + combos from Edge Function) ──
+// Single API call, split into matches and combos for downstream consumers.
+
+final _dailyResponseProvider = FutureProvider<DailyResponse>((ref) async {
   final repo = ref.watch(supabaseRepoProvider);
   final user = Supabase.instance.client.auth.currentUser;
   final result = await repo.fetchTodayEligibleMatches(useEdgeFunction: user != null);
 
-  // Adaptive polling: interval depends on current match context
-  final interval = _computePollingInterval(result);
+  // Adaptive polling based on match states
+  final interval = _computePollingInterval(result.matches);
   debugPrint('[Quantara] Next refresh in ${interval.inSeconds}s '
-      '(${result.where((m) => m.isLive).length} live, '
-      '${result.where((m) => !m.isEffectivelyFinished && !m.isLive && m.minutesUntilKickoff <= 60 && m.minutesUntilKickoff > 0).length} pre-KO)');
+      '(${result.matches.where((m) => m.isLive).length} live, '
+      '${result.matches.where((m) => !m.isEffectivelyFinished && !m.isLive && m.minutesUntilKickoff <= 60 && m.minutesUntilKickoff > 0).length} pre-KO)');
 
   final timer = Timer(interval, () {
-    debugPrint('[Quantara] Auto-refresh matches (adaptive)');
+    debugPrint('[Quantara] Auto-refresh daily data (adaptive)');
     ref.invalidateSelf();
   });
   ref.onDispose(timer.cancel);
 
   return result;
+});
+
+// ── Today eligible matches (derived from daily response) ──
+
+final todayEligibleMatchesProvider = FutureProvider<List<TodayMatch>>((ref) async {
+  final daily = await ref.watch(_dailyResponseProvider.future);
+  return daily.matches;
+});
+
+// ── Today combos (derived from daily response) ──
+
+final todayCombosProvider = FutureProvider<List<ComboPrediction>>((ref) async {
+  final daily = await ref.watch(_dailyResponseProvider.future);
+  return daily.combos;
 });
 
 /// Active matches only (upcoming + live, excluding finished/effectively finished)
