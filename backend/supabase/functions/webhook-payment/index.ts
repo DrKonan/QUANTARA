@@ -1,74 +1,225 @@
 // ============================================================
 // QUANTARA — Edge Function : webhook-payment
-// URL publique appelée par CinetPay après chaque paiement.
-// Rôle : Valide la signature, active/annule l'abonnement en base.
+// Webhook public appelé par PawaPay et Wave après chaque paiement.
+// Détecte le provider à partir du payload et active l'abonnement.
 // ============================================================
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse } from "../_shared/helpers.ts";
 
-// Durées des plans en jours
 const PLAN_DURATIONS: Record<string, number> = {
   weekly: 7,
   monthly: 30,
   yearly: 365,
 };
 
-// ----------------------------------------------------------------
-// Vérification signature HMAC CinetPay
-// CinetPay signe la payload avec : HMAC-SHA256(body, secret)
-// Header : X-Cinetpay-Signature
-// ----------------------------------------------------------------
-async function verifySignature(
-  body: string,
-  signature: string,
-  secret: string,
-): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(secret);
-  const messageData = encoder.encode(body);
-
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["verify"],
-  );
-
-  const signatureBytes = hexToBytes(signature);
-  return crypto.subtle.verify("HMAC", key, signatureBytes, messageData);
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
-  }
-  return bytes;
-}
-
-// ----------------------------------------------------------------
-// Types CinetPay
-// ----------------------------------------------------------------
-interface CinetPayWebhook {
-  cpm_trans_id: string;        // référence de transaction
-  cpm_site_id: string;
-  cpm_trans_date: string;
-  cpm_amount: string;
-  cpm_currency: string;
-  cpm_payid: string;
-  cpm_result: string;          // "00" = succès
-  cpm_trans_status: string;    // "ACCEPTED" | "REFUSED" | ...
-  cpm_custom: string;          // JSON : { user_id, plan }
-  signature: string;
-}
-
+// ────────────────────────────────────────────────────────────
+// Main handler — route to the correct provider handler
+// ────────────────────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "content-type",
+      },
+    });
+  }
+
   if (req.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
   const rawBody = await req.text();
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return jsonResponse({ error: "Invalid JSON" }, 400);
+  }
+
+  // Detect provider from payload shape
+  if ("depositId" in payload) {
+    return handlePawapayCallback(payload, rawBody, req);
+  } else if ("client_reference" in payload || "checkout_session_id" in payload) {
+    return handleWaveCallback(payload);
+  } else if ("cpm_trans_id" in payload) {
+    return handleCinetpayCallback(payload, rawBody, req);
+  }
+
+  console.warn("[webhook-payment] Unknown payload shape:", Object.keys(payload));
+  return jsonResponse({ error: "Unknown provider" }, 400);
+});
+
+// ────────────────────────────────────────────────────────────
+// PawaPay Callback
+// Payload: { depositId, status, requestedAmount, currency, ... }
+// ────────────────────────────────────────────────────────────
+async function handlePawapayCallback(
+  payload: Record<string, unknown>,
+  _rawBody: string,
+  _req: Request,
+) {
+  const supabase = getSupabaseAdmin();
+
+  const depositId = payload.depositId as string;
+  const status = payload.status as string;
+
+  console.log(`[webhook-payment] PawaPay callback: depositId=${depositId}, status=${status}`);
+
+  // Find payment record
+  const { data: payment, error: findError } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("external_id", depositId)
+    .single();
+
+  if (findError || !payment) {
+    // Also check by id (depositId = our payment id)
+    const { data: paymentById } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("id", depositId)
+      .single();
+
+    if (!paymentById) {
+      console.error("[webhook-payment] Payment not found:", depositId);
+      return jsonResponse({ error: "Payment not found" }, 404);
+    }
+    return processPawapayResult(supabase, paymentById, status, payload);
+  }
+
+  return processPawapayResult(supabase, payment, status, payload);
+}
+
+async function processPawapayResult(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  payment: Record<string, unknown>,
+  status: string,
+  payload: Record<string, unknown>,
+) {
+  if (status === "COMPLETED") {
+    // Update payment
+    await supabase.from("payments").update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      metadata: payload,
+      updated_at: new Date().toISOString(),
+    }).eq("id", payment.id);
+
+    // Activate subscription
+    return activateSubscription(
+      supabase,
+      payment.user_id as string,
+      payment.plan as string,
+      payment.id as string,
+      "pawapay",
+      payment.correspondent as string | null,
+      payment.amount as number,
+    );
+  } else if (status === "FAILED") {
+    await supabase.from("payments").update({
+      status: "failed",
+      metadata: payload,
+      updated_at: new Date().toISOString(),
+    }).eq("id", payment.id);
+
+    return jsonResponse({ received: true, status: "failed" });
+  }
+
+  // ACCEPTED or SUBMITTED — intermediate status
+  await supabase.from("payments").update({
+    status: "submitted",
+    metadata: payload,
+    updated_at: new Date().toISOString(),
+  }).eq("id", payment.id);
+
+  return jsonResponse({ received: true, status: "pending" });
+}
+
+// ────────────────────────────────────────────────────────────
+// Wave Callback
+// Wave sends webhook with checkout session data
+// ────────────────────────────────────────────────────────────
+async function handleWaveCallback(payload: Record<string, unknown>) {
+  const supabase = getSupabaseAdmin();
+
+  const clientRef = (payload.client_reference as string) || (payload.checkout_session_id as string);
+  const paymentStatus = payload.payment_status as string;
+
+  console.log(`[webhook-payment] Wave callback: ref=${clientRef}, status=${paymentStatus}`);
+
+  // Find payment by client_reference (= our payment id)
+  const { data: payment } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("id", clientRef)
+    .single();
+
+  if (!payment) {
+    // Try by external_id
+    const { data: paymentByExt } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("external_id", clientRef)
+      .single();
+
+    if (!paymentByExt) {
+      console.error("[webhook-payment] Wave payment not found:", clientRef);
+      return jsonResponse({ error: "Payment not found" }, 404);
+    }
+    return processWaveResult(supabase, paymentByExt, paymentStatus, payload);
+  }
+
+  return processWaveResult(supabase, payment, paymentStatus, payload);
+}
+
+async function processWaveResult(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  payment: Record<string, unknown>,
+  paymentStatus: string,
+  payload: Record<string, unknown>,
+) {
+  if (paymentStatus === "succeeded") {
+    await supabase.from("payments").update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      metadata: payload,
+      updated_at: new Date().toISOString(),
+    }).eq("id", payment.id);
+
+    return activateSubscription(
+      supabase,
+      payment.user_id as string,
+      payment.plan as string,
+      payment.id as string,
+      "wave",
+      null,
+      payment.amount as number,
+    );
+  } else if (paymentStatus === "failed" || paymentStatus === "expired") {
+    await supabase.from("payments").update({
+      status: "failed",
+      metadata: payload,
+      updated_at: new Date().toISOString(),
+    }).eq("id", payment.id);
+
+    return jsonResponse({ received: true, status: "failed" });
+  }
+
+  return jsonResponse({ received: true, status: "pending" });
+}
+
+// ────────────────────────────────────────────────────────────
+// CinetPay Callback (legacy)
+// ────────────────────────────────────────────────────────────
+async function handleCinetpayCallback(
+  payload: Record<string, unknown>,
+  rawBody: string,
+  req: Request,
+) {
+  const supabase = getSupabaseAdmin();
   const cinetpaySecret = Deno.env.get("CINETPAY_SECRET");
 
   if (!cinetpaySecret) {
@@ -76,112 +227,139 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Server configuration error" }, 500);
   }
 
-  let payload: CinetPayWebhook;
-  try {
-    payload = JSON.parse(rawBody) as CinetPayWebhook;
-  } catch {
-    return jsonResponse({ error: "Invalid JSON payload" }, 400);
-  }
-
-  // Vérifie la signature HMAC
-  const signature = req.headers.get("X-Cinetpay-Signature") ?? payload.signature;
+  const signature = req.headers.get("X-Cinetpay-Signature") ?? (payload.signature as string);
   if (!signature) {
     return jsonResponse({ error: "Missing signature" }, 401);
   }
 
-  const isValid = await verifySignature(rawBody, signature, cinetpaySecret);
+  const isValid = await verifyHmacSignature(rawBody, signature, cinetpaySecret);
   if (!isValid) {
-    console.warn("[webhook-payment] Invalid signature received");
+    console.warn("[webhook-payment] CinetPay invalid signature");
     return jsonResponse({ error: "Invalid signature" }, 401);
   }
 
-  const supabase = getSupabaseAdmin();
-
-  // Paiement refusé ou échoué
   if (payload.cpm_result !== "00" || payload.cpm_trans_status !== "ACCEPTED") {
-    console.log(`[webhook-payment] Payment refused: ${payload.cpm_trans_id}`);
-
-    // Met à jour le statut si une subscription pending existe
+    console.log(`[webhook-payment] CinetPay payment refused: ${payload.cpm_trans_id}`);
     await supabase
       .from("subscriptions")
       .update({ status: "cancelled" })
-      .eq("payment_ref", payload.cpm_trans_id)
+      .eq("payment_ref", payload.cpm_trans_id as string)
       .eq("status", "pending");
-
     return jsonResponse({ received: true, status: "refused" });
   }
 
-  // Décode les données custom (user_id + plan)
   let customData: { user_id: string; plan: string };
   try {
-    customData = JSON.parse(payload.cpm_custom) as { user_id: string; plan: string };
+    customData = JSON.parse(payload.cpm_custom as string);
   } catch {
-    console.error("[webhook-payment] Invalid cpm_custom:", payload.cpm_custom);
     return jsonResponse({ error: "Invalid custom data" }, 400);
   }
 
-  const { user_id, plan } = customData;
+  return activateSubscription(
+    supabase,
+    customData.user_id,
+    customData.plan,
+    payload.cpm_trans_id as string,
+    "cinetpay",
+    null,
+    parseInt(payload.cpm_amount as string, 10),
+  );
+}
 
-  if (!user_id || !plan || !PLAN_DURATIONS[plan]) {
-    return jsonResponse({ error: "Invalid user_id or plan" }, 400);
+// ────────────────────────────────────────────────────────────
+// Shared: Activate subscription
+// ────────────────────────────────────────────────────────────
+async function activateSubscription(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  userId: string,
+  plan: string,
+  paymentRef: string,
+  provider: string,
+  correspondent: string | null,
+  amount: number,
+) {
+  const durationDays = PLAN_DURATIONS[plan];
+  if (!durationDays) {
+    return jsonResponse({ error: "Invalid plan" }, 400);
   }
 
-  const durationDays = PLAN_DURATIONS[plan];
   const startDate = new Date();
-  const endDate = new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
+  let subEndDate = new Date(startDate.getTime() + durationDays * 86_400_000);
 
-  // Vérifie si l'utilisateur a déjà un abonnement actif (extension)
+  // Check for existing active subscription (extension)
   const { data: existingSub } = await supabase
     .from("subscriptions")
     .select("id, end_date")
-    .eq("user_id", user_id)
+    .eq("user_id", userId)
     .eq("status", "active")
     .order("end_date", { ascending: false })
     .limit(1)
     .single();
 
   let subStartDate = startDate;
-  let subEndDate = endDate;
-
   if (existingSub) {
-    // Extension : part de la fin de l'abonnement actuel
     const currentEnd = new Date(existingSub.end_date);
     if (currentEnd > startDate) {
       subStartDate = currentEnd;
-      subEndDate = new Date(currentEnd.getTime() + durationDays * 24 * 60 * 60 * 1000);
+      subEndDate = new Date(currentEnd.getTime() + durationDays * 86_400_000);
     }
   }
 
-  // Crée la nouvelle subscription
-  const { error: subError } = await supabase
-    .from("subscriptions")
-    .insert({
-      user_id,
-      plan,
-      status: "active",
-      start_date: subStartDate.toISOString(),
-      end_date: subEndDate.toISOString(),
-      payment_ref: payload.cpm_trans_id,
-      amount: parseInt(payload.cpm_amount, 10),
-      currency: payload.cpm_currency,
-    });
+  const { error: subError } = await supabase.from("subscriptions").insert({
+    user_id: userId,
+    plan,
+    status: "active",
+    start_date: subStartDate.toISOString(),
+    end_date: subEndDate.toISOString(),
+    payment_ref: paymentRef,
+    amount,
+    currency: "XOF",
+    provider,
+    correspondent,
+  });
 
   if (subError) {
     console.error("[webhook-payment] Failed to create subscription:", subError);
     return jsonResponse({ error: "Database error" }, 500);
   }
 
-  // Passe le profil utilisateur en plan 'premium'
+  // Update user plan to premium
   const { error: userError } = await supabase
     .from("users")
     .update({ plan: "premium" })
-    .eq("id", user_id);
+    .eq("id", userId);
 
   if (userError) {
     console.error("[webhook-payment] Failed to update user plan:", userError);
-    // Non bloquant — la subscription est créée, on corrige le plan séparément
   }
 
-  console.log(`[webhook-payment] Subscription activated for user ${user_id}, plan=${plan}, end=${subEndDate.toISOString()}`);
-  return jsonResponse({ received: true, status: "activated", end_date: subEndDate.toISOString() });
-});
+  console.log(`[webhook-payment] ✅ Subscription activated: user=${userId}, plan=${plan}, provider=${provider}, end=${subEndDate.toISOString()}`);
+  return jsonResponse({
+    received: true,
+    status: "activated",
+    end_date: subEndDate.toISOString(),
+  });
+}
+
+// ────────────────────────────────────────────────────────────
+// HMAC-SHA256 verification (for CinetPay)
+// ────────────────────────────────────────────────────────────
+async function verifyHmacSignature(
+  body: string,
+  signature: string,
+  secret: string,
+): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  const sigBytes = new Uint8Array(signature.length / 2);
+  for (let i = 0; i < signature.length; i += 2) {
+    sigBytes[i / 2] = parseInt(signature.slice(i, i + 2), 16);
+  }
+  return crypto.subtle.verify("HMAC", key, sigBytes, encoder.encode(body));
+}

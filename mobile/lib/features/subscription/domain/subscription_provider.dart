@@ -1,0 +1,151 @@
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../auth/domain/auth_provider.dart';
+import '../data/payment_service.dart';
+
+// ── Service Provider ──
+final paymentServiceProvider = Provider<PaymentService>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  return PaymentService(client);
+});
+
+// ── Active Subscription ──
+final activeSubscriptionProvider = FutureProvider<Subscription?>((ref) async {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return null;
+  final service = ref.read(paymentServiceProvider);
+  return service.getActiveSubscription();
+});
+
+// ── Is Premium ──
+final isPremiumProvider = Provider<bool>((ref) {
+  final sub = ref.watch(activeSubscriptionProvider).valueOrNull;
+  return sub?.isActive ?? false;
+});
+
+// ── Payment State ──
+enum PaymentPhase { idle, creating, waitingConfirmation, success, error }
+
+class PaymentState {
+  final PaymentPhase phase;
+  final PaymentResult? result;
+  final String? errorMessage;
+  final PaymentStatus? lastStatus;
+
+  const PaymentState({
+    this.phase = PaymentPhase.idle,
+    this.result,
+    this.errorMessage,
+    this.lastStatus,
+  });
+
+  PaymentState copyWith({
+    PaymentPhase? phase,
+    PaymentResult? result,
+    String? errorMessage,
+    PaymentStatus? lastStatus,
+  }) {
+    return PaymentState(
+      phase: phase ?? this.phase,
+      result: result ?? this.result,
+      errorMessage: errorMessage ?? this.errorMessage,
+      lastStatus: lastStatus ?? this.lastStatus,
+    );
+  }
+}
+
+class PaymentNotifier extends StateNotifier<PaymentState> {
+  final PaymentService _service;
+  final Ref _ref;
+  Timer? _pollTimer;
+
+  PaymentNotifier(this._service, this._ref) : super(const PaymentState());
+
+  Future<void> initiatePayment({
+    required String plan,
+    required PaymentProvider provider,
+    String? phone,
+    String? correspondent,
+  }) async {
+    state = const PaymentState(phase: PaymentPhase.creating);
+
+    try {
+      final result = await _service.createPayment(
+        plan: plan,
+        provider: provider,
+        phone: phone,
+        correspondent: correspondent,
+      );
+
+      state = PaymentState(
+        phase: PaymentPhase.waitingConfirmation,
+        result: result,
+        lastStatus: result.status,
+      );
+
+      // Start polling for payment status
+      _startPolling(result.paymentId);
+    } catch (e) {
+      state = PaymentState(
+        phase: PaymentPhase.error,
+        errorMessage: e.toString().replaceFirst('Exception: ', ''),
+      );
+    }
+  }
+
+  void _startPolling(String paymentId) {
+    _pollTimer?.cancel();
+    int attempts = 0;
+    const maxAttempts = 60; // 5 minutes at 5s interval
+
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      attempts++;
+      if (attempts > maxAttempts) {
+        timer.cancel();
+        state = state.copyWith(
+          phase: PaymentPhase.error,
+          errorMessage: 'Le paiement a expiré. Vérifiez votre compte et réessayez.',
+        );
+        return;
+      }
+
+      try {
+        final status = await _service.checkPaymentStatus(paymentId);
+        state = state.copyWith(lastStatus: status);
+
+        if (status == PaymentStatus.completed) {
+          timer.cancel();
+          state = state.copyWith(phase: PaymentPhase.success);
+          // Refresh subscription state
+          _ref.invalidate(activeSubscriptionProvider);
+          _ref.invalidate(userProfileProvider);
+        } else if (status == PaymentStatus.failed) {
+          timer.cancel();
+          state = state.copyWith(
+            phase: PaymentPhase.error,
+            errorMessage: 'Le paiement a échoué. Veuillez réessayer.',
+          );
+        }
+      } catch (_) {
+        // Ignore polling errors, will retry
+      }
+    });
+  }
+
+  void reset() {
+    _pollTimer?.cancel();
+    state = const PaymentState();
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+}
+
+final paymentNotifierProvider =
+    StateNotifierProvider<PaymentNotifier, PaymentState>((ref) {
+  final service = ref.watch(paymentServiceProvider);
+  return PaymentNotifier(service, ref);
+});
