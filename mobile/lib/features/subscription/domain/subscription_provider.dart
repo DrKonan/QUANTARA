@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/domain/auth_provider.dart';
 import '../data/payment_service.dart';
@@ -170,4 +171,83 @@ final paymentNotifierProvider =
     StateNotifierProvider<PaymentNotifier, PaymentState>((ref) {
   final service = ref.watch(paymentServiceProvider);
   return PaymentNotifier(service, ref);
+});
+
+// ══════════════════════════════════════════════════════════════
+// Daily match view tracking (client-side, resets each day)
+// ══════════════════════════════════════════════════════════════
+
+class DailyViewState {
+  final Set<String> viewedMatchIds;
+  final String date; // YYYY-MM-DD to detect day rollover
+
+  const DailyViewState({this.viewedMatchIds = const {}, this.date = ''});
+
+  int get viewedCount => viewedMatchIds.length;
+
+  DailyViewState copyWith({Set<String>? viewedMatchIds, String? date}) {
+    return DailyViewState(
+      viewedMatchIds: viewedMatchIds ?? this.viewedMatchIds,
+      date: date ?? this.date,
+    );
+  }
+}
+
+class DailyViewNotifier extends StateNotifier<DailyViewState> {
+  DailyViewNotifier() : super(const DailyViewState());
+
+  String get _today {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  void _ensureToday() {
+    if (state.date != _today) {
+      state = DailyViewState(viewedMatchIds: {}, date: _today);
+      debugPrint('[Quantara] Daily views reset for $_today');
+    }
+  }
+
+  /// Record that a match was viewed. Returns true if this was a new view.
+  bool recordView(String matchId) {
+    _ensureToday();
+    if (state.viewedMatchIds.contains(matchId)) return false;
+    state = state.copyWith(
+      viewedMatchIds: {...state.viewedMatchIds, matchId},
+    );
+    return true;
+  }
+
+  /// Check if user can view more matches given their plan limit.
+  /// Returns true if the match was already viewed or limit not reached.
+  bool canView(String matchId, int limit) {
+    _ensureToday();
+    if (limit < 0) return true; // unlimited
+    if (state.viewedMatchIds.contains(matchId)) return true;
+    return state.viewedMatchIds.length < limit;
+  }
+
+  int get viewedCount {
+    _ensureToday();
+    return state.viewedMatchIds.length;
+  }
+}
+
+final dailyViewProvider =
+    StateNotifierProvider<DailyViewNotifier, DailyViewState>((ref) {
+  return DailyViewNotifier();
+});
+
+/// Whether the user can view a specific match (based on daily limit)
+final canViewMatchProvider = Provider.family<bool, String>((ref, matchId) {
+  final profile = ref.watch(userProfileProvider).valueOrNull;
+  final limit = profile?.dailyMatchLimit ?? 1;
+  final notifier = ref.watch(dailyViewProvider.notifier);
+  return notifier.canView(matchId, limit);
+});
+
+/// Combo limit for the user's current plan
+final comboLimitProvider = Provider<int>((ref) {
+  final profile = ref.watch(userProfileProvider).valueOrNull;
+  return profile?.comboLimit ?? 0;
 });

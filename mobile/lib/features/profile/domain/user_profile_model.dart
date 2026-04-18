@@ -33,6 +33,21 @@ class UserProfile {
   /// Has access to live predictions (pro + vip)
   bool get hasLiveAccess => isPro || isVip;
 
+  /// Max combos visible per day
+  int get comboLimit {
+    switch (plan) {
+      case 'pro': return 1;
+      case 'vip': return 3;
+      default: return 0;
+    }
+  }
+
+  /// Check if user's plan meets a required plan level
+  bool meetsRequirement(String requiredPlan) {
+    const hierarchy = {'free': 0, 'starter': 1, 'pro': 2, 'vip': 3};
+    return (hierarchy[plan] ?? 0) >= (hierarchy[requiredPlan] ?? 0);
+  }
+
   bool get isTrialActive {
     if (!trialUsed || trialEndsAt == null) return false;
     return DateTime.now().isBefore(trialEndsAt!);

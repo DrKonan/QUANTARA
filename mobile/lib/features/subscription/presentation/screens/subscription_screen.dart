@@ -30,7 +30,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       label: "Pro",
       emoji: "🏆",
       price: "1 990 FCFA",
-      subtitle: "15 matchs/jour · LIVE · Foot + Basket",
+      subtitle: "15 matchs/jour · LIVE · 1 combo/jour",
       duration: "/mois",
       badge: "Recommandé",
     ),
@@ -39,7 +39,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       label: "VIP",
       emoji: "👑",
       price: "3 990 FCFA",
-      subtitle: "Illimité · Tous sports · Combinés IA",
+      subtitle: "Illimité · Tous sports · 3 combos/jour",
       duration: "/mois",
       badge: "Complet",
     ),
@@ -73,7 +73,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                     _buildFeature(Icons.analytics_rounded, "Analyses complètes", "Pronos avec confiance ≥ 80% garantie"),
                     _buildFeature(Icons.flash_on_rounded, "Pronos LIVE", "Prédictions en temps réel (Pro+)"),
                     _buildFeature(Icons.stars_rounded, "Badge Haute Confiance", "Pronos ≥ 85% mis en avant (Pro+)"),
-                    _buildFeature(Icons.casino_rounded, "Combinés IA", "2-3 matchs à cotes intéressantes (VIP)"),
+                    _buildFeature(Icons.casino_rounded, "Combinés IA", "1 combo/jour (Pro) · 3 combos/jour (VIP)"),
 
                     const SizedBox(height: 28),
 
@@ -220,59 +220,128 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 
   // ── Active Subscription View ──
   Widget _buildActiveSubscription(Subscription sub) {
+    final plan = sub.plan;
+    final features = _planFeatures(plan);
+    final emoji = _planEmoji(plan);
+
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
             _buildAppBar(),
             Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 80, height: 80,
-                        decoration: BoxDecoration(
-                          color: AppColors.emerald.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.verified_rounded, color: AppColors.emerald, size: 44),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 24),
+                    Container(
+                      width: 80, height: 80,
+                      decoration: BoxDecoration(
+                        color: AppColors.emerald.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
                       ),
+                      child: Center(child: Text(emoji, style: const TextStyle(fontSize: 40))),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "Vous êtes ${_planLabel(plan)} ! 🎉",
+                      style: const TextStyle(color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 16),
+                    // Subscription info card
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        children: [
+                          _infoRow("Formule", _planLabel(plan)),
+                          const Divider(color: AppColors.surfaceLight, height: 20),
+                          _infoRow("Expire le", _formatDate(sub.endDate)),
+                          const Divider(color: AppColors.surfaceLight, height: 20),
+                          _infoRow("Jours restants", "${sub.remainingDays} jours"),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    // Plan features list
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.gold.withAlpha(30)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Vos privilèges",
+                            style: TextStyle(color: AppColors.gold, fontSize: 14, fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 12),
+                          ...features.map((f) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.check_circle_rounded, color: AppColors.emerald, size: 16),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(f, style: const TextStyle(color: AppColors.textPrimary, fontSize: 12)),
+                                ),
+                              ],
+                            ),
+                          )),
+                        ],
+                      ),
+                    ),
+                    // Upgrade prompt if not VIP
+                    if (plan != AppConstants.planVip) ...[
                       const SizedBox(height: 20),
-                      const Text(
-                        "Vous êtes Premium ! 🎉",
-                        style: TextStyle(color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Column(
-                          children: [
-                            _infoRow("Plan", _planLabel(sub.plan)),
-                            const Divider(color: AppColors.surfaceLight, height: 20),
-                            _infoRow("Expire le", _formatDate(sub.endDate)),
-                            const Divider(color: AppColors.surfaceLight, height: 20),
-                            _infoRow("Jours restants", "${sub.remainingDays} jours"),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        "Profitez de toutes les analyses IA,\ndes pronos LIVE et des alertes prioritaires.",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.textSecondary.withValues(alpha: 0.8),
-                          fontSize: 13, height: 1.5,
+                      GestureDetector(
+                        onTap: () => setState(() {}), // Refresh to show plan picker
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.gold.withAlpha(10),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.gold.withAlpha(30)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Text("👑", style: TextStyle(fontSize: 20)),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      plan == AppConstants.planStarter ? 'Passer à Pro ou VIP' : 'Passer à VIP',
+                                      style: const TextStyle(color: AppColors.gold, fontSize: 13, fontWeight: FontWeight.w700),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      plan == AppConstants.planStarter
+                                          ? 'Pronos LIVE, combinés IA et plus de matchs'
+                                          : 'Matchs illimités, 3 combinés/jour, tous sports',
+                                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.gold, size: 14),
+                            ],
+                          ),
                         ),
                       ),
                     ],
-                  ),
+                    const SizedBox(height: 32),
+                  ],
                 ),
               ),
             ),
@@ -280,6 +349,48 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         ),
       ),
     );
+  }
+
+  List<String> _planFeatures(String plan) {
+    switch (plan) {
+      case AppConstants.planStarter:
+        return [
+          '5 matchs analysés par jour',
+          'Prédictions IA ≥ 80% de confiance',
+          'Football uniquement',
+          'Historique et winrate complet',
+        ];
+      case AppConstants.planPro:
+        return [
+          '15 matchs analysés par jour',
+          'Prédictions IA ≥ 80% de confiance',
+          'Football + Basketball',
+          'Pronos LIVE en temps réel',
+          '1 combiné IA par jour (sûrs)',
+          'Cotes bookmaker affichées',
+        ];
+      case AppConstants.planVip:
+        return [
+          'Matchs illimités',
+          'Prédictions IA ≥ 80% de confiance',
+          'Tous les sports',
+          'Pronos LIVE en temps réel',
+          '3 combinés IA par jour (sûrs + audacieux)',
+          'Cotes bookmaker affichées',
+          'Alertes prioritaires & support dédié',
+        ];
+      default:
+        return ['1 match par jour (Top Pick)', 'Football uniquement'];
+    }
+  }
+
+  String _planEmoji(String plan) {
+    switch (plan) {
+      case AppConstants.planStarter: return '⚡';
+      case AppConstants.planPro: return '🏆';
+      case AppConstants.planVip: return '👑';
+      default: return '⚽';
+    }
   }
 
   Widget _infoRow(String label, String value) {

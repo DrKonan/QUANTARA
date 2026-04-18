@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/league_utils.dart';
+import '../../../../core/widgets/access_gate.dart';
 import '../../../auth/domain/auth_provider.dart';
 import '../../../predictions/domain/combo_prediction_model.dart';
 import '../../../predictions/domain/predictions_provider.dart';
@@ -310,9 +311,33 @@ class HomeScreen extends ConsumerWidget {
   }
 
   SliverMainAxisGroup _buildCombosSection(BuildContext context, List<ComboPrediction> combos, UserProfile? profile) {
+    final hasComboAccess = profile?.hasComboAccess ?? false;
+    final comboLimit = profile?.comboLimit ?? 0;
+    final isPro = profile?.isPro ?? false;
+    final isVip = profile?.isVip ?? false;
+
+    // Split into safe/bold
     final safeCombos = combos.where((c) => c.isSafe).toList();
     final boldCombos = combos.where((c) => c.isBold).toList();
-    final hasComboAccess = profile?.hasComboAccess ?? false;
+
+    // Apply combo limits: PRO sees 1 total, VIP sees 3 total
+    // PRO: 1 safe combo only (no bold)
+    // VIP: up to 3 (safe + bold)
+    int safeVisible = safeCombos.length;
+    int boldVisible = boldCombos.length;
+
+    if (hasComboAccess && comboLimit > 0) {
+      if (isPro && !isVip) {
+        // Pro: 1 combo total, safe only
+        safeVisible = safeVisible.clamp(0, 1);
+        boldVisible = 0;
+      } else if (isVip) {
+        // VIP: 3 total, distribute between safe & bold
+        safeVisible = safeVisible.clamp(0, comboLimit);
+        final remaining = comboLimit - safeVisible;
+        boldVisible = boldVisible.clamp(0, remaining);
+      }
+    }
 
     return SliverMainAxisGroup(
       slivers: [
@@ -323,13 +348,31 @@ class HomeScreen extends ConsumerWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Text(
-                "🛡️ Combinés Sûrs · ${safeCombos.length}",
-                style: TextStyle(
-                  color: const Color(0xFF00C896).withAlpha(200),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Row(
+                children: [
+                  Text(
+                    "🛡️ Combinés Sûrs · ${safeCombos.length}",
+                    style: TextStyle(
+                      color: const Color(0xFF00C896).withAlpha(200),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (hasComboAccess && comboLimit > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.gold.withAlpha(20),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '$safeVisible visible${safeVisible > 1 ? 's' : ''}',
+                        style: const TextStyle(color: AppColors.gold, fontSize: 9, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
@@ -340,11 +383,14 @@ class HomeScreen extends ConsumerWidget {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: safeCombos.length,
-                itemBuilder: (_, i) => ComboCard(
-                  combo: safeCombos[i],
-                  isLocked: !hasComboAccess || safeCombos[i].isLocked,
-                  onUpgradeTap: () => context.go('/subscription'),
-                ),
+                itemBuilder: (_, i) {
+                  final isWithinLimit = i < safeVisible && hasComboAccess;
+                  return ComboCard(
+                    combo: safeCombos[i],
+                    isLocked: !isWithinLimit || safeCombos[i].isLocked,
+                    onUpgradeTap: () => context.go('/subscription'),
+                  );
+                },
               ),
             ),
           ),
@@ -353,13 +399,31 @@ class HomeScreen extends ConsumerWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Text(
-                "🔥 Combinés Audacieux · ${boldCombos.length}",
-                style: TextStyle(
-                  color: const Color(0xFFFF6B35).withAlpha(200),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Row(
+                children: [
+                  Text(
+                    "🔥 Combinés Audacieux · ${boldCombos.length}",
+                    style: TextStyle(
+                      color: const Color(0xFFFF6B35).withAlpha(200),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (!isVip) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.gold.withAlpha(20),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'VIP',
+                        style: TextStyle(color: AppColors.gold, fontSize: 9, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
@@ -370,43 +434,23 @@ class HomeScreen extends ConsumerWidget {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: boldCombos.length,
-                itemBuilder: (_, i) => ComboCard(
-                  combo: boldCombos[i],
-                  isLocked: !(profile?.isVip ?? false) || boldCombos[i].isLocked,
-                  onUpgradeTap: () => context.go('/subscription'),
-                ),
+                itemBuilder: (_, i) {
+                  final isWithinLimit = i < boldVisible && isVip;
+                  return ComboCard(
+                    combo: boldCombos[i],
+                    isLocked: !isWithinLimit || boldCombos[i].isLocked,
+                    onUpgradeTap: () => context.go('/subscription'),
+                  );
+                },
               ),
             ),
           ),
         ],
         if (!hasComboAccess)
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: GestureDetector(
-                onTap: () => context.go('/subscription'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD4AF37).withAlpha(15),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFD4AF37).withAlpha(40)),
-                  ),
-                  child: const Row(
-                    children: [
-                      Text("💎", style: TextStyle(fontSize: 16)),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          "Débloquez les combinés avec Pro ou VIP",
-                          style: TextStyle(color: Color(0xFFD4AF37), fontSize: 12, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFD4AF37), size: 14),
-                    ],
-                  ),
-                ),
-              ),
+            child: UpgradeBanner(
+              requiredPlan: 'pro',
+              text: 'Débloquez les combinés avec Pro ou VIP',
             ),
           ),
       ],

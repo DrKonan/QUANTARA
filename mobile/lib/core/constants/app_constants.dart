@@ -19,4 +19,18 @@ abstract class AppConstants {
   static const matchLimitStarter = 5;
   static const matchLimitPro = 15;
   static const matchLimitVip = -1; // unlimited
+
+  // Combo limits per plan
+  static const comboLimitFree = 0;
+  static const comboLimitStarter = 0;
+  static const comboLimitPro = 1;
+  static const comboLimitVip = 3;
+
+  // Plan hierarchy for comparison
+  static const planHierarchy = {'free': 0, 'starter': 1, 'pro': 2, 'vip': 3};
+
+  /// Check if [userPlan] is at least [requiredPlan]
+  static bool planMeetsRequirement(String userPlan, String requiredPlan) {
+    return (planHierarchy[userPlan] ?? 0) >= (planHierarchy[requiredPlan] ?? 0);
+  }
 }

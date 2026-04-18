@@ -1,23 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/access_gate.dart';
+import '../../../auth/domain/auth_provider.dart';
 import '../../../predictions/domain/today_match_model.dart';
 import '../../../predictions/domain/match_model.dart';
+import '../../../subscription/domain/subscription_provider.dart';
 
-class MatchDetailSheet extends StatefulWidget {
+class MatchDetailSheet extends ConsumerStatefulWidget {
   final TodayMatch todayMatch;
   const MatchDetailSheet({super.key, required this.todayMatch});
 
   @override
-  State<MatchDetailSheet> createState() => _MatchDetailSheetState();
+  ConsumerState<MatchDetailSheet> createState() => _MatchDetailSheetState();
 }
 
-class _MatchDetailSheetState extends State<MatchDetailSheet> {
+class _MatchDetailSheetState extends ConsumerState<MatchDetailSheet> {
   TodayMatch get todayMatch => widget.todayMatch;
 
   @override
   Widget build(BuildContext context) {
     final match = todayMatch.match;
+    final matchId = match.id;
+    final canView = ref.watch(canViewMatchProvider(matchId));
+    final dailyViews = ref.watch(dailyViewProvider);
+
+    // Record the view when opening (if within limit)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (canView) {
+        ref.read(dailyViewProvider.notifier).recordView(matchId);
+      }
+    });
 
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
@@ -46,12 +60,53 @@ class _MatchDetailSheetState extends State<MatchDetailSheet> {
               const SizedBox(height: 20),
               _buildMatchInfoCard(match),
               const SizedBox(height: 20),
-              ..._buildPredictionsSection(),
+              if (canView)
+                ..._buildPredictionsSection()
+              else
+                _buildDailyLimitReached(dailyViews.viewedCount),
               const SizedBox(height: 32),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDailyLimitReached(int viewedCount) {
+    final profile = ref.watch(userProfileProvider).valueOrNull;
+    final limit = profile?.dailyMatchLimit ?? 1;
+    final plan = profile?.plan ?? 'free';
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.error.withAlpha(30)),
+          ),
+          child: Column(
+            children: [
+              const Icon(Icons.lock_clock_rounded, color: AppColors.gold, size: 40),
+              const SizedBox(height: 12),
+              const Text(
+                'Limite quotidienne atteinte',
+                style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Vous avez consulté $viewedCount/$limit matchs aujourd\'hui.\nPassez à un forfait supérieur pour plus de matchs.',
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              MatchLimitBanner(limit: limit, viewed: viewedCount, plan: plan),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
