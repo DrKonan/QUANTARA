@@ -21,7 +21,7 @@ class TodayMatch {
   });
 
   /// Minimum confidence to show any prediction to the user
-  static const double minConfidence = 0.75;
+  static const double minConfidence = 0.80;
 
   bool get hasPredictions => predictions.isNotEmpty;
   bool get isLive => match.status == MatchStatus.live;
@@ -30,7 +30,7 @@ class TodayMatch {
   /// Has lineup been received? (at least one refined prediction exists)
   bool get hasLineup => predictions.any((p) => p.isRefined);
 
-  /// Official coupon: refined top picks ≥75% + live ≥75%
+  /// Official coupon: refined top picks ≥80% + live ≥80%
   /// Only shown after lineup confirmation or during live
   List<TodayPrediction> get officialPredictions =>
       predictions.where((p) =>
@@ -39,7 +39,7 @@ class TodayMatch {
       ).toList();
   bool get hasOfficialPredictions => officialPredictions.isNotEmpty;
 
-  /// Tendances: pre-lineup signals ≥75% (shown as hints before compo)
+  /// Tendances: pre-lineup signals ≥80% (shown as hints before compo)
   List<TodayPrediction> get tendancePredictions {
     final list = predictions.where((p) =>
       (p.confidence ?? 0) >= minConfidence && !p.isRefined && !p.isLive

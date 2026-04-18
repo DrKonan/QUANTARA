@@ -30,8 +30,8 @@
         ┌──────────────┴──────────────┐
         │                             │
 ┌───────▼────────┐          ┌────────▼────────┐
-│  API-Football  │          │   CinetPay      │
-│  (Stats sport) │          │  (Paiements CI) │
+│  API-Football  │          │ Wave + PawaPay  │
+│  (Stats sport) │          │  (Wave/PawaPay) │
 └────────────────┘          └─────────────────┘
 ```
 
@@ -41,7 +41,15 @@
 2. **Analyse** : Edge Function `predict` calcule les prédictions (modèle Poisson + ELO + contexte)
 3. **Stockage** : Prédictions sauvegardées en base PostgreSQL
 4. **App mobile** : Flutter consomme les prédictions via Supabase Realtime/REST
-5. **Paiement** : CinetPay traite les abonnements, webhook confirme en base
+5. **Paiement** : Wave/PawaPay traite les abonnements, webhook confirme en base
+
+## Modèle de tarification
+
+> Détails complets dans `docs/PRICING_TIERS.md`
+
+4 niveaux : Gratuit (1 match/j) → Starter 990F (5/j) → Pro 1990F (15/j) → VIP 3990F (illimité)
+- Seuil de confiance ≥ 80% pour TOUS les niveaux
+- Différenciation : quantité + fonctionnalités (LIVE, combinés), pas qualité
 
 ## Modèle de prédiction
 
@@ -55,7 +63,7 @@
 - ELO Rating adapté par sport
 
 ### Score de confiance
-- < 60% → Non affiché
-- 60-75% → Prédiction basique (gratuit)
-- > 75% → Prédiction premium (payant)
-- > 85% → Prédiction haute confiance (premium)
+- < 80% → Non affiché (interne uniquement)
+- 80-84% → Élevé (tous les plans)
+- 85-91% → Très élevé + badge Haute Confiance (Pro/VIP)
+- ≥ 92% → Excellence (mis en avant)

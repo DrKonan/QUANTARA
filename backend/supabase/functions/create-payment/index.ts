@@ -7,15 +7,15 @@ import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse } from "../_shared/helpers.ts";
 
 const PLAN_AMOUNTS: Record<string, number> = {
-  weekly: 990,
-  monthly: 2990,
-  yearly: 24990,
+  starter: 990,
+  pro: 1990,
+  vip: 3990,
 };
 
 const PLAN_DURATIONS: Record<string, number> = {
-  weekly: 7,
-  monthly: 30,
-  yearly: 365,
+  starter: 30,
+  pro: 30,
+  vip: 30,
 };
 
 // PawaPay correspondents for Côte d'Ivoire
@@ -25,7 +25,7 @@ const PAWAPAY_CORRESPONDENTS: Record<string, string> = {
 };
 
 interface CreatePaymentRequest {
-  plan: string;          // 'weekly' | 'monthly' | 'yearly'
+  plan: string;          // 'starter' | 'pro' | 'vip'
   provider: string;      // 'wave' | 'pawapay'
   phone?: string;        // Required for PawaPay (MSISDN format)
   correspondent?: string; // 'orange_ci' | 'mtn_ci' — required for PawaPay
@@ -73,7 +73,7 @@ Deno.serve(async (req: Request) => {
 
   // Validate plan
   if (!plan || !PLAN_AMOUNTS[plan]) {
-    return jsonResponse({ error: "Invalid plan. Use: weekly, monthly, yearly" }, 400);
+    return jsonResponse({ error: "Invalid plan. Use: starter, pro, vip" }, 400);
   }
 
   // Validate provider

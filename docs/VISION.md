@@ -60,22 +60,28 @@ Analyse     : PSG joue à domicile avec 8.2 corners/match en moyenne.
 
 ## 4. Modèle Freemium & Abonnement
 
+> Détails complets dans `PRICING_TIERS.md`
+
 ### Période d'essai
-- **3 jours gratuits** avec accès à toutes les fonctionnalités premium
-- Anti-abus : vérification par numéro de téléphone (pas juste email) pour limiter les créations multiples de comptes
+- **3 jours gratuits** avec accès Premium complet (niveau VIP)
+- Anti-abus : vérification par numéro de téléphone (OTP SMS)
 - Device fingerprinting pour détecter les réinstallations
 
-### Plans après l'essai
-| Plan | Durée | Réduction |
-|------|-------|-----------|
-| Hebdomadaire | 7 jours | — |
-| Mensuel | 30 jours | ~15% vs hebdo |
-| Annuel | 365 jours | ~40% vs hebdo |
+### Plans (tous mensuels)
+| Plan | Prix | Matchs/jour | Sports | LIVE |
+|------|------|-------------|--------|------|
+| 🆓 Gratuit | 0 F | 1 (Top Pick) | Football | ❌ |
+| ⚽ Starter | 990 FCFA/mois | 5 | Football | ❌ |
+| 🏆 Pro | 1 990 FCFA/mois | 15 | Foot + Basket | ✅ |
+| 👑 VIP | 3 990 FCFA/mois | Illimité | Tous | ✅ |
+
+**Principe clé :** La qualité (seuil ≥ 80%) est identique pour tous. La différenciation porte sur la quantité et les fonctionnalités.
 
 ### Paiement
-- **CinetPay** : Wave, Orange Money, MTN Money, Moov Money
+- **Wave Business API** : Wave (CI, Sénégal, Mali, Burkina, Gambie, Ouganda)
+- **PawaPay** : Orange Money, MTN Mobile Money (20 pays africains)
 - Marché cible initial : Côte d'Ivoire
-- Extension : Afrique de l'Ouest (Sénégal, Mali, Burkina, Guinée...)
+- Extension : Afrique de l'Ouest & au-delà via PawaPay
 
 ---
 
@@ -126,7 +132,8 @@ Analyse     : PSG joue à domicile avec 8.2 corners/match en moyenne.
 | Service | Usage |
 |---------|-------|
 | API-Football | Stats matchs, compositions, résultats live |
-| CinetPay | Paiements mobile money |
+| PawaPay | Paiements mobile money (Orange, MTN — 20 pays) |
+| Wave Business | Paiements Wave (CI, Sénégal, Mali...) |
 | OpenAI / Anthropic (optionnel) | Synthèse textuelle de l'analyse |
 
 ---

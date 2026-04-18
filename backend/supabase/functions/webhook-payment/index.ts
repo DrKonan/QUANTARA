@@ -7,9 +7,9 @@ import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse } from "../_shared/helpers.ts";
 
 const PLAN_DURATIONS: Record<string, number> = {
-  weekly: 7,
-  monthly: 30,
-  yearly: 365,
+  starter: 30,
+  pro: 30,
+  vip: 30,
 };
 
 // ────────────────────────────────────────────────────────────
@@ -323,10 +323,10 @@ async function activateSubscription(
     return jsonResponse({ error: "Database error" }, 500);
   }
 
-  // Update user plan to premium
+  // Update user plan to the subscription tier
   const { error: userError } = await supabase
     .from("users")
-    .update({ plan: "premium" })
+    .update({ plan })
     .eq("id", userId);
 
   if (userError) {

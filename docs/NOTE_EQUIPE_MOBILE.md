@@ -187,13 +187,17 @@ const liveTopPicks = live.filter(p => p.is_top_pick);
 
 ---
 
-## 8. Niveaux de Confiance (inchangé)
+## 8. Niveaux de Confiance (MIS À JOUR)
 
-| Label | Plage | Couleur recommandée |
-|-------|-------|---------------------|
-| `elevated` | 50-64% | Jaune/Orange |
-| `high` | 65-79% | Vert |
-| `excellence` | 80-99% | Or/Doré |
+| Label | Plage | Couleur recommandée | Note |
+|-------|-------|---------------------|------|
+| *(non publié)* | < 80% | — | Masqué pour l'utilisateur |
+| `high` | 80-84% | Bleu | Pronos standard |
+| `very_high` | 85-91% | Vert | Badge 🔥 "Haute Confiance" (Pro/VIP) |
+| `excellence` | 92-99% | Or/Doré | Badge ⭐ "Excellence" (Pro/VIP) |
+
+> **Changement :** seuil minimum relevé de 75% → **80%** pour plus de fiabilité.  
+> Le badge "Haute Confiance" est un marqueur visuel réservé aux plans Pro et VIP.
 
 ---
 

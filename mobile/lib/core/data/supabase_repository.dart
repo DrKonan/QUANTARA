@@ -148,12 +148,12 @@ class SupabaseRepository {
       // Always attach predictions if available
       final matchPreds = predsByMatch[int.tryParse(match.id)] ?? [];
       preds = matchPreds;
-      // Official = refined top picks ≥75% + live ≥75%
+      // Official = refined top picks ≥80% + live ≥80%
       final officialCount = matchPreds.where((p) =>
-        (p.confidence ?? 0) >= 0.75 && ((p.isTopPick && p.isRefined) || p.isLive)
+        (p.confidence ?? 0) >= 0.80 && ((p.isTopPick && p.isRefined) || p.isLive)
       ).length;
       final hasTendances = matchPreds.any((p) =>
-        (p.confidence ?? 0) >= 0.75 && !p.isRefined && !p.isLive
+        (p.confidence ?? 0) >= 0.80 && !p.isRefined && !p.isLive
       );
 
       if (match.status == MatchStatus.finished) {
@@ -286,14 +286,14 @@ class SupabaseRepository {
   }
 
   Future<List<Prediction>> fetchRecentResults({int limit = 50}) async {
-    // Only fetch official predictions (refined top picks ≥75% + live ≥75%) for history/winrate
+    // Only fetch official predictions (refined top picks ≥80% + live ≥80%) for history/winrate
     final topPickData = await _client
         .from('predictions')
         .select('*, matches!inner(*)')
         .eq('is_published', true)
         .eq('is_top_pick', true)
         .eq('is_refined', true)
-        .gte('confidence', 0.75)
+        .gte('confidence', 0.80)
         .not('is_correct', 'is', null)
         .order('created_at', ascending: false)
         .limit(limit);
@@ -303,7 +303,7 @@ class SupabaseRepository {
         .select('*, matches!inner(*)')
         .eq('is_published', true)
         .eq('is_live', true)
-        .gte('confidence', 0.75)
+        .gte('confidence', 0.80)
         .not('is_correct', 'is', null)
         .order('created_at', ascending: false)
         .limit(limit);

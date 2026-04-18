@@ -24,10 +24,10 @@
 ### Score de confiance — couleurs
 | Niveau | % | Couleur |
 |--------|---|---------|
-| Faible | < 65% | Rouge `#FF4757` |
-| Moyen | 65–74% | Orange `#FFA502` |
-| Élevé | 75–84% | Bleu `#1E90FF` |
-| Très élevé | ≥ 85% | Vert `#2ED573` |
+| Non publié | < 80% | — (masqué) |
+| Élevé | 80–84% | Bleu `#1E90FF` |
+| Très élevé | 85–91% | Vert `#2ED573` |
+| Excellence | ≥ 92% | Or `#D4AF37` |
 
 ### Logo
 - Lettre **Q stylisée** — sobre, premium, reconnaissable comme icône d'app
@@ -168,20 +168,22 @@ MainShell (Bottom Nav)
 - Bouton [Déconnexion]
 
 ### SubscriptionScreen
+> Voir `PRICING_TIERS.md` pour le détail complet des formules.
+
 ```
 ┌──────────────────────────────────┐
 │  Passez Premium 🏆               │
-│  Accès illimité à tous les pronos│
+│  Des pronos IA à partir de 990F  │
 ├──────────────────────────────────┤
-│  ○ Hebdomadaire   XXXX FCFA/sem  │
-│  ● Mensuel        XXXX FCFA/mois │  ← recommandé
-│  ○ Annuel         XXXX FCFA/an   │
-│    (économisez 40%)              │
+│  🆓 Gratuit      1 match/jour   │
+│  ⚽ Starter 990F  5 matchs/jour  │ 
+│  ● Pro     1990F 15 matchs/jour  │  ← recommandé
+│  👑 VIP    3990F Illimité        │
 ├──────────────────────────────────┤
-│  ✅ Pronos illimités             │
-│  ✅ Analyses complètes           │
-│  ✅ Alertes Live                 │
-│  ✅ Historique complet           │
+│  ✅ Confiance ≥ 80% garantie     │
+│  ✅ Analyses détaillées           │
+│  ✅ Alertes Live (Pro+)          │
+│  ✅ Combinés IA (VIP)            │
 ├──────────────────────────────────┤
 │  [Payer via Wave / Orange / MTN] │
 └──────────────────────────────────┘
@@ -214,10 +216,19 @@ MainShell (Bottom Nav)
 - Device fingerprinting (package `device_info_plus` + hash stocké en base)
 - Blocage si même device fingerprint + essai déjà consommé
 
-### Après l'essai
-- Pronos toujours visibles (match + événement)
-- Analyse masquée → remplacée par [🔒 Débloquer avec Premium]
-- Pas de limitation du nombre de matchs visibles
+### Après l'essai (Gratuit)
+- **1 match/jour** visible avec prono (Top Pick du jour)
+- Analyse courte (2 lignes) — pas le détail complet
+- Pronos au-delà du quota → masqués avec [🔒 Passez à Starter]
+- Pas de pronos LIVE
+
+### Limites par plan (voir `PRICING_TIERS.md`)
+| Plan | Matchs/jour | LIVE | Combinés |
+|------|-------------|------|----------|
+| Gratuit | 1 | ❌ | ❌ |
+| Starter | 5 | ❌ | ❌ |
+| Pro | 15 | ✅ | ❌ |
+| VIP | Illimité | ✅ | ✅ |
 
 ---
 

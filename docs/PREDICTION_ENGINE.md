@@ -9,7 +9,7 @@
 Le moteur de prédiction est une **Edge Function Supabase** (Deno/TypeScript) qui :
 1. Récupère les données d'un match via **API-Football**
 2. Calcule un score de confiance pour chaque catégorie d'événement
-3. Filtre et retient uniquement les événements pertinents (≥ 75%)
+3. Filtre et retient uniquement les événements pertinents (≥ 80%)
 4. Génère une analyse textuelle courte via **OpenAI GPT-4o**
 5. Publie automatiquement les pronos en base de données
 
@@ -111,12 +111,13 @@ Score(événement) = Σ(poids_i × indicateur_i) / Σ(poids_i)
 
 | Score | Niveau | Action |
 |-------|--------|--------|
-| < 75% | Insuffisant | ❌ Non publié |
-| 75–84% | Élevé | ✅ Publié (label bleu) |
-| 85–91% | Très élevé | ✅ Publié (label vert) |
-| ≥ 92% | Excellence | ✅ Publié (label or + mise en avant) |
+| < 80% | Insuffisant | ❌ Non publié (interne uniquement) |
+| 80–84% | Élevé | ✅ Publié (label bleu) |
+| 85–91% | Très élevé | ✅ Publié (label vert) + Badge "Haute Confiance" (Pro/VIP) |
+| ≥ 92% | Excellence | ✅ Publié (label or + mise en avant) + Badge "Excellence" |
 
-**Règle qualité :** Mieux vaut 3 pronos solides par jour que 20 pronos douteux.
+**Règle qualité :** Mieux vaut 3 pronos solides par jour que 20 pronos douteux.  
+**Seuil unique :** 80% pour tous les niveaux d'abonnement. Voir `PRICING_TIERS.md`.
 
 ---
 
@@ -124,13 +125,14 @@ Score(événement) = Σ(poids_i × indicateur_i) / Σ(poids_i)
 
 ### Tier 1 — Grandes compétitions
 - Analyse toutes les **15 minutes** pendant le match
-- Chaque cycle : récupération des stats live → recalcul du score → publication si ≥ 75%
+- Chaque cycle : récupération des stats live → recalcul du score → publication si ≥ 80%
 - Pas de prono systématique : si rien de pertinent, on ne publie pas
 - Potentiellement 0 à 4+ pronos live par match
+- **Accès LIVE réservé aux plans Pro et VIP**
 
 ### Tier 2 — Autres ligues
 - Analyse **une seule fois en 2ème mi-temps** (autour de la 60ème minute)
-- Même logique : publication uniquement si ≥ 75%
+- Même logique : publication uniquement si ≥ 80%
 
 ### Déduplication
 - Si un prono live porte sur le même événement qu'un prono pré-match → on met à jour le score de confiance, on ne crée pas un doublon

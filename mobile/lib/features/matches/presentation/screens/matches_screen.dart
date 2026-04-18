@@ -634,7 +634,7 @@ class _MatchTile extends StatelessWidget {
       );
     }
 
-    // Show Top Pick star if available (official only: refined + ≥75%)
+    // Show Top Pick star if available (official only: refined + ≥80%)
     final best = todayMatch.bestTopPick;
     if (best != null) {
       return Column(

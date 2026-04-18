@@ -440,7 +440,7 @@ class _HomeMatchCard extends StatelessWidget {
   Color _confidenceColor(double confidence) {
     if (confidence >= 0.92) return AppColors.emerald;
     if (confidence >= 0.85) return AppColors.success;
-    if (confidence >= 0.75) return AppColors.gold;
+    if (confidence >= 0.80) return AppColors.gold;
     return AppColors.warning;
   }
 }

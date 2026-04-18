@@ -389,7 +389,7 @@ class _MatchDetailSheetState extends State<MatchDetailSheet> {
     );
   }
 
-  /// Subtle hint tile for strong secondary signals (≥75%) — not an official bet
+  /// Subtle hint tile for strong secondary signals (≥80%) — not an official bet
   Widget _buildHintTile(TodayPrediction pred, String home, String away) {
     final confidence = pred.confidencePercent;
 

@@ -144,7 +144,7 @@ class AboutScreen extends StatelessWidget {
                       Icons.verified_rounded,
                       AppColors.info,
                       "Fiabilité",
-                      "Seuil de confiance minimum de 75% pour chaque pronostic",
+                      "Seuil de confiance minimum de 80% pour chaque pronostic",
                     ),
                     _buildFeatureRow(
                       Icons.security_rounded,

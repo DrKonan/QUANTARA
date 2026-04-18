@@ -14,31 +14,34 @@ class SubscriptionScreen extends ConsumerStatefulWidget {
 }
 
 class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
-  String _selectedPlan = AppConstants.planMonthly;
+  String _selectedPlan = AppConstants.planPro;
 
   static const _plans = [
     _Plan(
-      id: AppConstants.planWeekly,
-      label: "Hebdo",
+      id: AppConstants.planStarter,
+      label: "Starter",
+      emoji: "⚽",
       price: "990 FCFA",
-      pricePerDay: "141 FCFA/jour",
-      duration: "7 jours",
+      subtitle: "5 matchs/jour · Football",
+      duration: "/mois",
     ),
     _Plan(
-      id: AppConstants.planMonthly,
-      label: "Mensuel",
-      price: "2 990 FCFA",
-      pricePerDay: "100 FCFA/jour",
-      duration: "30 jours",
-      badge: "Populaire",
+      id: AppConstants.planPro,
+      label: "Pro",
+      emoji: "🏆",
+      price: "1 990 FCFA",
+      subtitle: "15 matchs/jour · LIVE · Foot + Basket",
+      duration: "/mois",
+      badge: "Recommandé",
     ),
     _Plan(
-      id: AppConstants.planYearly,
-      label: "Annuel",
-      price: "24 990 FCFA",
-      pricePerDay: "68 FCFA/jour",
-      duration: "365 jours",
-      badge: "Meilleur prix",
+      id: AppConstants.planVip,
+      label: "VIP",
+      emoji: "👑",
+      price: "3 990 FCFA",
+      subtitle: "Illimité · Tous sports · Combinés IA",
+      duration: "/mois",
+      badge: "Complet",
     ),
   ];
 
@@ -67,10 +70,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                     _buildHero(),
                     const SizedBox(height: 28),
 
-                    _buildFeature(Icons.analytics_rounded, "Analyses complètes", "Accès à toutes les prédictions détaillées"),
-                    _buildFeature(Icons.flash_on_rounded, "Pronos LIVE", "Prédictions en temps réel pendant les matchs"),
-                    _buildFeature(Icons.stars_rounded, "Confiance élevée", "Pronos avec taux de confiance > 85%"),
-                    _buildFeature(Icons.notifications_active_rounded, "Alertes prioritaires", "Notifications instantanées des meilleurs pronos"),
+                    _buildFeature(Icons.analytics_rounded, "Analyses complètes", "Pronos avec confiance ≥ 80% garantie"),
+                    _buildFeature(Icons.flash_on_rounded, "Pronos LIVE", "Prédictions en temps réel (Pro+)"),
+                    _buildFeature(Icons.stars_rounded, "Badge Haute Confiance", "Pronos ≥ 85% mis en avant (Pro+)"),
+                    _buildFeature(Icons.casino_rounded, "Combinés IA", "2-3 matchs à cotes intéressantes (VIP)"),
 
                     const SizedBox(height: 28),
 
@@ -207,7 +210,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          "Accédez à toutes les analyses IA\net maximisez vos gains",
+          "Des pronos IA fiables\nà partir de 990 FCFA/mois",
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
         ),
@@ -291,9 +294,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 
   String _planLabel(String plan) {
     switch (plan) {
-      case 'weekly': return 'Hebdomadaire';
-      case 'monthly': return 'Mensuel';
-      case 'yearly': return 'Annuel';
+      case 'starter': return 'Starter';
+      case 'pro': return 'Pro';
+      case 'vip': return 'VIP';
       default: return plan;
     }
   }
@@ -436,6 +439,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                 children: [
                   Row(
                     children: [
+                      Text(plan.emoji, style: const TextStyle(fontSize: 16)),
+                      const SizedBox(width: 6),
                       Text(plan.label, style: TextStyle(color: isSelected ? AppColors.textPrimary : AppColors.textSecondary, fontSize: 15, fontWeight: FontWeight.w600)),
                       if (plan.badge != null) ...[
                         const SizedBox(width: 8),
@@ -448,11 +453,17 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text("${plan.duration} · ${plan.pricePerDay}", style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                  Text(plan.subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
                 ],
               ),
             ),
-            Text(plan.price, style: TextStyle(color: isSelected ? AppColors.gold : AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(plan.price, style: TextStyle(color: isSelected ? AppColors.gold : AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                Text(plan.duration, style: const TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+              ],
+            ),
           ],
         ),
       ),
@@ -802,16 +813,18 @@ class _PaymentStatusPage extends ConsumerWidget {
 class _Plan {
   final String id;
   final String label;
+  final String emoji;
   final String price;
-  final String pricePerDay;
+  final String subtitle;
   final String duration;
   final String? badge;
 
   const _Plan({
     required this.id,
     required this.label,
+    required this.emoji,
     required this.price,
-    required this.pricePerDay,
+    required this.subtitle,
     required this.duration,
     this.badge,
   });

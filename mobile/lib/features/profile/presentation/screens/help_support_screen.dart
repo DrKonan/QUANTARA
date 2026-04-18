@@ -101,7 +101,7 @@ class HelpSupportScreen extends StatelessWidget {
                       "Comment fonctionnent les prédictions ?",
                       "Notre IA analyse les statistiques des équipes, les compositions, la forme récente, "
                           "les confrontations directes et de nombreux autres paramètres pour générer des prédictions "
-                          "avec un niveau de confiance. Seuls les pronostics avec un taux de confiance ≥ 75% vous sont proposés.",
+                          "avec un niveau de confiance. Seuls les pronostics avec un taux de confiance ≥ 80% vous sont proposés.",
                     ),
 
                     _buildFaqItem(
@@ -114,7 +114,7 @@ class HelpSupportScreen extends StatelessWidget {
                     _buildFaqItem(
                       "Comment est calculé le Win Rate ?",
                       "Le Win Rate est calculé uniquement sur les pronostics officiels que nous vous proposons "
-                          "(top picks affinés ≥ 75% et pronos live ≥ 75%). Il représente le pourcentage de prédictions correctes "
+                          "(top picks affinés ≥ 80% et pronos live ≥ 80%). Il représente le pourcentage de prédictions correctes "
                           "parmi celles que nous avons officiellement recommandées.",
                     ),
 

@@ -8,7 +8,7 @@ Extension de auth.users de Supabase.
 id          uuid PRIMARY KEY (ref auth.users)
 username    text
 avatar_url  text
-plan        text DEFAULT 'free'  -- 'free' | 'premium'
+plan        text DEFAULT 'free'  -- 'free' | 'starter' | 'pro' | 'vip'
 created_at  timestamptz
 ```
 
@@ -43,7 +43,7 @@ created_at      timestamptz
 ```sql
 id              serial PRIMARY KEY
 user_id         uuid REFERENCES users(id)
-plan            text    -- 'monthly' | 'quarterly' | 'yearly'
+plan            text    -- 'starter' | 'pro' | 'vip'
 status          text    -- 'active' | 'cancelled' | 'expired'
 start_date      timestamptz
 end_date        timestamptz
