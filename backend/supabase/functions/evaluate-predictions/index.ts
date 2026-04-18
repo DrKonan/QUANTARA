@@ -224,6 +224,41 @@ Deno.serve(async (_req: Request) => {
 
       totalEvaluated += updates.length;
 
+      // V1.1 — Mise à jour dynamique de l'ELO après chaque match
+      try {
+        const { data: eloRows } = await supabase
+          .from("team_elo")
+          .select("team_id, elo")
+          .in("team_id", [result.teams.home.id, result.teams.away.id]);
+
+        if (eloRows && eloRows.length === 2) {
+          const homeEloRow = eloRows.find((r: { team_id: number }) => r.team_id === result.teams.home.id);
+          const awayEloRow = eloRows.find((r: { team_id: number }) => r.team_id === result.teams.away.id);
+          if (homeEloRow && awayEloRow) {
+            const K = 32;
+            const homeElo = homeEloRow.elo;
+            const awayElo = awayEloRow.elo;
+            const expectedHome = 1 / (1 + Math.pow(10, (awayElo - homeElo) / 400));
+            const expectedAway = 1 - expectedHome;
+
+            // Résultat réel : 1 = victoire, 0.5 = nul, 0 = défaite
+            const homeGoals = result.goals.home ?? 0;
+            const awayGoals = result.goals.away ?? 0;
+            const actualHome = homeGoals > awayGoals ? 1 : homeGoals === awayGoals ? 0.5 : 0;
+            const actualAway = 1 - actualHome;
+
+            const newHomeElo = Math.round(homeElo + K * (actualHome - expectedHome));
+            const newAwayElo = Math.round(awayElo + K * (actualAway - expectedAway));
+
+            await supabase.from("team_elo").update({ elo: newHomeElo }).eq("team_id", result.teams.home.id);
+            await supabase.from("team_elo").update({ elo: newAwayElo }).eq("team_id", result.teams.away.id);
+            console.log(`[evaluate-predictions] ELO updated: ${result.teams.home.id} ${homeElo}→${newHomeElo}, ${result.teams.away.id} ${awayElo}→${newAwayElo}`);
+          }
+        }
+      } catch (eloErr) {
+        console.warn(`[evaluate-predictions] ELO update failed:`, eloErr);
+      }
+
       // Recalcule les stats agrégées (all_time + mois courant)
       await supabase.rpc("recalculate_prediction_stats");
 

@@ -3,9 +3,12 @@
 -- Gratuit / Starter / Pro / VIP — seuil confiance relevé à 80%
 -- ================================================================
 
--- 1. Update users.plan constraint to support new tiers
+-- 1. Drop old constraint, migrate legacy values, add new constraint
 alter table public.users
   drop constraint if exists users_plan_check;
+
+update public.users set plan = 'pro' where plan = 'premium';
+
 alter table public.users
   add constraint users_plan_check
     check (plan in ('free', 'starter', 'pro', 'vip'));

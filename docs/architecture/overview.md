@@ -53,17 +53,32 @@
 
 ## Modèle de prédiction
 
-### Indicateurs utilisés
-- Forme récente (5 derniers matchs)
-- Stats domicile/extérieur
-- Head-to-head historique
-- Blessures / suspensions
-- Classement & enjeux du match
-- Modèle de Poisson pour les buts (football)
-- ELO Rating adapté par sport
+### Indicateurs utilisés (V1.0 — actuel)
+- Forme récente (5 derniers matchs, pondération décroissante)
+- Stats domicile/extérieur (win rate, buts moyens)
+- Head-to-head historique (10 derniers)
+- Blessures / suspensions (impact max -30%)
+- Modèle de Poisson pour les buts (xG naïfs)
+- ELO Rating statique (sigmoid ±400pts)
+- Raffinement par compositions (lineup quality factor)
+- 6 marchés : result, double_chance, over_under, btts, corners, cards
+
+### Améliorations planifiées (V1.1)
+- **Calibration par cotes bookmakers** (`/odds`) — ancrage marché pour corriger sur-confiances
+- **Cross-validation API** (`/predictions`) — second avis indépendant
+- **Vrais xG** (`/fixtures/statistics` → `expected_goals`) — remplace formule naïve
+- **Vrais stats corners/cards** (`/fixtures/statistics`) — remplace proxy buts→corners
+- **ELO dynamique** — mise à jour auto après chaque match (K=32)
+- **Filtres anti-faux positifs** — suppression `under_1.5`, seuil `draw` à 0.88
 
 ### Score de confiance
 - < 80% → Non affiché (interne uniquement)
 - 80-84% → Élevé (tous les plans)
 - 85-91% → Très élevé + badge Haute Confiance (Pro/VIP)
 - ≥ 92% → Excellence (mis en avant)
+
+### Performance actuelle (18/04/2026)
+- Winrate global (≥0.80) : **76%** (130/171)
+- Meilleurs marchés : BTTS 95.5%, Corners 90%, Cards 80.8%
+- Marchés à améliorer : Over/Under 57.1%, Result 52.9%, Double Chance 69%
+- Objectif V1.1 : **≥ 80%** via calibration odds + vrais xG

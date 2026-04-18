@@ -37,14 +37,18 @@ L'IA ne propose pas un type d'événement figé. Elle :
 
 ### Données analysées
 - Compositions d'équipes officielles
-- Forme récente (5-10 derniers matchs)
-- Stats domicile / extérieur
-- Head-to-head historique
+- Forme récente (5 derniers matchs, pondération décroissante)
+- Stats domicile / extérieur (win rate, buts moyens)
+- Head-to-head historique (10 derniers matchs)
 - Blessures & suspensions
 - Classement & enjeux du match
 - Stats live (possession, tirs, corners, cartons) pour le mode live
 - Modèle de Poisson pour les buts
 - ELO Rating adapté au football
+- **[V1.1]** Cotes bookmakers réelles (calibration)
+- **[V1.1]** Vrais xG historiques (expected_goals API)
+- **[V1.1]** Vrais stats corners/cards (statistiques matchs passés)
+- **[V1.1]** Prédictions API-Football (cross-validation)
 
 ### Format d'un prono
 ```
@@ -149,17 +153,32 @@ Analyse     : PSG joue à domicile avec 8.2 corners/match en moyenne.
 
 ## 8. Roadmap
 
-### V1 — MVP
-- [ ] Auth (email + téléphone OTP)
-- [ ] Moteur de prédiction football (pré-match)
-- [ ] Dashboard + liste des pronos
-- [ ] Abonnement via CinetPay
-- [ ] Notifications push (prono disponible + résultat)
-- [ ] Historique & stats de performance
-- [ ] Français + Anglais
+### V1.0 — MVP (✅ Livré)
+- [x] Auth (email + téléphone OTP)
+- [x] Moteur de prédiction football (pré-match) — 6 marchés
+- [x] Raffinement par compositions officielles
+- [x] Dashboard + liste des pronos
+- [x] Abonnement 4 niveaux (Free/Starter/Pro/VIP) via Wave + PawaPay
+- [x] Notifications push (prono disponible + résultat)
+- [x] Historique & stats de performance
+- [x] Prédictions live (in-match)
+- [x] Auto-évaluation des résultats
+- [x] Top Picks (2 meilleurs pronos par match)
+- [x] Winrate : 76% @ confidence ≥ 0.80
+
+### V1.1 — Amélioration du moteur (🔜 En cours — objectif winrate ≥ 80%)
+- [ ] Intégration cotes bookmakers (`/odds`) — calibration confiance par le marché
+- [ ] Cross-validation via `/predictions` API-Football
+- [ ] Vrais xG historiques via `/fixtures/statistics` → `expected_goals`
+- [ ] Vrais stats corners/cards via `/fixtures/statistics`
+- [ ] ELO dynamique — mise à jour automatique après chaque match
+- [ ] Filtres anti-faux positifs (supprimer `under_1.5`, seuil `draw` ≥ 0.88)
+- [ ] Push migrations paiement + déployer Edge Functions paiement
 
 ### V2
-- [ ] Prédictions live (in-match)
+- [ ] Feedback loop : ajustement automatique des poids selon performances
+- [ ] Modèle ML entraîné sur l'historique (XGBoost ou RandomForest)
+- [ ] Intégration `/standings` pour enjeux de classement
 - [ ] Basketball
 - [ ] Hockey sur glace
 - [ ] Expansion géographique (Sénégal, Mali...)

@@ -1,7 +1,7 @@
 // ============================================================
-// QUANTARA — Shared : moteur de scoring (pré-match)
-// Implémente le modèle documenté dans PREDICTION_ENGINE.md
+// QUANTARA — Shared : moteur de scoring (pré-match) V1.1
 // Marchés : result, double_chance, over_under, btts, corners, cards
+// V1.1 : calibration odds, vrais xG/corners, filtres anti-faux positifs
 // ============================================================
 
 export interface TeamStats {
@@ -18,6 +18,10 @@ export interface TeamStats {
   totalMatches?: number;         // nombre total de matchs joués cette saison
   avgYellowCards?: number;       // cartons jaunes par match
   avgRedCards?: number;          // cartons rouges par match
+  // V1.1 — vrais stats historiques
+  realXgAvg?: number;            // vrais xG moyens (expected_goals) des derniers matchs
+  realCornersAvg?: number;       // vrais corners moyens des derniers matchs
+  realCardsAvg?: number;         // vrais cartons moyens des derniers matchs
 }
 
 export interface MatchContext {
@@ -29,11 +33,30 @@ export interface MatchContext {
   h2hTotal: number;
   h2hHomeGoalsAvg: number;
   h2hAwayGoalsAvg: number;
-  // Facteurs de qualité des compos (1.0 = compo type, <1 = affaiblie, >1 = renforcée)
-  // undefined = pas de compo dispo (mode initial)
   homeLineupFactor?: number;     // 0.5–1.2 — impact sur les xG domicile
   awayLineupFactor?: number;     // 0.5–1.2 — impact sur les xG extérieur
   leagueAvgCorners?: number;     // moyenne corners par match dans la ligue (défaut 10.5)
+}
+
+// V1.1 — Données bookmakers pour calibration
+export interface OddsData {
+  homeWinOdds?: number;          // cote victoire domicile
+  drawOdds?: number;             // cote nul
+  awayWinOdds?: number;          // cote victoire extérieur
+  over25Odds?: number;           // cote over 2.5
+  under25Odds?: number;          // cote under 2.5
+  bttsYesOdds?: number;          // cote BTTS oui
+  bttsNoOdds?: number;           // cote BTTS non
+}
+
+// V1.1 — Prédictions API-Football pour cross-validation
+export interface ApiPredictionData {
+  winnerTeamId?: number;         // id de l'équipe favorite selon l'API
+  homePercent?: number;          // 0-100
+  drawPercent?: number;          // 0-100
+  awayPercent?: number;          // 0-100
+  advice?: string;               // ex: "Winner : PSG"
+  underOver?: string | null;     // ex: "Under 3.5"
 }
 
 export interface ScoringResult {
@@ -89,14 +112,65 @@ function expectedGoals(
 // (en dessous de l'estimation = on parie over avec confiance)
 // ----------------------------------------------------------------
 export function selectBestLine(estimated: number, lines: number[]): number {
-  // Choisit la ligne juste en dessous de l'estimation (pour un meilleur edge)
-  // Si l'estimation est pile sur une ligne, on la prend
   let bestLine = lines[0];
   for (const line of lines) {
     if (line <= estimated) bestLine = line;
     else break;
   }
   return bestLine;
+}
+
+// ----------------------------------------------------------------
+// V1.1 — Calibration par les cotes bookmakers
+// Convertit une cote en probabilité implicite puis compare à notre proba.
+// Retourne un facteur multiplicateur pour la confiance.
+// ----------------------------------------------------------------
+function oddsToProb(odds: number): number {
+  return odds > 0 ? 1 / odds : 0;
+}
+
+function oddsCalibrationFactor(ourProb: number, marketOdds: number | undefined): number {
+  if (!marketOdds || marketOdds <= 1) return 1.0; // pas de données odds → neutre
+  const marketProb = oddsToProb(marketOdds);
+  const gap = Math.abs(ourProb - marketProb);
+  if (gap < 0.10) return 1.05;   // concordance → bonus
+  if (gap < 0.20) return 1.00;   // léger écart → neutre
+  if (gap < 0.30) return 0.85;   // fort désaccord → pénalité
+  return 0.70;                    // contradiction totale → forte pénalité
+}
+
+// ----------------------------------------------------------------
+// V1.1 — Cross-validation API predictions
+// ----------------------------------------------------------------
+function apiPredictionFactor(
+  prediction: string,
+  predType: string,
+  apiPred: ApiPredictionData | undefined,
+  homeTeamId: number,
+  awayTeamId: number,
+): number {
+  if (!apiPred) return 1.0; // pas de données → neutre
+
+  if (predType === "result") {
+    const apiWinner = apiPred.winnerTeamId;
+    if (!apiWinner) return 1.0;
+    if (prediction === "home_win" && apiWinner === homeTeamId) return 1.05;
+    if (prediction === "away_win" && apiWinner === awayTeamId) return 1.05;
+    if (prediction === "draw" && !apiPred.winnerTeamId) return 1.05;
+    // Contradiction
+    if (prediction === "home_win" && apiWinner === awayTeamId) return 0.90;
+    if (prediction === "away_win" && apiWinner === homeTeamId) return 0.90;
+    return 0.95;
+  }
+
+  if (predType === "over_under" && apiPred.underOver) {
+    const apiSaysUnder = apiPred.underOver.toLowerCase().includes("under");
+    const ourSaysUnder = prediction.startsWith("under");
+    if (apiSaysUnder === ourSaysUnder) return 1.05;
+    return 0.90;
+  }
+
+  return 1.0;
 }
 
 // ----------------------------------------------------------------
@@ -153,23 +227,28 @@ export function computePrematchScores(
   home: TeamStats,
   away: TeamStats,
   ctx: MatchContext,
-  isHome: boolean,  // true = calcul pour la victoire domicile
+  isHome: boolean,
+  odds?: OddsData,
+  apiPred?: ApiPredictionData,
 ): ScoringResult[] {
   const PUBLISH_THRESHOLD = 0.50;
   const results: ScoringResult[] = [];
 
   const homeFormScore = formScore(home.recentForm);
   const awayFormScore = formScore(away.recentForm);
-  const eloAdv = eloAdvantage(home.elo, away.elo);  // > 0.5 = avantage domicile
+  const eloAdv = eloAdvantage(home.elo, away.elo);
 
-  // Blessures : pénalise proportionnellement à l'impact (max 30% de réduction)
   const injuryPenalty = Math.min(ctx.keyInjuries * 0.05, 0.3);
 
-  // XG attendus (ajustés par la qualité de la compo si dispo)
+  // V1.1 — xG : utilise les vrais xG si dispo, sinon formule naïve
   const homeLineupMul = ctx.homeLineupFactor ?? 1.0;
   const awayLineupMul = ctx.awayLineupFactor ?? 1.0;
-  const homeXG = expectedGoals(home.homeGoalsScored, away.homeGoalsConceded) * homeLineupMul;
-  const awayXG = expectedGoals(away.awayGoalsScored, home.homeGoalsConceded) * awayLineupMul;
+  const homeXG = (home.realXgAvg != null && home.realXgAvg > 0)
+    ? home.realXgAvg * homeLineupMul
+    : expectedGoals(home.homeGoalsScored, away.homeGoalsConceded) * homeLineupMul;
+  const awayXG = (away.realXgAvg != null && away.realXgAvg > 0)
+    ? away.realXgAvg * awayLineupMul
+    : expectedGoals(away.awayGoalsScored, home.homeGoalsConceded) * awayLineupMul;
 
   // ── 1. Résultat (1X2) ──────────────────────────────────────────
   const { homeWin, draw, awayWin } = computeResultProbs(homeXG, awayXG);
@@ -189,11 +268,16 @@ export function computePrematchScores(
     (homeFormWeight + homeStatWeight + h2hWeight + eloWeight + injuryWeight + stakesWeight) *
     (0.7 + 0.3 * poissonHomeScore);
 
-  if (homeWinComposite >= PUBLISH_THRESHOLD) {
+  // V1.1 — Calibration odds + cross-validation API
+  const homeWinCalibrated = homeWinComposite
+    * oddsCalibrationFactor(homeWin, odds?.homeWinOdds)
+    * apiPredictionFactor("home_win", "result", apiPred, home.teamId, away.teamId);
+
+  if (homeWinCalibrated >= PUBLISH_THRESHOLD) {
     results.push({
       prediction: "home_win",
       prediction_type: "result",
-      confidence: Math.min(homeWinComposite, 0.99),
+      confidence: Math.min(homeWinCalibrated, 0.99),
       score_breakdown: {
         form: homeFormWeight,
         home_stats: homeStatWeight,
@@ -202,6 +286,8 @@ export function computePrematchScores(
         injuries: injuryWeight,
         stakes: stakesWeight,
         poisson_validation: poissonHomeScore,
+        odds_calibration: oddsCalibrationFactor(homeWin, odds?.homeWinOdds),
+        api_validation: apiPredictionFactor("home_win", "result", apiPred, home.teamId, away.teamId),
       },
     });
   }
@@ -217,11 +303,16 @@ export function computePrematchScores(
     (awayFormWeight + awayStatWeight + h2hAwayWeight + eloAwayWeight + injuryWeight + stakesWeight) *
     (0.7 + 0.3 * awayWin);
 
-  if (awayWinComposite >= PUBLISH_THRESHOLD) {
+  // V1.1 — Calibration odds + cross-validation API
+  const awayWinCalibrated = awayWinComposite
+    * oddsCalibrationFactor(awayWin, odds?.awayWinOdds)
+    * apiPredictionFactor("away_win", "result", apiPred, home.teamId, away.teamId);
+
+  if (awayWinCalibrated >= PUBLISH_THRESHOLD) {
     results.push({
       prediction: "away_win",
       prediction_type: "result",
-      confidence: Math.min(awayWinComposite, 0.99),
+      confidence: Math.min(awayWinCalibrated, 0.99),
       score_breakdown: {
         form: awayFormWeight,
         away_stats: awayStatWeight,
@@ -230,6 +321,8 @@ export function computePrematchScores(
         injuries: injuryWeight,
         stakes: stakesWeight,
         poisson_validation: awayWin,
+        odds_calibration: oddsCalibrationFactor(awayWin, odds?.awayWinOdds),
+        api_validation: apiPredictionFactor("away_win", "result", apiPred, home.teamId, away.teamId),
       },
     });
   }
@@ -246,20 +339,29 @@ export function computePrematchScores(
   const overGoalsScore = overGoals * 0.6 + (h2hGoalsAvg > goalLine ? 0.3 : 0.1) + homeFormScore * 0.1;
   const underGoalsScore = underGoals * 0.6 + (h2hGoalsAvg < goalLine ? 0.3 : 0.1) + (1 - homeFormScore) * 0.1;
 
-  if (overGoalsScore >= PUBLISH_THRESHOLD) {
+  // V1.1 — Calibration odds pour O/U + cross-validation API
+  const overCalib = overGoalsScore
+    * oddsCalibrationFactor(overGoals, odds?.over25Odds)
+    * apiPredictionFactor(`over_${goalLine}`, "over_under", apiPred, home.teamId, away.teamId);
+  const underCalib = underGoalsScore
+    * oddsCalibrationFactor(underGoals, odds?.under25Odds)
+    * apiPredictionFactor(`under_${goalLine}`, "over_under", apiPred, home.teamId, away.teamId);
+
+  if (overCalib >= PUBLISH_THRESHOLD) {
     results.push({
       prediction: `over_${goalLine}`,
       prediction_type: "over_under",
-      confidence: Math.min(overGoalsScore, 0.99),
-      score_breakdown: { poisson_over: overGoals, h2h_goals: h2hGoalsAvg, form: homeFormScore * 0.1, line: goalLine, estimated_total: totalXG },
+      confidence: Math.min(overCalib, 0.99),
+      score_breakdown: { poisson_over: overGoals, h2h_goals: h2hGoalsAvg, form: homeFormScore * 0.1, line: goalLine, estimated_total: totalXG, odds_calibration: oddsCalibrationFactor(overGoals, odds?.over25Odds) },
     });
   }
-  if (underGoalsScore >= PUBLISH_THRESHOLD) {
+  // V1.1 — Filtre : under_1.5 a 42% winrate historique → on le bloque
+  if (underCalib >= PUBLISH_THRESHOLD && goalLine !== 1.5) {
     results.push({
       prediction: `under_${goalLine}`,
       prediction_type: "over_under",
-      confidence: Math.min(underGoalsScore, 0.99),
-      score_breakdown: { poisson_under: underGoals, h2h_goals: h2hGoalsAvg, line: goalLine, estimated_total: totalXG },
+      confidence: Math.min(underCalib, 0.99),
+      score_breakdown: { poisson_under: underGoals, h2h_goals: h2hGoalsAvg, line: goalLine, estimated_total: totalXG, odds_calibration: oddsCalibrationFactor(underGoals, odds?.under25Odds) },
     });
   }
 
@@ -272,20 +374,24 @@ export function computePrematchScores(
   const bttsScore = bttsProb * 0.65 + h2hBttsRate * 0.35;
   const noBttsScore = (1 - bttsProb) * 0.65 + (1 - h2hBttsRate) * 0.35;
 
-  if (bttsScore >= PUBLISH_THRESHOLD) {
+  // V1.1 — Calibration odds BTTS
+  const bttsCalib = bttsScore * oddsCalibrationFactor(bttsProb, odds?.bttsYesOdds);
+  const noBttsCalib = noBttsScore * oddsCalibrationFactor(1 - bttsProb, odds?.bttsNoOdds);
+
+  if (bttsCalib >= PUBLISH_THRESHOLD) {
     results.push({
       prediction: "yes",
       prediction_type: "btts",
-      confidence: Math.min(bttsScore, 0.99),
-      score_breakdown: { poisson_btts: bttsProb, h2h_btts_rate: h2hBttsRate },
+      confidence: Math.min(bttsCalib, 0.99),
+      score_breakdown: { poisson_btts: bttsProb, h2h_btts_rate: h2hBttsRate, odds_calibration: oddsCalibrationFactor(bttsProb, odds?.bttsYesOdds) },
     });
   }
-  if (noBttsScore >= PUBLISH_THRESHOLD) {
+  if (noBttsCalib >= PUBLISH_THRESHOLD) {
     results.push({
       prediction: "no",
       prediction_type: "btts",
-      confidence: Math.min(noBttsScore, 0.99),
-      score_breakdown: { poisson_no_btts: 1 - bttsProb, h2h_rate: 1 - h2hBttsRate },
+      confidence: Math.min(noBttsCalib, 0.99),
+      score_breakdown: { poisson_no_btts: 1 - bttsProb, h2h_rate: 1 - h2hBttsRate, odds_calibration: oddsCalibrationFactor(1 - bttsProb, odds?.bttsNoOdds) },
     });
   }
 
@@ -301,21 +407,25 @@ export function computePrematchScores(
     ? (ctx.h2hAwayWins + ctx.h2hDraws) / ctx.h2hTotal : 0.55;
 
   const dcHomeOrDraw = homeOrDraw * 0.60 + h2hHomeOrDrawRate * 0.25 + homeFormScore * 0.15;
-  if (dcHomeOrDraw >= 0.60) {
+  // V1.1 — Calibration odds pour double chance
+  const dcHomeOrDrawCalib = dcHomeOrDraw * oddsCalibrationFactor(homeOrDraw, odds?.homeWinOdds);
+  if (dcHomeOrDrawCalib >= 0.60) {
     results.push({
       prediction: "1X",
       prediction_type: "double_chance",
-      confidence: Math.min(dcHomeOrDraw, 0.99),
+      confidence: Math.min(dcHomeOrDrawCalib, 0.99),
       score_breakdown: { poisson_1x: homeOrDraw, h2h_rate: h2hHomeOrDrawRate, form: homeFormScore },
     });
   }
 
   const dcAwayOrDraw = awayOrDraw * 0.60 + h2hAwayOrDrawRate * 0.25 + awayFormScore * 0.15;
-  if (dcAwayOrDraw >= 0.60) {
+  // V1.1 — X2 : publier seulement si calibré par odds
+  const dcAwayOrDrawCalib = dcAwayOrDraw * oddsCalibrationFactor(awayOrDraw, odds?.awayWinOdds);
+  if (dcAwayOrDrawCalib >= 0.60) {
     results.push({
       prediction: "X2",
       prediction_type: "double_chance",
-      confidence: Math.min(dcAwayOrDraw, 0.99),
+      confidence: Math.min(dcAwayOrDrawCalib, 0.99),
       score_breakdown: { poisson_x2: awayOrDraw, h2h_rate: h2hAwayOrDrawRate, form: awayFormScore },
     });
   }
@@ -333,12 +443,19 @@ export function computePrematchScores(
   }
 
   // ── 5. Corners Over/Under (ligne dynamique) ─────────────────────
-  // Estimation basée sur l'intensité offensive des deux équipes
+  // V1.1 — Utilise les vrais corners moyens si disponibles, sinon proxy
   const leagueAvgCorners = ctx.leagueAvgCorners ?? 10.5;
-  const leagueAvgGoals = 1.35;
-  const homeIntensity = ((home.homeGoalsScored + home.homeGoalsConceded) / 2) / leagueAvgGoals;
-  const awayIntensity = ((away.awayGoalsScored + away.awayGoalsConceded) / 2) / leagueAvgGoals;
-  const estimatedCorners = leagueAvgCorners * (homeIntensity + awayIntensity) / 2;
+  let estimatedCorners: number;
+  if (home.realCornersAvg != null && away.realCornersAvg != null) {
+    // Vrais corners moyens des derniers matchs
+    estimatedCorners = home.realCornersAvg + away.realCornersAvg;
+  } else {
+    // Fallback : proxy basé sur l'intensité offensive
+    const leagueAvgGoals = 1.35;
+    const homeIntensity = ((home.homeGoalsScored + home.homeGoalsConceded) / 2) / leagueAvgGoals;
+    const awayIntensity = ((away.awayGoalsScored + away.awayGoalsConceded) / 2) / leagueAvgGoals;
+    estimatedCorners = leagueAvgCorners * (homeIntensity + awayIntensity) / 2;
+  }
   const cornerLine = selectBestLine(estimatedCorners, [7.5, 8.5, 9.5, 10.5, 11.5, 12.5]);
 
   // Sigmoid : plus l'estimation s'éloigne de la ligne, plus la confiance est forte
@@ -382,9 +499,9 @@ export function computePrematchScores(
   }
 
   // ── 6. Cards Over/Under (ligne dynamique) ───────────────────────
-  // Basé sur les cartons jaunes moyens par match de chaque équipe
-  const homeAvgCards = home.avgYellowCards ?? 2.0;
-  const awayAvgCards = away.avgYellowCards ?? 2.0;
+  // V1.1 — Utilise les vrais cartons moyens si disponibles
+  const homeAvgCards = home.realCardsAvg ?? home.avgYellowCards ?? 2.0;
+  const awayAvgCards = away.realCardsAvg ?? away.avgYellowCards ?? 2.0;
   const estimatedCards = homeAvgCards + awayAvgCards;
   const cardLine = selectBestLine(estimatedCards, [2.5, 3.5, 4.5, 5.5, 6.5]);
 
@@ -435,22 +552,26 @@ export function computePrematchScores(
   console.log(`[scoring-engine] corners=${estimatedCorners.toFixed(1)} line=${cornerLine} | cards=${estimatedCards.toFixed(1)} line=${cardLine}`);
   console.log(`[scoring-engine] PUBLISH_THRESHOLD=${PUBLISH_THRESHOLD} → ${results.length} predictions passed`);
 
+  // V1.1 — Filtre draw : seuil minimum 0.88 (52.9% winrate historique)
+  const filtered = results.filter(r => {
+    if (r.prediction === "draw" && r.confidence < 0.88) return false;
+    return true;
+  });
+
   // Tri par confiance décroissante + sélection des top picks
-  results.sort((a, b) => b.confidence - a.confidence);
-  selectTopPicks(results);
-  return results;
+  filtered.sort((a, b) => b.confidence - a.confidence);
+  selectTopPicks(filtered);
+  return filtered;
 }
 
 // ----------------------------------------------------------------
 // Sélectionne les 1-2 meilleurs pronos par match (top picks)
-// Règle : max 2 picks de types différents, confiance minimum 0.62
-// Fallback : si aucun n'atteint 0.62, on prend le meilleur si >= 0.55
-// Utilisé aussi par le live-engine.
+// V1.1 : confiance minimum relevée à 0.75 (de 0.62)
 // ----------------------------------------------------------------
 export function selectTopPicks<T extends { confidence: number; prediction_type: string; is_top_pick?: boolean }>(
   results: T[],
   maxPicks = 2,
-  minConfidence = 0.62,
+  minConfidence = 0.75,
 ): T[] {
   // Reset
   for (const r of results) r.is_top_pick = false;

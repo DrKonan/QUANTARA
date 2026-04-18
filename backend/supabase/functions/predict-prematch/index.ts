@@ -27,6 +27,8 @@ import {
   computePrematchScores,
   TeamStats,
   MatchContext,
+  OddsData,
+  ApiPredictionData,
 } from "../_shared/scoring-engine.ts";
 import { generateAnalysis } from "../_shared/openai.ts";
 
@@ -312,7 +314,107 @@ Deno.serve(async (req: Request) => {
     const homeTeamStatsApi = homeStatsRaw as ApiTeamStats | null;
     const awayTeamStatsApi = awayStatsRaw as ApiTeamStats | null;
 
-    // 3b. Si mode raffinement, récupérer les effectifs pour évaluer la qualité des compos
+    // 3b. V1.1 — Récupère les cotes bookmakers, prédictions API, et stats historiques
+    let oddsData: OddsData | undefined;
+    let apiPredData: ApiPredictionData | undefined;
+    let homeRealXg: number | undefined;
+    let awayRealXg: number | undefined;
+    let homeRealCorners: number | undefined;
+    let awayRealCorners: number | undefined;
+    let homeRealCards: number | undefined;
+    let awayRealCards: number | undefined;
+
+    try {
+      const [oddsRaw, predRaw, homeLastFixturesRaw, awayLastFixturesRaw] = await apifootballSequential([
+        () => apifootball("/odds", { fixture: match.external_id }),
+        () => apifootball("/predictions", { fixture: match.external_id }),
+        () => apifootball("/fixtures", { team: match.home_team_id, last: 5, status: "FT" }),
+        () => apifootball("/fixtures", { team: match.away_team_id, last: 5, status: "FT" }),
+      ]);
+
+      // Parse odds
+      if (Array.isArray(oddsRaw) && oddsRaw.length > 0) {
+        const bookmaker = (oddsRaw[0] as { bookmakers?: Array<{ bets: Array<{ id: number; values: Array<{ value: string; odd: string }> }> }> })?.bookmakers?.[0];
+        if (bookmaker) {
+          const getBetOdds = (betId: number, val: string) => {
+            const bet = bookmaker.bets.find((b: { id: number }) => b.id === betId);
+            const v = bet?.values.find((v: { value: string }) => v.value === val);
+            return v ? parseFloat(v.odd) : undefined;
+          };
+          oddsData = {
+            homeWinOdds: getBetOdds(1, "Home"),
+            drawOdds: getBetOdds(1, "Draw"),
+            awayWinOdds: getBetOdds(1, "Away"),
+            over25Odds: getBetOdds(5, "Over 2.5"),
+            under25Odds: getBetOdds(5, "Under 2.5"),
+            bttsYesOdds: getBetOdds(8, "Yes"),
+            bttsNoOdds: getBetOdds(8, "No"),
+          };
+          console.log(`[predict-prematch] Odds loaded: H=${oddsData.homeWinOdds} D=${oddsData.drawOdds} A=${oddsData.awayWinOdds}`);
+        }
+      }
+
+      // Parse API predictions
+      if (Array.isArray(predRaw) && predRaw.length > 0) {
+        const apiP = predRaw[0] as { predictions?: { winner?: { id?: number }; percent?: { home?: string; draw?: string; away?: string }; advice?: string; under_over?: string | null } };
+        if (apiP?.predictions) {
+          apiPredData = {
+            winnerTeamId: apiP.predictions.winner?.id,
+            homePercent: parseInt(apiP.predictions.percent?.home ?? "0"),
+            drawPercent: parseInt(apiP.predictions.percent?.draw ?? "0"),
+            awayPercent: parseInt(apiP.predictions.percent?.away ?? "0"),
+            advice: apiP.predictions.advice,
+            underOver: apiP.predictions.under_over,
+          };
+          console.log(`[predict-prematch] API prediction: winner=${apiPredData.winnerTeamId} advice="${apiPredData.advice}"`);
+        }
+      }
+
+      // Parse historical stats (xG, corners, cards) from last 5 finished fixtures
+      const extractAvgStats = async (fixturesRaw: unknown): Promise<{ xg: number | undefined; corners: number | undefined; cards: number | undefined }> => {
+        if (!Array.isArray(fixturesRaw) || fixturesRaw.length === 0) return { xg: undefined, corners: undefined, cards: undefined };
+        const fixtureIds = (fixturesRaw as Array<{ fixture: { id: number } }>).map(f => f.fixture.id).slice(0, 5);
+        let totalXg = 0, totalCorners = 0, totalCards = 0, countXg = 0, countCorners = 0, countCards = 0;
+
+        for (const fid of fixtureIds) {
+          try {
+            const statsRaw = await apifootball("/fixtures/statistics", { fixture: fid });
+            if (!Array.isArray(statsRaw) || statsRaw.length < 2) continue;
+            for (const teamStats of statsRaw as Array<{ statistics: Array<{ type: string; value: string | number | null }> }>) {
+              for (const s of teamStats.statistics) {
+                const val = s.value != null ? (typeof s.value === "number" ? s.value : parseFloat(String(s.value))) : NaN;
+                if (isNaN(val)) continue;
+                if (s.type === "expected_goals") { totalXg += val; countXg++; }
+                if (s.type === "Corner Kicks") { totalCorners += val; countCorners++; }
+                if (s.type === "Yellow Cards") { totalCards += val; countCards++; }
+              }
+            }
+          } catch { /* skip fixture */ }
+        }
+
+        return {
+          xg: countXg > 0 ? totalXg / countXg : undefined,
+          corners: countCorners > 0 ? totalCorners / (countCorners / 2) : undefined, // per team per match
+          cards: countCards > 0 ? totalCards / (countCards / 2) : undefined,
+        };
+      };
+
+      const homeHistorical = await extractAvgStats(homeLastFixturesRaw);
+      const awayHistorical = await extractAvgStats(awayLastFixturesRaw);
+      homeRealXg = homeHistorical.xg;
+      awayRealXg = awayHistorical.xg;
+      homeRealCorners = homeHistorical.corners;
+      awayRealCorners = awayHistorical.corners;
+      homeRealCards = homeHistorical.cards;
+      awayRealCards = awayHistorical.cards;
+
+      console.log(`[predict-prematch] Real stats — homeXG=${homeRealXg?.toFixed(2)} awayXG=${awayRealXg?.toFixed(2)} homeCorners=${homeRealCorners?.toFixed(1)} awayCorners=${awayRealCorners?.toFixed(1)}`);
+
+    } catch (err) {
+      console.warn(`[predict-prematch] V1.1 enrichment failed (continuing with base model):`, err);
+    }
+
+    // 3c. Si mode raffinement, récupérer les effectifs pour évaluer la qualité des compos
     let homeLineupFactor = 1.0;
     let awayLineupFactor = 1.0;
 
@@ -366,16 +468,25 @@ Deno.serve(async (req: Request) => {
     // 6. Parse les stats d'équipe depuis /teams/statistics (plan Ultra)
     const homeStats = parseTeamStats(homeTeamStatsApi, match.home_team_id, match.home_team, homeElo);
     const awayStats = parseTeamStats(awayTeamStatsApi, match.away_team_id, match.away_team, awayElo);
+
+    // V1.1 — Injecte les vrais stats historiques
+    homeStats.realXgAvg = homeRealXg;
+    awayStats.realXgAvg = awayRealXg;
+    homeStats.realCornersAvg = homeRealCorners;
+    awayStats.realCornersAvg = awayRealCorners;
+    homeStats.realCardsAvg = homeRealCards;
+    awayStats.realCardsAvg = awayRealCards;
+
     const matchCtx = parseH2HContext(h2hFixtures, match.home_team_id, false, keyInjuries);
     // Injecte les facteurs de compo dans le contexte
     matchCtx.homeLineupFactor = homeLineupFactor;
     matchCtx.awayLineupFactor = awayLineupFactor;
 
-    // 7. Lance le moteur de scoring
+    // 7. Lance le moteur de scoring (V1.1 — avec odds + API predictions)
     console.log(`[predict-prematch] homeStats:`, JSON.stringify(homeStats));
     console.log(`[predict-prematch] awayStats:`, JSON.stringify(awayStats));
     console.log(`[predict-prematch] matchCtx:`, JSON.stringify(matchCtx));
-    const scoringResults = computePrematchScores(homeStats, awayStats, matchCtx, true);
+    const scoringResults = computePrematchScores(homeStats, awayStats, matchCtx, true, oddsData, apiPredData);
 
     if (scoringResults.length === 0) {
       console.log(`[predict-prematch] No predictions above threshold for match ${match_id}`);
