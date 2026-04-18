@@ -73,6 +73,7 @@ export default async function PredictionsPage() {
       .from("predictions")
       .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_premium, is_published, is_refined, created_at, match_id, matches(home_team, away_team, league, league_id, match_date, status, home_score, away_score)")
       .eq("is_published", true)
+      .gte("confidence", 0.70)
       .order("created_at", { ascending: false })
       .limit(200),
     supabase.from("leagues_config").select("league_id, country, category"),

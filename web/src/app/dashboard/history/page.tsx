@@ -64,6 +64,7 @@ export default async function HistoryPage() {
       .from("predictions")
       .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_premium, is_refined, is_top_pick, created_at, match_id, matches(home_team, away_team, league, league_id, match_date, status, home_score, away_score)")
       .eq("is_published", true)
+      .gte("confidence", 0.70)
       .not("matches.status", "eq", "scheduled")
       .order("created_at", { ascending: false })
       .limit(500),
@@ -111,12 +112,10 @@ export default async function HistoryPage() {
     (a, b) => b.match_date.localeCompare(a.match_date)
   );
 
-  // Stats globales — Winrate officiel : top picks prematch + toutes les live
-  const officialPreds = list.filter(p =>
-    p.is_correct !== null && (p.is_live || p.is_top_pick)
-  );
-  const totalPreds = officialPreds.length;
-  const correctPreds = officialPreds.filter(p => p.is_correct === true).length;
+  // Stats globales — Winrate : tous les pronos évalués (>= 70% déjà filtrés par la query)
+  const evaluatedPreds = list.filter(p => p.is_correct !== null);
+  const totalPreds = evaluatedPreds.length;
+  const correctPreds = evaluatedPreds.filter(p => p.is_correct === true).length;
   const winRate = totalPreds > 0 ? ((correctPreds / totalPreds) * 100).toFixed(1) : "—";
 
   return (

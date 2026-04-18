@@ -59,6 +59,7 @@ async function getDashboardStats() {
       .from("predictions")
       .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_refined, created_at, matches(home_team, away_team, league)")
       .eq("is_published", true)
+      .gte("confidence", 0.70)
       .order("created_at", { ascending: false })
       .limit(10),
     (() => {
