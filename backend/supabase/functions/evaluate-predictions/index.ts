@@ -278,6 +278,54 @@ Deno.serve(async (_req: Request) => {
     }
 
     console.log(`[evaluate-predictions] Evaluated ${totalEvaluated} predictions`);
+
+    // ── Évaluation des combinés ────────────────────────────────
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: activeCombos } = await supabase
+        .from("combo_predictions")
+        .select("id, legs, status")
+        .eq("status", "active")
+        .lte("combo_date", today);
+
+      for (const combo of (activeCombos ?? []) as Array<{ id: number; legs: Array<{ prediction_id: number }>; status: string }>) {
+        // Récupère l'état actuel de chaque jambe
+        const legPredIds = combo.legs.map(l => l.prediction_id);
+        const { data: legPreds } = await supabase
+          .from("predictions")
+          .select("id, is_correct")
+          .in("id", legPredIds);
+
+        if (!legPreds || legPreds.length !== legPredIds.length) continue;
+
+        const results = legPreds as Array<{ id: number; is_correct: boolean | null }>;
+        const allResolved = results.every(r => r.is_correct !== null);
+        if (!allResolved) continue; // pas encore tous les matchs terminés
+
+        const allCorrect = results.every(r => r.is_correct === true);
+        const anyCorrect = results.some(r => r.is_correct === true);
+        const comboStatus = allCorrect ? "won" : (anyCorrect ? "partial" : "lost");
+
+        const resultDetail = results.map(r => ({
+          prediction_id: r.id,
+          is_correct: r.is_correct,
+        }));
+
+        await supabase
+          .from("combo_predictions")
+          .update({
+            status: comboStatus,
+            result_detail: resultDetail,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", combo.id);
+
+        console.log(`[evaluate-predictions] Combo #${combo.id} → ${comboStatus}`);
+      }
+    } catch (comboErr) {
+      console.warn("[evaluate-predictions] Combo evaluation failed:", comboErr);
+    }
+
     return jsonResponse({ success: true, matches: matches.length, predictions_evaluated: totalEvaluated });
   } catch (err) {
     console.error("[evaluate-predictions] Error:", err);

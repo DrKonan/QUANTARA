@@ -47,6 +47,37 @@ export interface OddsData {
   under25Odds?: number;          // cote under 2.5
   bttsYesOdds?: number;          // cote BTTS oui
   bttsNoOdds?: number;           // cote BTTS non
+  dc1XOdds?: number;             // cote double chance 1X
+  dc12Odds?: number;             // cote double chance 12
+  dcX2Odds?: number;             // cote double chance X2
+}
+
+// Mappe une prédiction spécifique vers sa cote bookmaker
+export function mapPredictionToOdds(
+  prediction: string,
+  predictionType: string,
+  odds: OddsData,
+): number | undefined {
+  switch (predictionType) {
+    case "btts":
+      return prediction === "yes" ? odds.bttsYesOdds : odds.bttsNoOdds;
+    case "over_under":
+      if (prediction === "over_2.5") return odds.over25Odds;
+      if (prediction === "under_2.5") return odds.under25Odds;
+      return undefined;
+    case "double_chance":
+      if (prediction === "1X") return odds.dc1XOdds;
+      if (prediction === "12") return odds.dc12Odds;
+      if (prediction === "X2") return odds.dcX2Odds;
+      return undefined;
+    case "result":
+      if (prediction === "home_win") return odds.homeWinOdds;
+      if (prediction === "draw") return odds.drawOdds;
+      if (prediction === "away_win") return odds.awayWinOdds;
+      return undefined;
+    default:
+      return undefined;
+  }
 }
 
 // V1.1 — Prédictions API-Football pour cross-validation

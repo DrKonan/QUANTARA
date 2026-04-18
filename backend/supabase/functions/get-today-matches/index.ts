@@ -129,8 +129,10 @@ Deno.serve(async (req: Request) => {
       .eq("id", user.id)
       .single();
 
-    const isPremium = userProfile?.plan === "premium" ||
+    const userPlan = userProfile?.plan ?? "free";
+    const isPremium = userPlan !== "free" ||
       (userProfile?.trial_ends_at && new Date(userProfile.trial_ends_at) > now);
+    const hasCombos = userPlan === "pro" || userPlan === "vip";
 
     // --- Construit la réponse enrichie ---
     const result = (matches ?? []).map((match: MatchRow) => {
@@ -234,6 +236,36 @@ Deno.serve(async (req: Request) => {
     const live = result.filter((m: { status: string }) => m.status === "live");
     const upcoming = result.filter((m: { status: string }) => m.status === "scheduled");
 
+    // --- Récupère les combinés du jour ---
+    let combos: unknown[] = [];
+    const { data: combosRaw } = await supabase
+      .from("combo_predictions")
+      .select("id, combo_type, combined_odds, combined_confidence, leg_count, legs, status, min_plan, created_at")
+      .eq("combo_date", targetDate)
+      .order("combo_type", { ascending: true });
+
+    if (combosRaw && combosRaw.length > 0) {
+      combos = combosRaw.map((c: {
+        id: number; combo_type: string; combined_odds: number; combined_confidence: number;
+        leg_count: number; legs: unknown; status: string; min_plan: string; created_at: string;
+      }) => {
+        // Vérifie si l'utilisateur a accès à ce combo
+        const hasAccess = hasCombos && (c.min_plan === "pro" || (c.min_plan === "vip" && userPlan === "vip"));
+        return {
+          id: c.id,
+          combo_type: c.combo_type,
+          combined_odds: hasAccess ? c.combined_odds : null,
+          combined_confidence: hasAccess ? c.combined_confidence : null,
+          leg_count: c.leg_count,
+          legs: hasAccess ? c.legs : null,
+          status: c.status,
+          is_locked: !hasAccess,
+          min_plan: c.min_plan,
+          created_at: c.created_at,
+        };
+      });
+    }
+
     return jsonResponse({
       date: targetDate,
       count: result.length,
@@ -243,6 +275,7 @@ Deno.serve(async (req: Request) => {
         upcoming: upcoming.length,
       },
       matches: result,
+      combos,
     });
   } catch (err) {
     console.error("[get-today-matches] Error:", err);

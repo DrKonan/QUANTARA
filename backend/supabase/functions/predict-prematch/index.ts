@@ -29,6 +29,7 @@ import {
   MatchContext,
   OddsData,
   ApiPredictionData,
+  mapPredictionToOdds,
 } from "../_shared/scoring-engine.ts";
 import { generateAnalysis } from "../_shared/openai.ts";
 
@@ -349,6 +350,9 @@ Deno.serve(async (req: Request) => {
             under25Odds: getBetOdds(5, "Under 2.5"),
             bttsYesOdds: getBetOdds(8, "Yes"),
             bttsNoOdds: getBetOdds(8, "No"),
+            dc1XOdds: getBetOdds(12, "Home/Draw"),
+            dc12Odds: getBetOdds(12, "Home/Away"),
+            dcX2Odds: getBetOdds(12, "Draw/Away"),
           };
           console.log(`[predict-prematch] Odds loaded: H=${oddsData.homeWinOdds} D=${oddsData.drawOdds} A=${oddsData.awayWinOdds}`);
         }
@@ -548,6 +552,7 @@ Deno.serve(async (req: Request) => {
           is_refined: true,
           refined_at: new Date().toISOString(),
           is_top_pick: r.is_top_pick ?? false,
+          bookmaker_odds: oddsData ? mapPredictionToOdds(r.prediction, r.prediction_type, oddsData) ?? null : null,
         };
 
         if (existingId) {
@@ -608,6 +613,7 @@ Deno.serve(async (req: Request) => {
         is_published: true,
         is_refined: false,
         is_top_pick: r.is_top_pick ?? false,
+        bookmaker_odds: oddsData ? mapPredictionToOdds(r.prediction, r.prediction_type, oddsData) ?? null : null,
       }));
 
       const { error: insertError } = await supabase
