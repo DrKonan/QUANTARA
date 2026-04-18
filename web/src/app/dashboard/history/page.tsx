@@ -11,6 +11,9 @@ const TYPE_LABELS: Record<string, string> = {
   home_win: "Victoire dom.",
   away_win: "Victoire ext.",
   draw: "Match nul",
+  double_chance: "Double chance",
+  corners: "Corners",
+  cards: "Cartons",
 };
 
 interface HistoryPrediction {

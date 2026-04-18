@@ -1,7 +1,7 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/stat-card";
 import { LocalTime } from "@/components/local-time";
-import { Users, ListChecks, TrendingUp, CreditCard, Trophy, Clock, CheckCircle2, Radio } from "lucide-react";
+import { Users, ListChecks, TrendingUp, CreditCard, Trophy, Clock, CheckCircle2, Radio, Layers } from "lucide-react";
 
 export const revalidate = 60;
 
@@ -42,9 +42,10 @@ async function getDashboardStats() {
     { data: todayMatches },
     { data: todayPredictions },
     { data: leaguesMeta },
+    { data: todayCombos },
   ] = await Promise.all([
     supabase.from("users").select("*", { count: "exact", head: true }),
-    supabase.from("users").select("*", { count: "exact", head: true }).eq("plan", "premium"),
+    supabase.from("users").select("*", { count: "exact", head: true }).in("plan", ["starter", "pro", "vip"]),
     supabase.from("predictions").select("*", { count: "exact", head: true }).eq("is_published", true),
     supabase.from("subscriptions").select("*", { count: "exact", head: true }).eq("status", "active"),
     supabase
@@ -79,6 +80,10 @@ async function getDashboardStats() {
     supabase
       .from("leagues_config")
       .select("league_id, country, category"),
+    supabase
+      .from("combo_predictions")
+      .select("id, combo_type, result")
+      .eq("combo_date", new Date().toISOString().slice(0, 10)),
   ]);
 
   // Build league metadata map
@@ -111,6 +116,7 @@ async function getDashboardStats() {
     globalStats: globalStats ?? { total: 0, correct: 0, win_rate: 0 },
     recentPredictions: (recentPredictions ?? []) as unknown as RecentPrediction[],
     todayMatches: enrichedMatches,
+    todayCombos: (todayCombos ?? []) as Array<{ id: number; combo_type: string; result: string | null }>,
   };
 }
 
@@ -153,11 +159,11 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-8">
         <StatCard
           title="Utilisateurs"
           value={stats.totalUsers.toLocaleString("fr")}
-          subtitle={`${stats.premiumUsers} premium`}
+          subtitle={`${stats.premiumUsers} payant${stats.premiumUsers > 1 ? "s" : ""}`}
           icon={<Users size={18} />}
           color="gold"
         />
@@ -181,6 +187,13 @@ export default async function DashboardPage() {
           subtitle="actifs"
           icon={<CreditCard size={18} />}
           color="green"
+        />
+        <StatCard
+          title="Combinés du jour"
+          value={stats.todayCombos.length.toString()}
+          subtitle={stats.todayCombos.filter(c => c.result === "won").length > 0 ? `${stats.todayCombos.filter(c => c.result === "won").length} gagné(s)` : "en cours"}
+          icon={<Layers size={18} />}
+          color="gold"
         />
       </div>
 

@@ -15,11 +15,13 @@ import {
   Loader2,
   Zap,
   History,
+  Layers,
 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Vue d'ensemble", icon: LayoutDashboard },
   { href: "/dashboard/predictions", label: "Pronos", icon: ListChecks },
+  { href: "/dashboard/combos", label: "Combinés", icon: Layers },
   { href: "/dashboard/history", label: "Historique", icon: History },
   { href: "/dashboard/users", label: "Utilisateurs", icon: Users },
   { href: "/dashboard/revenue", label: "Revenus", icon: CreditCard },
@@ -139,7 +141,7 @@ export default function DashboardLayout({
           <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-4" />
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-[#34D399] live-pulse" />
-            <p className="text-xs text-[#6B6B80]">v1.1 — Pipeline actif</p>
+            <p className="text-xs text-[#6B6B80]">v1.2 — Pipeline actif</p>
           </div>
         </div>
       </aside>

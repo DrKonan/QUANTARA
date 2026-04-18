@@ -262,7 +262,7 @@ export function computePrematchScores(
   odds?: OddsData,
   apiPred?: ApiPredictionData,
 ): ScoringResult[] {
-  const PUBLISH_THRESHOLD = 0.50;
+  const PUBLISH_THRESHOLD = 0.70;
   const results: ScoringResult[] = [];
 
   const homeFormScore = formScore(home.recentForm);

@@ -25,7 +25,7 @@ export default async function UsersPage() {
   const { count: premiumCount } = await supabase
     .from("users")
     .select("*", { count: "exact", head: true })
-    .eq("plan", "premium");
+    .in("plan", ["starter", "pro", "vip"]);
 
   const list = (users ?? []) as User[];
 
@@ -35,7 +35,7 @@ export default async function UsersPage() {
         <div>
           <h2 className="text-2xl sm:text-3xl font-bold">Utilisateurs</h2>
           <p className="text-[#6B6B80] mt-1">
-            {count ?? 0} inscrits · {premiumCount ?? 0} premium
+            {count ?? 0} inscrits · {premiumCount ?? 0} payant(s)
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -47,7 +47,7 @@ export default async function UsersPage() {
           <div className="glass-card px-4 py-2.5 flex items-center gap-2">
             <Crown size={14} className="text-[#D4AF37]" />
             <span className="text-sm font-medium text-[#D4AF37]">{premiumCount ?? 0}</span>
-            <span className="text-xs text-[#6B6B80]">premium</span>
+            <span className="text-xs text-[#6B6B80]">payants</span>
           </div>
         </div>
       </div>
@@ -70,7 +70,7 @@ export default async function UsersPage() {
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                        user.plan === "premium"
+                        ["starter", "pro", "vip"].includes(user.plan)
                           ? "bg-[#D4AF37]/10 text-[#D4AF37]"
                           : "bg-white/5 text-[#6B6B80]"
                       }`}>
@@ -85,11 +85,11 @@ export default async function UsersPage() {
                   <td className="p-4 text-[#6B6B80]">{user.phone ?? "—"}</td>
                   <td className="p-4">
                     <span className={`px-2.5 py-1 rounded-md text-xs font-medium ${
-                      user.plan === "premium"
+                      ["starter", "pro", "vip"].includes(user.plan)
                         ? "text-[#D4AF37] bg-[#D4AF37]/10"
                         : "text-[#6B6B80] bg-white/5"
                     }`}>
-                      {user.plan === "premium" && "★ "}{user.plan}
+                      {["pro", "vip"].includes(user.plan) && "★ "}{user.plan}
                     </span>
                   </td>
                   <td className="p-4">

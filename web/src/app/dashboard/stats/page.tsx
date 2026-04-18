@@ -18,6 +18,9 @@ const TYPE_LABELS: Record<string, string> = {
   result: "Résultat",
   over_under: "Buts (O/U)",
   btts: "Les 2 marquent",
+  double_chance: "Double chance",
+  corners: "Corners",
+  cards: "Cartons",
 };
 
 export default async function StatsPage() {
