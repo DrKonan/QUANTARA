@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/constants/app_constants.dart';
 
 enum PaymentProvider { wave, pawapay }
 
@@ -11,6 +13,7 @@ class PaymentResult {
   final PaymentStatus status;
   final String? checkoutUrl; // Wave only
   final String? message;     // PawaPay confirmation message
+  final String? correspondent;
 
   const PaymentResult({
     required this.paymentId,
@@ -18,6 +21,7 @@ class PaymentResult {
     required this.status,
     this.checkoutUrl,
     this.message,
+    this.correspondent,
   });
 }
 
@@ -28,6 +32,7 @@ class Subscription {
   final DateTime startDate;
   final DateTime endDate;
   final String? provider;
+  final int? amount;
 
   const Subscription({
     required this.id,
@@ -36,11 +41,14 @@ class Subscription {
     required this.startDate,
     required this.endDate,
     this.provider,
+    this.amount,
   });
 
   bool get isActive => status == 'active' && endDate.isAfter(DateTime.now());
 
   int get remainingDays => endDate.difference(DateTime.now()).inDays;
+
+  String get planLabel => AppConstants.planLabels[plan] ?? plan;
 
   factory Subscription.fromJson(Map<String, dynamic> json) {
     return Subscription(
@@ -50,6 +58,7 @@ class Subscription {
       startDate: DateTime.parse(json['start_date'] as String),
       endDate: DateTime.parse(json['end_date'] as String),
       provider: json['provider'] as String?,
+      amount: json['amount'] as int?,
     );
   }
 }
@@ -64,14 +73,31 @@ class PaymentService {
     required String plan,
     required PaymentProvider provider,
     String? phone,
-    String? correspondent, // 'orange_ci' | 'mtn_ci'
+    String? correspondent,
   }) async {
+    // Validate plan
+    if (!AppConstants.planPrices.containsKey(plan)) {
+      throw Exception('Plan invalide: $plan');
+    }
+
     final body = <String, dynamic>{
       'plan': plan,
       'provider': provider == PaymentProvider.wave ? 'wave' : 'pawapay',
     };
-    if (phone != null) body['phone'] = phone;
-    if (correspondent != null) body['correspondent'] = correspondent;
+
+    // Format phone number for PawaPay
+    if (provider == PaymentProvider.pawapay) {
+      if (phone == null || phone.trim().isEmpty) {
+        throw Exception('Numéro de téléphone requis pour le paiement mobile');
+      }
+      if (!AppConstants.isValidIvoryCoastPhone(phone)) {
+        throw Exception('Numéro de téléphone invalide. Format attendu: 07 XX XX XX XX');
+      }
+      body['phone'] = AppConstants.formatPhoneForPawapay(phone);
+      body['correspondent'] = correspondent;
+    }
+
+    debugPrint('[PaymentService] Creating payment: plan=$plan, provider=${body['provider']}');
 
     final response = await _client.functions.invoke(
       'create-payment',
@@ -82,12 +108,16 @@ class PaymentService {
       final data = response.data is String
           ? jsonDecode(response.data as String)
           : response.data;
-      throw Exception(data?['error'] ?? 'Erreur lors de la création du paiement');
+      final errorMsg = data?['error'] ?? 'Erreur lors de la création du paiement';
+      debugPrint('[PaymentService] Error: $errorMsg (status ${response.status})');
+      throw Exception(errorMsg);
     }
 
     final data = response.data is String
         ? jsonDecode(response.data as String) as Map<String, dynamic>
         : response.data as Map<String, dynamic>;
+
+    debugPrint('[PaymentService] Payment created: ${data['payment_id']}');
 
     return PaymentResult(
       paymentId: data['payment_id'] as String,
@@ -97,6 +127,7 @@ class PaymentService {
           : _parseStatus(data['status'] as String?),
       checkoutUrl: data['checkout_url'] as String?,
       message: data['message'] as String?,
+      correspondent: data['correspondent'] as String?,
     );
   }
 
@@ -110,7 +141,10 @@ class PaymentService {
 
     if (data == null) return PaymentStatus.pending;
 
-    switch (data['status'] as String) {
+    final status = data['status'] as String;
+    debugPrint('[PaymentService] Poll status for $paymentId: $status');
+
+    switch (status) {
       case 'completed':
         return PaymentStatus.completed;
       case 'failed':
@@ -139,6 +173,21 @@ class PaymentService {
 
     if (data == null) return null;
     return Subscription.fromJson(data);
+  }
+
+  /// Get payment history for the current user
+  Future<List<Map<String, dynamic>>> getPaymentHistory() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return [];
+
+    final data = await _client
+        .from('payments')
+        .select('id, plan, amount, provider, status, created_at, completed_at')
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .limit(20);
+
+    return List<Map<String, dynamic>>.from(data);
   }
 
   /// Check if user has premium access

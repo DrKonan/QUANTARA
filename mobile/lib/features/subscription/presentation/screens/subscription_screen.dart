@@ -440,6 +440,55 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     String? phone,
     String? correspondent,
   }) async {
+    // Show confirmation dialog first
+    final planLabel = AppConstants.planLabels[_selectedPlan] ?? _selectedPlan;
+    final price = AppConstants.planPrices[_selectedPlan] ?? 0;
+    final providerLabel = provider == PaymentProvider.wave ? 'Wave' : 
+        (correspondent == 'orange_ci' ? 'Orange Money' : 'MTN MoMo');
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          "Confirmer le paiement",
+          style: TextStyle(color: AppColors.textPrimary, fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _confirmRow("Formule", "$planLabel ⭐"),
+            const SizedBox(height: 8),
+            _confirmRow("Montant", "$price FCFA/mois"),
+            const SizedBox(height: 8),
+            _confirmRow("Paiement", providerLabel),
+            if (phone != null) ...[
+              const SizedBox(height: 8),
+              _confirmRow("Téléphone", phone),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Annuler", style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text("Confirmer", style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
     final notifier = ref.read(paymentNotifierProvider.notifier);
     await notifier.initiatePayment(
       plan: _selectedPlan,
@@ -471,9 +520,20 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         builder: (_) => _PaymentStatusPage(
           paymentId: state.result!.paymentId,
           provider: provider,
+          plan: _selectedPlan,
           message: state.result?.message,
         ),
       ),
+    );
+  }
+
+  Widget _confirmRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        Text(value, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+      ],
     );
   }
 
@@ -769,6 +829,15 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
         );
         return;
       }
+      if (!AppConstants.isValidIvoryCoastPhone(phone)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Numéro invalide. Format: 07 XX XX XX XX"),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
       widget.onPay(
         PaymentProvider.pawapay,
         phone: phone,
@@ -784,11 +853,13 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
 class _PaymentStatusPage extends ConsumerWidget {
   final String paymentId;
   final PaymentProvider provider;
+  final String plan;
   final String? message;
 
   const _PaymentStatusPage({
     required this.paymentId,
     required this.provider,
+    required this.plan,
     this.message,
   });
 
@@ -906,16 +977,17 @@ class _PaymentStatusPage extends ConsumerWidget {
   }
 
   String _statusMessage(PaymentState state) {
+    final planLabel = AppConstants.planLabels[plan] ?? plan;
     switch (state.phase) {
       case PaymentPhase.success:
-        return "Votre abonnement Premium est maintenant actif.\nProfitez de toutes les fonctionnalités !";
+        return "Votre abonnement $planLabel est maintenant actif ! 🎉\nProfitez de toutes vos fonctionnalités exclusives.";
       case PaymentPhase.error:
         return state.errorMessage ?? "Une erreur est survenue. Veuillez réessayer.";
       default:
         if (provider == PaymentProvider.wave) {
-          return "Complétez le paiement dans l'application Wave.\nNous vérifions automatiquement...";
+          return "Complétez le paiement de ${AppConstants.planPrices[plan]} FCFA dans l'application Wave.\nNous vérifions automatiquement...";
         }
-        return message ?? "Un push USSD a été envoyé sur votre téléphone.\nEntrez votre code PIN pour confirmer le paiement.";
+        return message ?? "Un push USSD a été envoyé sur votre téléphone.\nEntrez votre code PIN pour confirmer le paiement de ${AppConstants.planPrices[plan]} FCFA.";
     }
   }
 }
