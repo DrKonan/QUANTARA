@@ -101,8 +101,8 @@ class TodayMatch {
         name: json['league'] as String? ?? 'Unknown',
         country: json['country'] as String? ?? '',
       ),
-      dateTime: DateTime.parse(json['match_date'] as String).toUtc(),
-      status: _parseStatus(json['status'] as String),
+      dateTime: DateTime.tryParse(json['match_date']?.toString() ?? '')?.toUtc() ?? DateTime.now().toUtc(),
+      status: _parseStatus(json['status']?.toString() ?? 'upcoming'),
       score: (json['home_score'] != null && json['away_score'] != null)
           ? MatchScore(
               home: (json['home_score'] is int)
@@ -118,9 +118,15 @@ class TodayMatch {
           : int.tryParse(json['tier']?.toString() ?? '') ?? 2,
     );
 
-    final preds = (json['predictions'] as List<dynamic>? ?? [])
-        .map((p) => TodayPrediction.fromJson(p as Map<String, dynamic>))
-        .toList();
+    final rawPreds = json['predictions'] as List<dynamic>? ?? [];
+    final preds = <TodayPrediction>[];
+    for (final p in rawPreds) {
+      try {
+        preds.add(TodayPrediction.fromJson(p as Map<String, dynamic>));
+      } catch (e) {
+        // Skip malformed prediction silently
+      }
+    }
 
     return TodayMatch(
       match: matchData,
@@ -262,8 +268,8 @@ class TodayPrediction {
 
   factory TodayPrediction.fromJson(Map<String, dynamic> json) {
     return TodayPrediction(
-      id: json['id'] as int,
-      predictionType: json['prediction_type'] as String,
+      id: (json['id'] is int) ? json['id'] as int : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      predictionType: json['prediction_type'] as String? ?? 'unknown',
       prediction: json['prediction'] as String?,
       confidence: (json['confidence'] as num?)?.toDouble(),
       confidenceLabel: json['confidence_label'] as String?,

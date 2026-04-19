@@ -18,6 +18,25 @@ class MatchDetailSheet extends ConsumerStatefulWidget {
 
 class _MatchDetailSheetState extends ConsumerState<MatchDetailSheet> {
   TodayMatch get todayMatch => widget.todayMatch;
+  bool _viewRecorded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Record the view once when opening the sheet
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_viewRecorded) {
+        _viewRecorded = true;
+        final matchId = todayMatch.match.id;
+        final profile = ref.read(userProfileProvider).valueOrNull;
+        final limit = profile?.dailyMatchLimit ?? 1;
+        final notifier = ref.read(dailyViewProvider.notifier);
+        if (notifier.canView(matchId, limit)) {
+          notifier.recordView(matchId);
+        }
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,13 +44,6 @@ class _MatchDetailSheetState extends ConsumerState<MatchDetailSheet> {
     final matchId = match.id;
     final canView = ref.watch(canViewMatchProvider(matchId));
     final dailyViews = ref.watch(dailyViewProvider);
-
-    // Record the view when opening (if within limit)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (canView) {
-        ref.read(dailyViewProvider.notifier).recordView(matchId);
-      }
-    });
 
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
