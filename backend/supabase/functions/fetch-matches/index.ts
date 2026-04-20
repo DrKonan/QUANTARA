@@ -174,6 +174,7 @@ Deno.serve(async (req: Request) => {
       away_team_id: f.teams.away.id,
       league: f.league.name,
       league_id: f.league.id,
+      league_country: f.league.country,
       season: f.league.season ?? new Date().getFullYear(),
       tier: leagueTierMap.get(f.league.id) ?? 2,
       match_date: f.fixture.date,
