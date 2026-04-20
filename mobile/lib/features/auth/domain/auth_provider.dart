@@ -60,9 +60,12 @@ class AuthService {
     return response;
   }
 
-  /// Send OTP to phone number for signup/login
+  /// Send OTP to phone number via WhatsApp
   Future<void> signInWithPhone({required String phone}) async {
-    await _client.auth.signInWithOtp(phone: phone);
+    await _client.auth.signInWithOtp(
+      phone: phone,
+      channel: OtpChannel.whatsapp,
+    );
   }
 
   /// Verify phone OTP and create session

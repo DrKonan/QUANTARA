@@ -209,7 +209,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         height: 22, width: 22,
                         child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.background),
                       )
-                    : const Text("Recevoir le code SMS"),
+                    : const Text("Recevoir le code WhatsApp"),
               ),
             ),
             const SizedBox(height: 40),
@@ -235,7 +235,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            "Un code SMS a été envoyé au $_fullPhone",
+            "Un code a été envoyé via WhatsApp au $_fullPhone",
             style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
           ),
           const SizedBox(height: 36),

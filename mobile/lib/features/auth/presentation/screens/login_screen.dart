@@ -201,7 +201,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           height: 22, width: 22,
                           child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.background),
                         )
-                      : const Text("Recevoir le code SMS"),
+                      : const Text("Recevoir le code WhatsApp"),
                 ),
               ),
             ] else ...[
@@ -283,7 +283,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            "Code SMS envoyé au $_fullPhone",
+            "Code envoyé via WhatsApp au $_fullPhone",
             style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
           ),
           const SizedBox(height: 36),
