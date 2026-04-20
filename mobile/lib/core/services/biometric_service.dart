@@ -36,10 +36,12 @@ class BiometricService {
     return val == 'true';
   }
 
-  /// Check if credentials are stored (= biometric login possible).
+  /// Check if real credentials are stored (= biometric login is ready).
   Future<bool> get hasStoredCredentials async {
     final email = await _storage.read(key: _keyEmail);
-    return email != null && email.isNotEmpty;
+    final password = await _storage.read(key: _keyPassword);
+    return email != null && email.isNotEmpty && email != '_pending_' &&
+           password != null && password.isNotEmpty && password != '_pending_';
   }
 
   /// Get a user-friendly label for the available biometric type.
@@ -55,14 +57,20 @@ class BiometricService {
     }
   }
 
-  /// Save credentials securely after a successful password login.
+  /// Enable biometric login (flag only — credentials saved on next password login).
+  Future<void> enable() async {
+    await _storage.write(key: _keyEnabled, value: 'true');
+    debugPrint('[Quantara] Biometric enabled (awaiting credentials on next login)');
+  }
+
+  /// Save credentials securely. Called after a successful password login
+  /// ONLY if the user has already enabled biometric.
   Future<void> saveCredentials({
     required String authEmail,
     required String password,
   }) async {
     await _storage.write(key: _keyEmail, value: authEmail);
     await _storage.write(key: _keyPassword, value: password);
-    await _storage.write(key: _keyEnabled, value: 'true');
     debugPrint('[Quantara] Biometric credentials saved');
   }
 

@@ -34,18 +34,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _toggleBiometric(bool value) async {
     if (value) {
-      final hasCreds = await BiometricService().hasStoredCredentials;
-      if (!hasCreds) {
-        // Enable the flag — credentials will be stored on next login
-        await BiometricService().saveCredentials(authEmail: '_pending_', password: '_pending_');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("$_bioLabel sera activé lors de votre prochaine connexion"),
-              backgroundColor: AppColors.surface,
-            ),
-          );
-        }
+      await BiometricService().enable();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("$_bioLabel sera actif dès votre prochaine connexion"),
+            backgroundColor: AppColors.surface,
+          ),
+        );
       }
     } else {
       await BiometricService().disable();

@@ -261,11 +261,13 @@ class AuthService {
     return response;
   }
 
-  /// Silently offer to save credentials for biometric login.
+  /// Silently save credentials for biometric login only if user has enabled it.
   void _saveBiometricCredentials(String authEmail, String password) {
-    BiometricService().isDeviceSupported.then((supported) {
-      if (supported) {
-        BiometricService().saveCredentials(
+    BiometricService().isDeviceSupported.then((supported) async {
+      if (!supported) return;
+      final enabled = await BiometricService().isEnabled;
+      if (enabled) {
+        await BiometricService().saveCredentials(
           authEmail: authEmail,
           password: password,
         );
