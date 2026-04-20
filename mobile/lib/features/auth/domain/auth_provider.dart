@@ -45,61 +45,61 @@ class AuthService {
 
   AuthService(this._client);
 
-  Future<AuthResponse> signUp({
-    required String email,
+  /// Convert phone to a deterministic email for Supabase auth.
+  /// Users without a real email use this as their auth identifier.
+  static String phoneToAuthEmail(String phone) {
+    final cleaned = phone.replaceAll(RegExp(r'[^\d]'), '');
+    return '$cleaned@phone.quantara.app';
+  }
+
+  /// Register with phone + password + optional email.
+  /// Supabase auth uses email/password under the hood.
+  Future<AuthResponse> signUpWithPhone({
+    required String phone,
     required String password,
     required String username,
+    String? email,
   }) async {
+    final authEmail = email?.isNotEmpty == true ? email! : phoneToAuthEmail(phone);
+
     final response = await _client.auth.signUp(
-      email: email,
+      email: authEmail,
       password: password,
-      data: {'username': username},
+      data: {
+        'username': username,
+        'phone': phone,
+      },
     );
-    // Register push token after successful signup
-    NotificationService().registerToken();
-    return response;
-  }
 
-  /// Send OTP to phone number via WhatsApp
-  Future<void> signInWithPhone({required String phone}) async {
-    await _client.auth.signInWithOtp(
-      phone: phone,
-      channel: OtpChannel.whatsapp,
-    );
-  }
-
-  /// Verify phone OTP and create session
-  Future<AuthResponse> verifyPhoneOtp({
-    required String phone,
-    required String token,
-    String? username,
-  }) async {
-    final response = await _client.auth.verifyOTP(
-      phone: phone,
-      token: token,
-      type: OtpType.sms,
-    );
-    // If username provided (new signup), update profile
-    if (username != null && response.user != null) {
+    if (response.user != null) {
       await _client.from('users').upsert({
         'id': response.user!.id,
         'username': username,
+        'phone': phone,
+        'email': email?.isNotEmpty == true ? email : null,
         'plan': 'free',
       });
     }
+
     NotificationService().registerToken();
     return response;
   }
 
+  /// Login with phone or email + password.
   Future<AuthResponse> signIn({
-    required String email,
+    String? phone,
+    String? email,
     required String password,
   }) async {
+    final authEmail = email?.isNotEmpty == true
+        ? email!
+        : phoneToAuthEmail(phone ?? '');
+
     final response = await _client.auth.signInWithPassword(
-      email: email,
+      email: authEmail,
       password: password,
     );
-    // Register push token after successful login
+
     NotificationService().registerToken();
     return response;
   }
@@ -116,6 +116,7 @@ class AuthService {
     String? username,
     String? avatarUrl,
     String? phone,
+    String? email,
   }) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return;
@@ -124,6 +125,7 @@ class AuthService {
     if (username != null) updates['username'] = username;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
     if (phone != null) updates['phone'] = phone;
+    if (email != null) updates['email'] = email;
 
     if (updates.isNotEmpty) {
       await _client.from('users').update(updates).eq('id', userId);

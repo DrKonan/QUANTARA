@@ -88,4 +88,35 @@ On peut créer une Edge Function `get-active-correspondents` qui appelle `/activ
 
 ---
 
+## 4. 🔐 Authentification — Nouveau flow sans OTP
+
+### Changement
+L'inscription/connexion par **OTP SMS/WhatsApp a été supprimée**. Le nouveau flow :
+
+- **Inscription** : nom d'utilisateur + téléphone (avec sélecteur pays) + email optionnel + mot de passe
+- **Connexion** : téléphone + mot de passe OU email + mot de passe
+
+### Fonctionnement interne
+- Supabase utilise **email/password** comme méthode d'auth
+- Si l'utilisateur ne fournit pas d'email, un email dérivé du téléphone est généré : `{dialCode}{numéro}@phone.quantara.app` (ex: `2250700000000@phone.quantara.app`)
+- Le vrai numéro de téléphone est stocké dans la table `users.phone`
+- L'email réel (si fourni) est aussi stocké dans `users.email`
+
+### Action requise côté Supabase
+1. **Désactiver la confirmation email** dans Dashboard → Authentication → Settings → Email :
+   - `Enable email confirmations` → **OFF** (sinon les comptes avec email auto-généré ne pourront pas se connecter)
+   - Ou configurer un domaine autorisé `phone.quantara.app` qui bypass la confirmation
+2. Le provider **Phone** n'a plus besoin d'être activé (pas de Twilio nécessaire)
+
+### Table `users` — colonnes attendues
+| Colonne | Type | Nullable | Description |
+|---------|------|----------|-------------|
+| `id` | uuid | Non | FK vers auth.users |
+| `username` | text | Non | Nom d'utilisateur |
+| `phone` | text | Non | Numéro complet avec indicatif (ex: +2250700000000) |
+| `email` | text | Oui | Email réel (optionnel) |
+| `plan` | text | Non | Plan d'abonnement (default: 'free') |
+
+---
+
 *Note rédigée le 20/04/2026 — Équipe mobile Quantara*

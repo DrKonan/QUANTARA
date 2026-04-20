@@ -16,59 +16,43 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
-  final _otpCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
 
-  bool _otpSent = false;
+  PaymentCountry _selectedCountry = AppConstants.defaultCountry;
   bool _registered = false;
-  String _fullPhone = '';
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
-    _otpCtrl.dispose();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
     super.dispose();
   }
 
   String _buildFullPhone() {
     final raw = _phoneCtrl.text.trim().replaceAll(RegExp(r'[\s\-]'), '');
     if (raw.startsWith('+')) return raw;
-    if (raw.startsWith('00')) return '+${raw.substring(2)}';
-    // Default Côte d'Ivoire prefix
-    return '+225$raw';
+    if (raw.startsWith('0')) return '+${_selectedCountry.dialCode}${raw.substring(1)}';
+    return '+${_selectedCountry.dialCode}$raw';
   }
 
-  Future<void> _sendOtp() async {
+  Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
     ref.read(authErrorProvider.notifier).state = null;
     ref.read(authLoadingProvider.notifier).state = true;
 
     try {
-      _fullPhone = _buildFullPhone();
-      await ref.read(authServiceProvider).signInWithPhone(phone: _fullPhone);
-      if (mounted) setState(() => _otpSent = true);
-    } catch (e) {
-      ref.read(authErrorProvider.notifier).state = _mapError(e);
-    } finally {
-      if (mounted) ref.read(authLoadingProvider.notifier).state = false;
-    }
-  }
+      final phone = _buildFullPhone();
+      final email = _emailCtrl.text.trim();
 
-  Future<void> _verifyOtp() async {
-    if (_otpCtrl.text.trim().length < 6) {
-      ref.read(authErrorProvider.notifier).state = "Entrez le code à 6 chiffres";
-      return;
-    }
-
-    ref.read(authErrorProvider.notifier).state = null;
-    ref.read(authLoadingProvider.notifier).state = true;
-
-    try {
-      await ref.read(authServiceProvider).verifyPhoneOtp(
-            phone: _fullPhone,
-            token: _otpCtrl.text.trim(),
+      await ref.read(authServiceProvider).signUpWithPhone(
+            phone: phone,
+            password: _passwordCtrl.text,
             username: _nameCtrl.text.trim(),
+            email: email.isNotEmpty ? email : null,
           );
       if (mounted) setState(() => _registered = true);
     } catch (e) {
@@ -78,40 +62,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
   }
 
-  Future<void> _resendOtp() async {
-    ref.read(authErrorProvider.notifier).state = null;
-    ref.read(authLoadingProvider.notifier).state = true;
-    try {
-      await ref.read(authServiceProvider).signInWithPhone(phone: _fullPhone);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Code renvoyé !"),
-            backgroundColor: AppColors.emerald,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      ref.read(authErrorProvider.notifier).state = _mapError(e);
-    } finally {
-      if (mounted) ref.read(authLoadingProvider.notifier).state = false;
-    }
-  }
-
   String _mapError(Object e) {
     final msg = e.toString().toLowerCase();
-    if (msg.contains('already registered') || msg.contains('user_already_exists')) {
-      return "Un compte existe déjà avec ce numéro";
+    if (msg.contains('already registered') || msg.contains('user_already_exists') || msg.contains('already been registered')) {
+      return "Un compte existe déjà avec ce numéro ou cet email";
     }
-    if (msg.contains('invalid') && msg.contains('otp')) {
-      return "Code invalide. Vérifiez et réessayez";
+    if (msg.contains('weak_password') || msg.contains('password')) {
+      return "Mot de passe trop faible (minimum 6 caractères)";
     }
-    if (msg.contains('expired')) {
-      return "Code expiré. Demandez un nouveau code";
-    }
-    if (msg.contains('phone') && msg.contains('provider')) {
-      return "L'inscription par téléphone n'est pas encore activée. Contactez le support";
+    if (msg.contains('invalid') && msg.contains('email')) {
+      return "Adresse email invalide";
     }
     if (msg.contains('rate') || msg.contains('too many')) {
       return "Trop de tentatives. Attendez quelques minutes";
@@ -122,17 +82,68 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return "Une erreur est survenue. Réessayez";
   }
 
+  void _showCountryPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.85,
+        minChildSize: 0.4,
+        expand: false,
+        builder: (ctx, scrollController) => Column(
+          children: [
+            const SizedBox(height: 8),
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text("Choisir votre pays", style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                itemCount: AppConstants.supportedCountries.length,
+                itemBuilder: (ctx, i) {
+                  final country = AppConstants.supportedCountries[i];
+                  final isSelected = country.code == _selectedCountry.code;
+                  return ListTile(
+                    leading: Text(country.flag, style: const TextStyle(fontSize: 24)),
+                    title: Text(country.name, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+                    trailing: Text('+${country.dialCode}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    selected: isSelected,
+                    selectedTileColor: AppColors.gold.withValues(alpha: 0.08),
+                    onTap: () {
+                      setState(() => _selectedCountry = country);
+                      Navigator.pop(ctx);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLoading = ref.watch(authLoadingProvider);
     final error = ref.watch(authErrorProvider);
 
     if (_registered) return _buildSuccessView();
-    if (_otpSent) return _buildOtpView(isLoading, error);
-    return _buildPhoneForm(isLoading, error);
+    return _buildForm(isLoading, error);
   }
 
-  Widget _buildPhoneForm(bool isLoading, String? error) {
+  Widget _buildForm(bool isLoading, String? error) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Form(
@@ -153,11 +164,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               "${AppConstants.trialDurationDays} jours d'essai gratuit inclus",
               style: const TextStyle(color: AppColors.emerald, fontSize: 14, fontWeight: FontWeight.w500),
             ),
-            const SizedBox(height: 36),
+            const SizedBox(height: 28),
 
             if (error != null) ...[
               _buildErrorBanner(error),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
             ],
 
             // Username
@@ -174,131 +185,111 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Phone number
+            // Phone with country selector
+            const Text("Numéro de téléphone", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: _showCountryPicker,
+                  child: Container(
+                    height: 56,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.surfaceLight),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_selectedCountry.flag, style: const TextStyle(fontSize: 20)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '+${_selectedCountry.dialCode}',
+                          style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
+                        ),
+                        const Icon(Icons.arrow_drop_down_rounded, color: AppColors.textSecondary, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextFormField(
+                    controller: _phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: 'X' * _selectedCountry.localDigits,
+                      hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.4)),
+                      prefixIcon: const Icon(Icons.phone_outlined, color: AppColors.textSecondary, size: 20),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return "Numéro requis";
+                      final clean = v.trim().replaceAll(RegExp(r'[\s\-]'), '');
+                      if (clean.length < _selectedCountry.localDigits - 1) return "Numéro trop court";
+                      if (!RegExp(r'^[0-9]+$').hasMatch(clean)) return "Numéro invalide";
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Email (optional)
             AuthTextField(
-              controller: _phoneCtrl,
-              label: "Numéro de téléphone",
-              hint: "07 XX XX XX XX",
-              prefixIcon: Icons.phone_outlined,
-              keyboardType: TextInputType.phone,
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _sendOtp(),
+              controller: _emailCtrl,
+              label: "Email (optionnel)",
+              hint: "votre@email.com",
+              prefixIcon: Icons.email_outlined,
+              keyboardType: TextInputType.emailAddress,
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return "Numéro requis";
-                final clean = v.trim().replaceAll(RegExp(r'[\s\-\+]'), '');
-                if (clean.length < 8) return "Numéro trop court";
-                if (!RegExp(r'^[0-9]+$').hasMatch(clean)) return "Numéro invalide";
+                if (v == null || v.trim().isEmpty) return null; // optional
+                if (!RegExp(r'^[\w\-.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v.trim())) {
+                  return "Email invalide";
+                }
                 return null;
               },
             ),
-            const SizedBox(height: 8),
-            const Text(
-              "🇨🇮 Préfixe +225 ajouté automatiquement",
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-            ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
 
-            // Send OTP button
+            // Password
+            AuthTextField(
+              controller: _passwordCtrl,
+              label: "Mot de passe",
+              hint: "Minimum 6 caractères",
+              prefixIcon: Icons.lock_outline,
+              isPassword: true,
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) => _register(),
+              validator: (v) {
+                if (v == null || v.isEmpty) return "Mot de passe requis";
+                if (v.length < 6) return "Minimum 6 caractères";
+                return null;
+              },
+            ),
+            const SizedBox(height: 28),
+
+            // Register button
             SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: isLoading ? null : _sendOtp,
+                onPressed: isLoading ? null : _register,
                 child: isLoading
                     ? const SizedBox(
                         height: 22, width: 22,
                         child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.background),
                       )
-                    : const Text("Recevoir le code WhatsApp"),
+                    : const Text("Créer mon compte"),
               ),
             ),
             const SizedBox(height: 40),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildOtpView(bool isLoading, String? error) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 32),
-          Text(
-            "Vérification",
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Un code a été envoyé via WhatsApp au $_fullPhone",
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
-          ),
-          const SizedBox(height: 36),
-
-          if (error != null) ...[
-            _buildErrorBanner(error),
-            const SizedBox(height: 20),
-          ],
-
-          // OTP field
-          AuthTextField(
-            controller: _otpCtrl,
-            label: "Code de vérification",
-            hint: "123456",
-            prefixIcon: Icons.sms_outlined,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.done,
-            onFieldSubmitted: (_) => _verifyOtp(),
-            validator: (v) {
-              if (v == null || v.trim().length < 6) return "Code à 6 chiffres requis";
-              return null;
-            },
-          ),
-          const SizedBox(height: 32),
-
-          // Verify button
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: isLoading ? null : _verifyOtp,
-              child: isLoading
-                  ? const SizedBox(
-                      height: 22, width: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.background),
-                    )
-                  : const Text("Vérifier et créer mon compte"),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Resend + Back
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: () {
-                  ref.read(authErrorProvider.notifier).state = null;
-                  setState(() {
-                    _otpSent = false;
-                    _otpCtrl.clear();
-                  });
-                },
-                child: const Text("← Modifier le numéro", style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-              ),
-              TextButton(
-                onPressed: isLoading ? null : _resendOtp,
-                child: const Text("Renvoyer le code", style: TextStyle(color: AppColors.gold, fontSize: 13)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 40),
-        ],
       ),
     );
   }
