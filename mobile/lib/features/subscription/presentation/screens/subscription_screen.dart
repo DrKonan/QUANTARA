@@ -16,34 +16,36 @@ class SubscriptionScreen extends ConsumerStatefulWidget {
 class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   String _selectedPlan = AppConstants.planPro;
 
-  static const _plans = [
-    _Plan(
-      id: AppConstants.planStarter,
-      label: "Starter",
-      emoji: "⚽",
-      price: "990 FCFA",
-      subtitle: "5 matchs/jour · Football",
-      duration: "/mois",
-    ),
-    _Plan(
-      id: AppConstants.planPro,
-      label: "Pro",
-      emoji: "🏆",
-      price: "1 990 FCFA",
-      subtitle: "15 matchs/jour · LIVE · 1 combo/jour",
-      duration: "/mois",
-      badge: "Recommandé",
-    ),
-    _Plan(
-      id: AppConstants.planVip,
-      label: "VIP",
-      emoji: "👑",
-      price: "3 990 FCFA",
-      subtitle: "Illimité · Tous sports · 3 combos/jour",
-      duration: "/mois",
-      badge: "Complet",
-    ),
-  ];
+  List<_Plan> get _plans {
+    return [
+      _Plan(
+        id: AppConstants.planStarter,
+        label: "Starter",
+        emoji: "⚽",
+        price: AppConstants.formatPrice(AppConstants.priceStarter, 'XOF'),
+        subtitle: "5 matchs/jour · Football",
+        duration: "/mois",
+      ),
+      _Plan(
+        id: AppConstants.planPro,
+        label: "Pro",
+        emoji: "🏆",
+        price: AppConstants.formatPrice(AppConstants.pricePro, 'XOF'),
+        subtitle: "15 matchs/jour · LIVE · 1 combo/jour",
+        duration: "/mois",
+        badge: "Recommandé",
+      ),
+      _Plan(
+        id: AppConstants.planVip,
+        label: "VIP",
+        emoji: "👑",
+        price: AppConstants.formatPrice(AppConstants.priceVip, 'XOF'),
+        subtitle: "Illimité · Tous sports · 3 combos/jour",
+        duration: "/mois",
+        badge: "Complet",
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -209,10 +211,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           style: TextStyle(color: AppColors.textPrimary, fontSize: 24, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
-        const Text(
-          "Des pronos IA fiables\nà partir de 990 FCFA/mois",
+        Text(
+          "Des pronos IA fiables\nà partir de ${AppConstants.formatPrice(AppConstants.priceStarter, 'XOF')}/mois",
           textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
         ),
       ],
     );
@@ -427,9 +429,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       ),
       builder: (ctx) => _PaymentMethodSheet(
         selectedPlan: _selectedPlan,
-        onPay: (provider, {String? phone, String? correspondent}) {
+        onPay: (provider, {String? phone, String? correspondent, String? currency}) {
           Navigator.pop(ctx);
-          _initiatePayment(provider, phone: phone, correspondent: correspondent);
+          _initiatePayment(provider, phone: phone, correspondent: correspondent, currency: currency);
         },
       ),
     );
@@ -439,10 +441,13 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     PaymentProvider provider, {
     String? phone,
     String? correspondent,
+    String? currency,
   }) async {
     // Show confirmation dialog first
     final planLabel = AppConstants.planLabels[_selectedPlan] ?? _selectedPlan;
-    final price = AppConstants.planPrices[_selectedPlan] ?? 0;
+    final cur = currency ?? 'XOF';
+    final price = AppConstants.getPriceInCurrency(_selectedPlan, cur);
+    final priceLabel = AppConstants.formatPrice(price, cur);
     final providerLabel = provider == PaymentProvider.wave ? 'Wave' : (correspondent ?? 'Mobile Money');
 
     final confirmed = await showDialog<bool>(
@@ -459,7 +464,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           children: [
             _confirmRow("Formule", "$planLabel ⭐"),
             const SizedBox(height: 8),
-            _confirmRow("Montant", "$price FCFA/mois"),
+            _confirmRow("Montant", "$priceLabel/mois"),
             const SizedBox(height: 8),
             _confirmRow("Paiement", providerLabel),
             if (phone != null) ...[
@@ -521,6 +526,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           provider: provider,
           plan: _selectedPlan,
           message: state.result?.message,
+          currency: currency ?? 'XOF',
         ),
       ),
     );
@@ -654,7 +660,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 // ══════════════════════════════════════════════════════════════
 class _PaymentMethodSheet extends StatefulWidget {
   final String selectedPlan;
-  final void Function(PaymentProvider provider, {String? phone, String? correspondent}) onPay;
+  final void Function(PaymentProvider provider, {String? phone, String? correspondent, String? currency}) onPay;
 
   const _PaymentMethodSheet({required this.selectedPlan, required this.onPay});
 
@@ -845,9 +851,10 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
 
   void _onConfirm() {
     final method = _selectedMethod!;
+    final currency = AppConstants.currencyForCountry(_selectedCountry.code);
 
     if (method.isWave) {
-      widget.onPay(PaymentProvider.wave);
+      widget.onPay(PaymentProvider.wave, currency: currency);
       return;
     }
 
@@ -872,6 +879,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
       PaymentProvider.pawapay,
       phone: formatted,
       correspondent: method.correspondent!,
+      currency: currency,
     );
   }
 
@@ -944,12 +952,14 @@ class _PaymentStatusPage extends ConsumerWidget {
   final PaymentProvider provider;
   final String plan;
   final String? message;
+  final String currency;
 
   const _PaymentStatusPage({
     required this.paymentId,
     required this.provider,
     required this.plan,
     this.message,
+    this.currency = 'XOF',
   });
 
   @override
@@ -1067,6 +1077,8 @@ class _PaymentStatusPage extends ConsumerWidget {
 
   String _statusMessage(PaymentState state) {
     final planLabel = AppConstants.planLabels[plan] ?? plan;
+    final priceLabel = AppConstants.formatPrice(
+      AppConstants.getPriceInCurrency(plan, currency), currency);
     switch (state.phase) {
       case PaymentPhase.success:
         return "Votre abonnement $planLabel est maintenant actif ! 🎉\nProfitez de toutes vos fonctionnalités exclusives.";
@@ -1074,9 +1086,9 @@ class _PaymentStatusPage extends ConsumerWidget {
         return state.errorMessage ?? "Une erreur est survenue. Veuillez réessayer.";
       default:
         if (provider == PaymentProvider.wave) {
-          return "Complétez le paiement de ${AppConstants.planPrices[plan]} FCFA dans l'application Wave.\nNous vérifions automatiquement...";
+          return "Complétez le paiement de $priceLabel dans l'application Wave.\nNous vérifions automatiquement...";
         }
-        return message ?? "Un push USSD a été envoyé sur votre téléphone.\nEntrez votre code PIN pour confirmer le paiement de ${AppConstants.planPrices[plan]} FCFA.";
+        return message ?? "Un push USSD a été envoyé sur votre téléphone.\nEntrez votre code PIN pour confirmer le paiement de $priceLabel.";
     }
   }
 }

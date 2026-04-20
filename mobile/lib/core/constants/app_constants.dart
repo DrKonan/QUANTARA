@@ -14,12 +14,12 @@ abstract class AppConstants {
   static const planPro = 'pro';
   static const planVip = 'vip';
 
-  // Plan prices (FCFA)
-  static const priceStarter = 990;
-  static const pricePro = 1990;
-  static const priceVip = 3990;
+  // Plan prices (base XOF/XAF)
+  static const priceStarter = 1000;
+  static const pricePro = 2000;
+  static const priceVip = 4000;
 
-  /// Map plan → price
+  /// Map plan → base price (XOF)
   static const planPrices = {
     planStarter: priceStarter,
     planPro: pricePro,
@@ -52,6 +52,76 @@ abstract class AppConstants {
   /// Check if [userPlan] is at least [requiredPlan]
   static bool planMeetsRequirement(String userPlan, String requiredPlan) {
     return (planHierarchy[userPlan] ?? 0) >= (planHierarchy[requiredPlan] ?? 0);
+  }
+
+  // ── Currency conversion ──
+  // Base prices are in XOF. Other currencies use rounded conversions.
+  static const currencySymbols = {
+    'XOF': 'F',
+    'XAF': 'F',
+    'GNF': 'GNF',
+    'CDF': 'FC',
+  };
+
+  /// Price multipliers relative to XOF (rounded to nice numbers)
+  /// XOF = XAF (1:1 parity, CFA franc zones)
+  /// GNF ≈ 14× XOF → 1000 XOF = 14000 GNF
+  /// CDF ≈ 3.5× XOF → 1000 XOF = 3500 CDF
+  static const _currencyMultipliers = {
+    'XOF': 1.0,
+    'XAF': 1.0,
+    'GNF': 14.0,
+    'CDF': 3.5,
+  };
+
+  /// Get the price for a plan in a specific currency (always rounded)
+  static int getPriceInCurrency(String plan, String currency) {
+    final basePrice = planPrices[plan] ?? 0;
+    final multiplier = _currencyMultipliers[currency] ?? 1.0;
+    final raw = basePrice * multiplier;
+    // Round to nearest 500 for cleaner numbers
+    return ((raw / 500).round() * 500).clamp(500, 999999);
+  }
+
+  /// Format price with currency symbol
+  static String formatPrice(int amount, String currency) {
+    final symbol = currencySymbols[currency] ?? currency;
+    final formatted = _formatNumber(amount);
+    return '$formatted $symbol';
+  }
+
+  /// Format a plan price for display in a given currency
+  static String planPriceLabel(String plan, String currency) {
+    final amount = getPriceInCurrency(plan, currency);
+    return '${formatPrice(amount, currency)}/mois';
+  }
+
+  static String _formatNumber(int n) {
+    if (n < 1000) return '$n';
+    final s = n.toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write(' ');
+      buf.write(s[i]);
+    }
+    return buf.toString();
+  }
+
+  /// Get currency for a country code
+  static String currencyForCountry(String countryCode) {
+    switch (countryCode) {
+      case 'CI': case 'SN': case 'ML': case 'BF':
+      case 'BJ': case 'TG': case 'NE':
+        return 'XOF';
+      case 'CM': case 'GA': case 'CG':
+        return 'XAF';
+      case 'GN':
+        return 'GNF';
+      case 'CD':
+        return 'CDF';
+      default:
+        return 'XOF';
+    }
   }
 
   // PawaPay correspondents (legacy keys)

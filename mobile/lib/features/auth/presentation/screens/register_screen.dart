@@ -55,7 +55,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             email: email.isNotEmpty ? email : null,
           );
       if (mounted) setState(() => _registered = true);
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[Quantara] SIGNUP ERROR: $e');
+      debugPrint('[Quantara] STACK: $stack');
       ref.read(authErrorProvider.notifier).state = _mapError(e);
     } finally {
       if (mounted) ref.read(authLoadingProvider.notifier).state = false;
@@ -67,11 +69,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (msg.contains('already registered') || msg.contains('user_already_exists') || msg.contains('already been registered')) {
       return "Un compte existe déjà avec ce numéro ou cet email";
     }
-    if (msg.contains('weak_password') || msg.contains('password')) {
+    if (msg.contains('email_provider_disabled') || msg.contains('email signups are disabled')) {
+      return "L'inscription par email est désactivée côté serveur. Contactez le support";
+    }
+    if (msg.contains('weak_password') || (msg.contains('password') && msg.contains('weak'))) {
       return "Mot de passe trop faible (minimum 6 caractères)";
     }
     if (msg.contains('invalid') && msg.contains('email')) {
       return "Adresse email invalide";
+    }
+    if (msg.contains('email_confirmation_required')) {
+      return "Un email de confirmation a été envoyé. Vérifiez votre boîte de réception";
+    }
+    if (msg.contains('signup_blocked_confirm_email')) {
+      return "Inscription temporairement indisponible. Réessayez avec une adresse email";
     }
     if (msg.contains('rate') || msg.contains('too many')) {
       return "Trop de tentatives. Attendez quelques minutes";

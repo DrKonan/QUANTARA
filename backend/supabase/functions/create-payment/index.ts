@@ -7,9 +7,9 @@ import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse } from "../_shared/helpers.ts";
 
 const PLAN_AMOUNTS: Record<string, number> = {
-  starter: 990,
-  pro: 1990,
-  vip: 3990,
+  starter: 1000,
+  pro: 2000,
+  vip: 4000,
 };
 
 const PLAN_DURATIONS: Record<string, number> = {
@@ -58,6 +58,20 @@ function getCurrencyForCorrespondent(correspondent: string): string {
     return "GNF";
   }
   return "XOF"; // UEMOA countries
+}
+
+// Currency multipliers relative to XOF base prices (rounded)
+const CURRENCY_MULTIPLIERS: Record<string, number> = {
+  XOF: 1,
+  XAF: 1,    // 1:1 parity with XOF
+  GNF: 14,   // 1000 XOF ≈ 14000 GNF
+  CDF: 3.5,  // 1000 XOF ≈ 3500 CDF
+};
+
+function getAmountInCurrency(baseAmount: number, currency: string): number {
+  const mult = CURRENCY_MULTIPLIERS[currency] ?? 1;
+  const raw = baseAmount * mult;
+  return Math.round(raw / 500) * 500 || raw; // round to nearest 500
 }
 
 interface CreatePaymentRequest {
@@ -117,13 +131,17 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Invalid provider. Use: wave or pawapay" }, 400);
   }
 
-  const amount = PLAN_AMOUNTS[plan];
+  const baseAmount = PLAN_AMOUNTS[plan];
   const paymentId = crypto.randomUUID();
 
   try {
     if (provider === "wave") {
-      return await handleWavePayment(supabase, user.id, plan, amount, paymentId);
+      // Wave uses XOF only
+      return await handleWavePayment(supabase, user.id, plan, baseAmount, paymentId);
     } else {
+      // PawaPay: convert to the correspondent's currency
+      const currency = correspondent ? getCurrencyForCorrespondent(correspondent) : "XOF";
+      const amount = getAmountInCurrency(baseAmount, currency);
       return await handlePawapayPayment(supabase, user.id, plan, amount, paymentId, phone, correspondent);
     }
   } catch (err) {

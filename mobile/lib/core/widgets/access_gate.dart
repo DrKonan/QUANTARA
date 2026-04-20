@@ -29,7 +29,7 @@ class AccessGate extends ConsumerWidget {
         Opacity(opacity: 0.35, child: IgnorePointer(child: child)),
         Positioned.fill(
           child: GestureDetector(
-            onTap: () => _showUpgradeSheet(context, profile?.plan ?? 'free'),
+            onTap: () => _showUpgradeSheet(context, profile?.effectivePlan ?? 'free'),
             child: Container(
               decoration: BoxDecoration(borderRadius: BorderRadius.circular(14)),
               alignment: Alignment.center,

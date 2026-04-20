@@ -87,7 +87,7 @@ class _MatchDetailSheetState extends ConsumerState<MatchDetailSheet> {
   Widget _buildDailyLimitReached(int viewedCount) {
     final profile = ref.watch(userProfileProvider).valueOrNull;
     final limit = profile?.dailyMatchLimit ?? 1;
-    final plan = profile?.plan ?? 'free';
+    final plan = profile?.effectivePlan ?? 'free';
 
     return Column(
       children: [

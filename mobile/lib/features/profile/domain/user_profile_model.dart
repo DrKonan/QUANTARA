@@ -27,11 +27,11 @@ class UserProfile {
   /// Has any paid subscription (starter, pro, or vip)
   bool get isPremium => isStarter || isPro || isVip;
 
-  /// Has access to combo predictions (pro + vip)
-  bool get hasComboAccess => isPro || isVip;
+  /// Has access to combo predictions (pro + vip or trial)
+  bool get hasComboAccess => isPro || isVip || isTrialActive;
 
-  /// Has access to live predictions (pro + vip)
-  bool get hasLiveAccess => isPro || isVip;
+  /// Has access to live predictions (pro + vip or trial)
+  bool get hasLiveAccess => isPro || isVip || isTrialActive;
 
   /// Max combos visible per day
   int get comboLimit {
@@ -42,10 +42,10 @@ class UserProfile {
     }
   }
 
-  /// Check if user's plan meets a required plan level
+  /// Check if user's effective plan meets a required plan level
   bool meetsRequirement(String requiredPlan) {
     const hierarchy = {'free': 0, 'starter': 1, 'pro': 2, 'vip': 3};
-    return (hierarchy[plan] ?? 0) >= (hierarchy[requiredPlan] ?? 0);
+    return (hierarchy[effectivePlan] ?? 0) >= (hierarchy[requiredPlan] ?? 0);
   }
 
   bool get isTrialActive {
@@ -55,9 +55,12 @@ class UserProfile {
 
   bool get hasAccess => isPremium || isTrialActive;
 
-  /// Daily match limit based on plan (-1 = unlimited)
+  /// Effective plan: VIP during trial, actual plan otherwise
+  String get effectivePlan => isTrialActive ? 'vip' : plan;
+
+  /// Daily match limit based on effective plan (-1 = unlimited)
   int get dailyMatchLimit {
-    switch (plan) {
+    switch (effectivePlan) {
       case 'starter': return 5;
       case 'pro': return 15;
       case 'vip': return -1;
@@ -66,6 +69,7 @@ class UserProfile {
   }
 
   String get planLabel {
+    if (isTrialActive && isFree) return 'VIP (Essai)';
     switch (plan) {
       case 'starter': return 'Starter';
       case 'pro': return 'Pro';
@@ -75,6 +79,7 @@ class UserProfile {
   }
 
   String get planEmoji {
+    if (isTrialActive && isFree) return '🎁';
     switch (plan) {
       case 'starter': return '⚡';
       case 'pro': return '💎';

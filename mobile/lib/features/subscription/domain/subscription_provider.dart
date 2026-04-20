@@ -31,7 +31,7 @@ final isPremiumProvider = Provider<bool>((ref) {
 // ── Current plan tier ──
 final currentPlanProvider = Provider<String>((ref) {
   final profile = ref.watch(userProfileProvider).valueOrNull;
-  return profile?.plan ?? 'free';
+  return profile?.effectivePlan ?? 'free';
 });
 
 // ── Has combo access (pro or vip) ──

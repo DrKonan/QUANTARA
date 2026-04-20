@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/services/notification_service.dart';
 import '../../profile/domain/user_profile_model.dart';
 
@@ -61,6 +63,9 @@ class AuthService {
     String? email,
   }) async {
     final authEmail = email?.isNotEmpty == true ? email! : phoneToAuthEmail(phone);
+    final hasRealEmail = email?.isNotEmpty == true;
+
+    debugPrint('[Quantara] signUp authEmail=$authEmail hasRealEmail=$hasRealEmail');
 
     final response = await _client.auth.signUp(
       email: authEmail,
@@ -71,18 +76,103 @@ class AuthService {
       },
     );
 
+    debugPrint('[Quantara] signUp response: user=${response.user?.id}, session=${response.session != null}, identities=${response.user?.identities?.length}');
+
+    // Supabase may return a user without session if email confirmation is on.
+    // For phone-derived emails we auto-login immediately after signup.
+    if (response.session == null && response.user != null) {
+      debugPrint('[Quantara] No session after signUp, trying auto-login...');
+      try {
+        final loginResponse = await _client.auth.signInWithPassword(
+          email: authEmail,
+          password: password,
+        );
+        debugPrint('[Quantara] Auto-login OK');
+        await _upsertProfile(
+          userId: loginResponse.user!.id,
+          username: username,
+          phone: phone,
+          email: hasRealEmail ? email : null,
+        );
+        NotificationService().registerToken();
+        return loginResponse;
+      } catch (loginErr) {
+        debugPrint('[Quantara] Auto-login FAILED: $loginErr');
+        if (response.user != null) {
+          await _upsertProfileAnon(
+            userId: response.user!.id,
+            username: username,
+            phone: phone,
+            email: hasRealEmail ? email : null,
+          );
+        }
+        if (hasRealEmail) {
+          throw Exception('email_confirmation_required');
+        }
+        throw Exception('signup_blocked_confirm_email');
+      }
+    }
+
+    // Session exists — normal flow
     if (response.user != null) {
-      await _client.from('users').upsert({
-        'id': response.user!.id,
-        'username': username,
-        'phone': phone,
-        'email': email?.isNotEmpty == true ? email : null,
-        'plan': 'free',
-      });
+      debugPrint('[Quantara] Session exists, upserting profile...');
+      try {
+        await _upsertProfile(
+          userId: response.user!.id,
+          username: username,
+          phone: phone,
+          email: hasRealEmail ? email : null,
+        );
+        debugPrint('[Quantara] Profile upsert OK');
+      } catch (upsertErr) {
+        debugPrint('[Quantara] Profile upsert FAILED: $upsertErr');
+        rethrow;
+      }
     }
 
     NotificationService().registerToken();
     return response;
+  }
+
+  Future<void> _upsertProfile({
+    required String userId,
+    required String username,
+    required String phone,
+    String? email,
+  }) async {
+    final trialEnd = DateTime.now().add(const Duration(days: AppConstants.trialDurationDays));
+    await _client.from('users').upsert({
+      'id': userId,
+      'username': username,
+      'phone': phone,
+      'email': email,
+      'plan': 'free',
+      'trial_used': true,
+      'trial_ends_at': trialEnd.toIso8601String(),
+    });
+  }
+
+  /// Upsert profile using service role or without RLS (for pre-auth scenarios)
+  Future<void> _upsertProfileAnon({
+    required String userId,
+    required String username,
+    required String phone,
+    String? email,
+  }) async {
+    try {
+      final trialEnd = DateTime.now().add(const Duration(days: AppConstants.trialDurationDays));
+      await _client.from('users').upsert({
+        'id': userId,
+        'username': username,
+        'phone': phone,
+        'email': email,
+        'plan': 'free',
+        'trial_used': true,
+        'trial_ends_at': trialEnd.toIso8601String(),
+      });
+    } catch (_) {
+      // Silently fail — profile will be created on first login
+    }
   }
 
   /// Login with phone or email + password.
