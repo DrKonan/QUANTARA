@@ -17,25 +17,34 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _usernameCtrl;
   late TextEditingController _phoneCtrl;
+  late TextEditingController _emailCtrl;
   File? _pickedImage;
   String? _currentAvatarUrl;
   bool _saving = false;
   bool _uploadingImage = false;
+  bool _signedUpWithPhone = false;
 
   @override
   void initState() {
     super.initState();
     _usernameCtrl = TextEditingController();
     _phoneCtrl = TextEditingController();
+    _emailCtrl = TextEditingController();
 
-    // Pre-fill from profile data
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final profile = ref.read(userProfileProvider).valueOrNull;
+      final email = ref.read(currentUserProvider)?.email ?? '';
+      final isPhoneSignup = email.endsWith('@phone.quantara.app');
+
       if (profile != null) {
         _usernameCtrl.text = profile.username ?? '';
         _phoneCtrl.text = profile.phone ?? '';
         setState(() => _currentAvatarUrl = profile.avatarUrl);
       }
+
+      // If signed up with phone, don't show the generated email
+      _emailCtrl.text = isPhoneSignup ? '' : email;
+      setState(() => _signedUpWithPhone = isPhoneSignup);
     });
   }
 
@@ -43,6 +52,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   void dispose() {
     _usernameCtrl.dispose();
     _phoneCtrl.dispose();
+    _emailCtrl.dispose();
     super.dispose();
   }
 
@@ -176,6 +186,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       await authService.updateProfile(
         username: _usernameCtrl.text.trim(),
         phone: _phoneCtrl.text.trim().isNotEmpty ? _phoneCtrl.text.trim() : null,
+        email: _signedUpWithPhone && _emailCtrl.text.trim().isNotEmpty
+            ? _emailCtrl.text.trim()
+            : null,
         avatarUrl: avatarUrl,
       );
 
@@ -217,8 +230,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final email = ref.watch(currentUserProvider)?.email;
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -334,24 +345,37 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
                       const SizedBox(height: 18),
 
-                      // Email (read-only)
+                      // Email — editable if signed up with phone, locked if signed up with email
                       _buildField(
-                        initialValue: email ?? '',
+                        controller: _signedUpWithPhone ? _emailCtrl : null,
+                        initialValue: _signedUpWithPhone ? null : _emailCtrl.text,
                         label: "Email",
                         icon: Icons.email_rounded,
-                        readOnly: true,
-                        hint: "Non modifiable",
+                        readOnly: !_signedUpWithPhone,
+                        hint: _signedUpWithPhone ? "Ajoutez votre adresse email" : "Non modifiable",
+                        keyboardType: TextInputType.emailAddress,
+                        validator: _signedUpWithPhone
+                            ? (v) {
+                                if (v != null && v.trim().isNotEmpty) {
+                                  final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+                                  if (!emailRegex.hasMatch(v.trim())) return "Email invalide";
+                                }
+                                return null;
+                              }
+                            : null,
                       ),
 
                       const SizedBox(height: 18),
 
-                      // Phone
+                      // Phone — editable if signed up with email, locked if signed up with phone
                       _buildField(
-                        controller: _phoneCtrl,
+                        controller: !_signedUpWithPhone ? _phoneCtrl : null,
+                        initialValue: !_signedUpWithPhone ? null : _phoneCtrl.text,
                         label: "Téléphone",
                         icon: Icons.phone_rounded,
+                        readOnly: _signedUpWithPhone,
                         keyboardType: TextInputType.phone,
-                        hint: "+225 XX XX XX XX XX",
+                        hint: _signedUpWithPhone ? "Non modifiable" : "+225 XX XX XX XX XX",
                       ),
 
                       const SizedBox(height: 40),
