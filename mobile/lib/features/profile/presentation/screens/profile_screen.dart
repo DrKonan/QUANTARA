@@ -293,6 +293,26 @@ class ProfileScreen extends ConsumerWidget {
 
                 const SizedBox(height: 32),
 
+                // Delete account
+                Divider(color: AppColors.surfaceLight.withValues(alpha: 0.5), height: 1),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _confirmDeleteAccount(context, ref),
+                    icon: const Icon(Icons.delete_forever_rounded, size: 18),
+                    label: const Text("Supprimer mon compte"),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error.withValues(alpha: 0.7),
+                      side: BorderSide(color: AppColors.error.withValues(alpha: 0.2)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
                 // Version
                 const Text(
                   "Quantara v1.0.0",
@@ -340,6 +360,99 @@ class ProfileScreen extends ConsumerWidget {
             : const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 20),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteAccount(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 22),
+              SizedBox(width: 8),
+              Text("Supprimer votre compte ?", style: TextStyle(color: AppColors.textPrimary, fontSize: 17)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Cette action est irréversible.\n\n"
+                "Toutes vos données seront supprimées :\n"
+                "• Profil et préférences\n"
+                "• Historique de prédictions\n"
+                "• Abonnement actif\n\n"
+                "Tapez SUPPRIMER pour confirmer :",
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                onChanged: (_) => setState(() {}),
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, letterSpacing: 2),
+                decoration: InputDecoration(
+                  hintText: "SUPPRIMER",
+                  hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.3)),
+                  filled: true,
+                  fillColor: AppColors.surfaceLight,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Annuler", style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            TextButton(
+              onPressed: controller.text == "SUPPRIMER" ? () => Navigator.pop(ctx, true) : null,
+              child: Text(
+                "Supprimer définitivement",
+                style: TextStyle(
+                  color: controller.text == "SUPPRIMER" ? AppColors.error : AppColors.textSecondary.withValues(alpha: 0.3),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.gold)),
+    );
+
+    try {
+      await ref.read(authServiceProvider).deleteAccount();
+      if (context.mounted) Navigator.of(context).pop(); // dismiss loader
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop(); // dismiss loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Erreur lors de la suppression. Réessayez."),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
   }
 
   Future<bool> _confirmLogout(BuildContext context) async {

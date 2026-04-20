@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../theme/app_colors.dart';
+import '../services/analytics_service.dart';
 import '../../features/auth/domain/auth_provider.dart';
 
 /// Shows a lock overlay when the user's plan doesn't meet requirements.
@@ -62,6 +63,7 @@ class AccessGate extends ConsumerWidget {
   }
 
   void _showUpgradeSheet(BuildContext context, String currentPlan) {
+    AnalyticsService().logAccessGateHit(requiredPlan);
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,

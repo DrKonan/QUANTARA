@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/onboarding/domain/onboarding_provider.dart';
 import '../../features/auth/presentation/screens/auth_screen.dart';
@@ -28,6 +29,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
+    observers: [FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance)],
     redirect: (context, state) {
       final onboardingDone = onboardingAsync.valueOrNull ?? false;
       final path = state.uri.path;

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/analytics_service.dart';
 import '../../profile/domain/user_profile_model.dart';
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
@@ -95,6 +96,9 @@ class AuthService {
           email: hasRealEmail ? email : null,
         );
         NotificationService().registerToken();
+        AnalyticsService().logSignUp(hasRealEmail ? 'email' : 'phone');
+        AnalyticsService().setUserId(loginResponse.user?.id);
+        AnalyticsService().logTrialStart();
         return loginResponse;
       } catch (loginErr) {
         debugPrint('[Quantara] Auto-login FAILED: $loginErr');
@@ -131,6 +135,9 @@ class AuthService {
     }
 
     NotificationService().registerToken();
+    AnalyticsService().logSignUp(hasRealEmail ? 'email' : 'phone');
+    AnalyticsService().setUserId(response.user?.id);
+    AnalyticsService().logTrialStart();
     return response;
   }
 
@@ -191,10 +198,20 @@ class AuthService {
     );
 
     NotificationService().registerToken();
+    AnalyticsService().logLogin(email?.isNotEmpty == true ? 'email' : 'phone');
+    AnalyticsService().setUserId(response.user?.id);
     return response;
   }
 
   Future<void> signOut() async {
+    AnalyticsService().setUserId(null);
+    await _client.auth.signOut();
+  }
+
+  Future<void> deleteAccount() async {
+    AnalyticsService().logDeleteAccount();
+    await _client.functions.invoke('delete-account', method: HttpMethod.post);
+    AnalyticsService().setUserId(null);
     await _client.auth.signOut();
   }
 

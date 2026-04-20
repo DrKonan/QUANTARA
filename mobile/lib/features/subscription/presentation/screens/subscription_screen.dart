@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/services/analytics_service.dart';
 import '../../../auth/domain/auth_provider.dart';
 import '../../data/payment_service.dart';
 import '../../domain/subscription_provider.dart';
@@ -16,6 +17,12 @@ class SubscriptionScreen extends ConsumerStatefulWidget {
 
 class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   String _selectedPlan = AppConstants.planPro;
+
+  @override
+  void initState() {
+    super.initState();
+    AnalyticsService().logViewSubscription();
+  }
 
   List<_Plan> _plans(String currency) {
     return [
@@ -499,6 +506,11 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 
     if (confirmed != true || !mounted) return;
 
+    AnalyticsService().logStartPayment(
+      _selectedPlan,
+      provider == PaymentProvider.wave ? 'wave' : 'pawapay',
+    );
+
     final notifier = ref.read(paymentNotifierProvider.notifier);
     await notifier.initiatePayment(
       plan: _selectedPlan,
@@ -960,7 +972,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
 // ══════════════════════════════════════════════════════════════
 // Payment Status Page (inline — shown after payment initiation)
 // ══════════════════════════════════════════════════════════════
-class _PaymentStatusPage extends ConsumerWidget {
+class _PaymentStatusPage extends ConsumerStatefulWidget {
   final String paymentId;
   final PaymentProvider provider;
   final String plan;
@@ -976,8 +988,27 @@ class _PaymentStatusPage extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PaymentStatusPage> createState() => _PaymentStatusPageState();
+}
+
+class _PaymentStatusPageState extends ConsumerState<_PaymentStatusPage> {
+  bool _analyticsLogged = false;
+
+  void _logOutcome(PaymentPhase phase, String? errorMessage) {
+    if (_analyticsLogged) return;
+    if (phase == PaymentPhase.success) {
+      _analyticsLogged = true;
+      AnalyticsService().logPaymentSuccess(widget.plan, widget.provider == PaymentProvider.wave ? 'wave' : 'pawapay');
+    } else if (phase == PaymentPhase.error) {
+      _analyticsLogged = true;
+      AnalyticsService().logPaymentFailure(widget.plan, errorMessage ?? 'unknown');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(paymentNotifierProvider);
+    _logOutcome(state.phase, state.errorMessage);
 
     return Scaffold(
       body: SafeArea(
@@ -1089,19 +1120,19 @@ class _PaymentStatusPage extends ConsumerWidget {
   }
 
   String _statusMessage(PaymentState state) {
-    final planLabel = AppConstants.planLabels[plan] ?? plan;
+    final planLabel = AppConstants.planLabels[widget.plan] ?? widget.plan;
     final priceLabel = AppConstants.formatPrice(
-      AppConstants.getPriceInCurrency(plan, currency), currency);
+      AppConstants.getPriceInCurrency(widget.plan, widget.currency), widget.currency);
     switch (state.phase) {
       case PaymentPhase.success:
         return "Votre abonnement $planLabel est maintenant actif ! 🎉\nProfitez de toutes vos fonctionnalités exclusives.";
       case PaymentPhase.error:
         return state.errorMessage ?? "Une erreur est survenue. Veuillez réessayer.";
       default:
-        if (provider == PaymentProvider.wave) {
+        if (widget.provider == PaymentProvider.wave) {
           return "Complétez le paiement de $priceLabel dans l'application Wave.\nNous vérifions automatiquement...";
         }
-        return message ?? "Un push USSD a été envoyé sur votre téléphone.\nEntrez votre code PIN pour confirmer le paiement de $priceLabel.";
+        return widget.message ?? "Un push USSD a été envoyé sur votre téléphone.\nEntrez votre code PIN pour confirmer le paiement de $priceLabel.";
     }
   }
 }

@@ -10,6 +10,7 @@ import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'core/config/app_config.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/analytics_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +26,9 @@ void main() async {
 
   // Register background message handler
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  // Initialize analytics & crash reporting
+  await AnalyticsService().initialize();
 
   // Initialize notifications in background (never block app startup)
   NotificationService().initialize().catchError((e) {
