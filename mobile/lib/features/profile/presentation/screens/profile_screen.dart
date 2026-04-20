@@ -2,13 +2,59 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/services/biometric_service.dart';
 import '../../../auth/domain/auth_provider.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  bool _bioSupported = false;
+  bool _bioEnabled = false;
+  String _bioLabel = 'Biométrie';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometricState();
+  }
+
+  Future<void> _loadBiometricState() async {
+    final bio = BiometricService();
+    final supported = await bio.isDeviceSupported;
+    if (!supported) return;
+    final enabled = await bio.isEnabled;
+    final label = await bio.biometricLabel;
+    if (mounted) setState(() { _bioSupported = true; _bioEnabled = enabled; _bioLabel = label; });
+  }
+
+  Future<void> _toggleBiometric(bool value) async {
+    if (value) {
+      final hasCreds = await BiometricService().hasStoredCredentials;
+      if (!hasCreds) {
+        // Enable the flag — credentials will be stored on next login
+        await BiometricService().saveCredentials(authEmail: '_pending_', password: '_pending_');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("$_bioLabel sera activé lors de votre prochaine connexion"),
+              backgroundColor: AppColors.surface,
+            ),
+          );
+        }
+      }
+    } else {
+      await BiometricService().disable();
+    }
+    if (mounted) setState(() => _bioEnabled = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final profileAsync = ref.watch(userProfileProvider);
     final authUser = ref.watch(currentUserProvider);
 
@@ -241,6 +287,8 @@ class ProfileScreen extends ConsumerWidget {
                   subtitle: "Changer votre mot de passe",
                   onTap: () => context.push('/profile/password'),
                 ),
+                if (_bioSupported)
+                  _buildBiometricToggle(),
                 _buildMenuItem(
                   icon: Icons.language_rounded,
                   title: "Langue",
@@ -322,6 +370,40 @@ class ProfileScreen extends ConsumerWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBiometricToggle() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 2),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+        leading: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.fingerprint, color: AppColors.gold, size: 20),
+        ),
+        title: Text(
+          _bioLabel,
+          style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+        ),
+        subtitle: const Text(
+          "Connexion rapide",
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+        ),
+        trailing: Switch.adaptive(
+          value: _bioEnabled,
+          activeTrackColor: AppColors.gold.withValues(alpha: 0.5),
+          thumbColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.selected) ? AppColors.gold : null,
+          ),
+          onChanged: _toggleBiometric,
         ),
       ),
     );

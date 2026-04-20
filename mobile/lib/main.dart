@@ -11,6 +11,7 @@ import 'core/router/app_router.dart';
 import 'core/config/app_config.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/analytics_service.dart';
+import 'shared/widgets/session_guard.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,6 +57,7 @@ class QuantaraApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      builder: (context, child) => SessionGuard(child: child ?? const SizedBox()),
     );
   }
 }

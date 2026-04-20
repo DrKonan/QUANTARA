@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/analytics_service.dart';
+import '../../../core/services/biometric_service.dart';
 import '../../profile/domain/user_profile_model.dart';
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
@@ -99,6 +100,7 @@ class AuthService {
         AnalyticsService().logSignUp(hasRealEmail ? 'email' : 'phone');
         AnalyticsService().setUserId(loginResponse.user?.id);
         AnalyticsService().logTrialStart();
+        _saveBiometricCredentials(authEmail, password);
         return loginResponse;
       } catch (loginErr) {
         debugPrint('[Quantara] Auto-login FAILED: $loginErr');
@@ -138,6 +140,7 @@ class AuthService {
     AnalyticsService().logSignUp(hasRealEmail ? 'email' : 'phone');
     AnalyticsService().setUserId(response.user?.id);
     AnalyticsService().logTrialStart();
+    _saveBiometricCredentials(authEmail, password);
     return response;
   }
 
@@ -200,7 +203,23 @@ class AuthService {
     NotificationService().registerToken();
     AnalyticsService().logLogin(email?.isNotEmpty == true ? 'email' : 'phone');
     AnalyticsService().setUserId(response.user?.id);
+
+    // Save credentials for biometric re-login
+    _saveBiometricCredentials(authEmail, password);
+
     return response;
+  }
+
+  /// Silently offer to save credentials for biometric login.
+  void _saveBiometricCredentials(String authEmail, String password) {
+    BiometricService().isDeviceSupported.then((supported) {
+      if (supported) {
+        BiometricService().saveCredentials(
+          authEmail: authEmail,
+          password: password,
+        );
+      }
+    });
   }
 
   Future<void> signOut() async {
@@ -212,6 +231,7 @@ class AuthService {
     AnalyticsService().logDeleteAccount();
     await _client.functions.invoke('delete-account', method: HttpMethod.post);
     AnalyticsService().setUserId(null);
+    await BiometricService().disable();
     await _client.auth.signOut();
   }
 

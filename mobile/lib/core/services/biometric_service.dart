@@ -1,0 +1,113 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/analytics_service.dart';
+import '../services/notification_service.dart';
+
+class BiometricService {
+  BiometricService._();
+  static final BiometricService _instance = BiometricService._();
+  factory BiometricService() => _instance;
+
+  final _auth = LocalAuthentication();
+  final _storage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+
+  static const _keyEmail = 'bio_auth_email';
+  static const _keyPassword = 'bio_auth_password';
+  static const _keyEnabled = 'bio_auth_enabled';
+
+  /// Check if device supports biometrics (Face ID / Touch ID / fingerprint).
+  Future<bool> get isDeviceSupported async {
+    try {
+      final canCheck = await _auth.canCheckBiometrics;
+      final isSupported = await _auth.isDeviceSupported();
+      return canCheck && isSupported;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Check if user has previously enabled biometric login.
+  Future<bool> get isEnabled async {
+    final val = await _storage.read(key: _keyEnabled);
+    return val == 'true';
+  }
+
+  /// Check if credentials are stored (= biometric login possible).
+  Future<bool> get hasStoredCredentials async {
+    final email = await _storage.read(key: _keyEmail);
+    return email != null && email.isNotEmpty;
+  }
+
+  /// Get a user-friendly label for the available biometric type.
+  Future<String> get biometricLabel async {
+    try {
+      final types = await _auth.getAvailableBiometrics();
+      if (types.contains(BiometricType.face)) return 'Face ID';
+      if (types.contains(BiometricType.fingerprint)) return 'Touch ID';
+      if (types.contains(BiometricType.strong)) return 'Biométrie';
+      return 'Biométrie';
+    } catch (_) {
+      return 'Biométrie';
+    }
+  }
+
+  /// Save credentials securely after a successful password login.
+  Future<void> saveCredentials({
+    required String authEmail,
+    required String password,
+  }) async {
+    await _storage.write(key: _keyEmail, value: authEmail);
+    await _storage.write(key: _keyPassword, value: password);
+    await _storage.write(key: _keyEnabled, value: 'true');
+    debugPrint('[Quantara] Biometric credentials saved');
+  }
+
+  /// Disable biometric login and clear stored credentials.
+  Future<void> disable() async {
+    await _storage.delete(key: _keyEmail);
+    await _storage.delete(key: _keyPassword);
+    await _storage.write(key: _keyEnabled, value: 'false');
+    debugPrint('[Quantara] Biometric credentials cleared');
+  }
+
+  /// Authenticate with biometrics then sign in via Supabase.
+  /// Returns true on success, false on cancellation/failure.
+  Future<bool> authenticateAndSignIn() async {
+    try {
+      final authenticated = await _auth.authenticate(
+        localizedReason: 'Connectez-vous à Quantara',
+        biometricOnly: true,
+        persistAcrossBackgrounding: true,
+      );
+
+      if (!authenticated) return false;
+
+      final email = await _storage.read(key: _keyEmail);
+      final password = await _storage.read(key: _keyPassword);
+
+      if (email == null || password == null) {
+        debugPrint('[Quantara] Biometric auth OK but no stored credentials');
+        return false;
+      }
+
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      NotificationService().registerToken();
+      AnalyticsService().logLogin('biometric');
+      AnalyticsService().setUserId(Supabase.instance.client.auth.currentUser?.id);
+
+      debugPrint('[Quantara] Biometric sign-in successful');
+      return true;
+    } catch (e) {
+      debugPrint('[Quantara] Biometric sign-in failed: $e');
+      return false;
+    }
+  }
+}

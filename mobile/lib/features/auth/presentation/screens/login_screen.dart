@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/services/biometric_service.dart';
 import '../../domain/auth_provider.dart';
 import '../widgets/auth_text_field.dart';
 
@@ -20,7 +21,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _phoneCtrl = TextEditingController();
 
   bool _usePhone = true;
+  bool _canBiometric = false;
+  String _bioLabel = '';
+  bool _bioLoading = false;
   PaymentCountry _selectedCountry = AppConstants.defaultCountry;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometric();
+  }
+
+  Future<void> _checkBiometric() async {
+    final bio = BiometricService();
+    final supported = await bio.isDeviceSupported;
+    final enabled = await bio.isEnabled;
+    final hasCreds = await bio.hasStoredCredentials;
+    if (supported && enabled && hasCreds) {
+      final label = await bio.biometricLabel;
+      if (mounted) setState(() { _canBiometric = true; _bioLabel = label; });
+    }
+  }
+
+  Future<void> _loginWithBiometric() async {
+    setState(() => _bioLoading = true);
+    ref.read(authErrorProvider.notifier).state = null;
+    try {
+      final success = await BiometricService().authenticateAndSignIn();
+      if (!success && mounted) {
+        ref.read(authErrorProvider.notifier).state = "Authentification biométrique annulée";
+      }
+    } catch (e) {
+      if (mounted) ref.read(authErrorProvider.notifier).state = "Erreur biométrique. Utilisez votre mot de passe";
+    } finally {
+      if (mounted) setState(() => _bioLoading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -326,6 +362,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.background),
                         )
                       : const Text("Se connecter"),
+                ),
+              ),
+            ],
+            if (_canBiometric) ...[
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Expanded(child: Divider(color: AppColors.surfaceLight)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text("ou", style: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.6), fontSize: 12)),
+                  ),
+                  const Expanded(child: Divider(color: AppColors.surfaceLight)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: (isLoading || _bioLoading) ? null : _loginWithBiometric,
+                  icon: _bioLoading
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.gold))
+                      : const Icon(Icons.fingerprint, size: 22),
+                  label: Text(_bioLabel, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.gold,
+                    side: const BorderSide(color: AppColors.gold, width: 1.2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
                 ),
               ),
             ],
