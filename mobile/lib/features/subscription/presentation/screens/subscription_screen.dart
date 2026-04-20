@@ -443,8 +443,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     // Show confirmation dialog first
     final planLabel = AppConstants.planLabels[_selectedPlan] ?? _selectedPlan;
     final price = AppConstants.planPrices[_selectedPlan] ?? 0;
-    final providerLabel = provider == PaymentProvider.wave ? 'Wave' : 
-        (correspondent == 'orange_ci' ? 'Orange Money' : 'MTN MoMo');
+    final providerLabel = provider == PaymentProvider.wave ? 'Wave' : (correspondent ?? 'Mobile Money');
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -664,7 +663,8 @@ class _PaymentMethodSheet extends StatefulWidget {
 }
 
 class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
-  String? _selectedMethod; // 'wave', 'orange_ci', 'mtn_ci'
+  PaymentCountry _selectedCountry = AppConstants.defaultCountry;
+  PaymentMethod? _selectedMethod;
   final _phoneController = TextEditingController();
 
   @override
@@ -673,7 +673,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
     super.dispose();
   }
 
-  bool get _needsPhone => _selectedMethod == 'orange_ci' || _selectedMethod == 'mtn_ci';
+  bool get _needsPhone => _selectedMethod != null && !_selectedMethod!.isWave;
 
   @override
   Widget build(BuildContext context) {
@@ -690,54 +690,82 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
             ),
           ),
           const SizedBox(height: 20),
-          const Text(
-            "Choisissez votre moyen de paiement",
-            style: TextStyle(color: AppColors.textPrimary, fontSize: 17, fontWeight: FontWeight.w700),
+
+          // ── Country selector ──
+          const Text("Votre pays", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: _showCountryPicker,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.surfaceLight),
+              ),
+              child: Row(
+                children: [
+                  Text(_selectedCountry.flag, style: const TextStyle(fontSize: 22)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${_selectedCountry.name}  (+${_selectedCountry.dialCode})',
+                      style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary, size: 22),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 16),
 
-          _methodTile(
-            id: 'wave',
-            icon: Icons.waves_rounded,
-            color: const Color(0xFF1DC2FF),
-            title: 'Wave',
-            subtitle: 'Paiement instantané via Wave',
-          ),
-          _methodTile(
-            id: 'orange_ci',
-            icon: Icons.phone_android_rounded,
-            color: const Color(0xFFFF6600),
-            title: 'Orange Money',
-            subtitle: 'Paiement par push USSD',
-          ),
-          _methodTile(
-            id: 'mtn_ci',
-            icon: Icons.phone_android_rounded,
-            color: const Color(0xFFFFCC00),
-            title: 'MTN Mobile Money',
-            subtitle: 'Paiement par push USSD',
-          ),
+          // ── Payment methods for selected country ──
+          const Text("Moyen de paiement", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          ..._selectedCountry.methods.map((method) => _methodTile(method)),
 
-          // Phone input for PawaPay methods
+          // ── Phone input (for mobile money methods) ──
           if (_needsPhone) ...[
-            const SizedBox(height: 16),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              style: const TextStyle(color: AppColors.textPrimary),
-              decoration: InputDecoration(
-                labelText: "Numéro de téléphone",
-                labelStyle: const TextStyle(color: AppColors.textSecondary),
-                hintText: "+225 07 XX XX XX XX",
-                hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.5)),
-                prefixIcon: const Icon(Icons.phone_rounded, color: AppColors.textSecondary),
-                filled: true,
-                fillColor: AppColors.surfaceLight,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 56,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${_selectedCountry.flag} +${_selectedCountry.dialCode}',
+                      style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      labelText: "Numéro de téléphone",
+                      labelStyle: const TextStyle(color: AppColors.textSecondary),
+                      hintText: 'X' * _selectedCountry.localDigits,
+                      hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.4)),
+                      filled: true,
+                      fillColor: AppColors.surfaceLight,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
 
@@ -756,7 +784,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                 elevation: 0,
               ),
               child: Text(
-                _selectedMethod == null ? "Sélectionnez un moyen" : "Confirmer le paiement",
+                _selectedMethod == null ? "Sélectionnez un moyen" : "Payer avec ${_selectedMethod!.name}",
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               ),
             ),
@@ -766,16 +794,13 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
     );
   }
 
-  Widget _methodTile({
-    required String id,
-    required IconData icon,
-    required Color color,
-    required String title,
-    required String subtitle,
-  }) {
-    final isSelected = _selectedMethod == id;
+  Widget _methodTile(PaymentMethod method) {
+    final isSelected = _selectedMethod?.id == method.id;
+    final color = Color(method.color);
+    final icon = method.icon == 'waves' ? Icons.waves_rounded : Icons.phone_android_rounded;
+
     return GestureDetector(
-      onTap: () => setState(() => _selectedMethod = id),
+      onTap: () => setState(() => _selectedMethod = method),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(14),
@@ -802,8 +827,11 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: TextStyle(color: isSelected ? AppColors.textPrimary : AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600)),
-                  Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                  Text(method.name, style: TextStyle(color: isSelected ? AppColors.textPrimary : AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text(
+                    method.isWave ? 'Paiement instantané via Wave' : 'Push USSD sur votre téléphone',
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  ),
                 ],
               ),
             ),
@@ -816,34 +844,95 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
   }
 
   void _onConfirm() {
-    if (_selectedMethod == 'wave') {
+    final method = _selectedMethod!;
+
+    if (method.isWave) {
       widget.onPay(PaymentProvider.wave);
-    } else {
-      final phone = _phoneController.text.trim();
-      if (phone.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Veuillez entrer votre numéro de téléphone"),
-            backgroundColor: AppColors.error,
-          ),
-        );
-        return;
-      }
-      if (!AppConstants.isValidIvoryCoastPhone(phone)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Numéro invalide. Format: 07 XX XX XX XX"),
-            backgroundColor: AppColors.error,
-          ),
-        );
-        return;
-      }
-      widget.onPay(
-        PaymentProvider.pawapay,
-        phone: phone,
-        correspondent: _selectedMethod!,
-      );
+      return;
     }
+
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Veuillez entrer votre numéro de téléphone"), backgroundColor: AppColors.error),
+      );
+      return;
+    }
+    if (!AppConstants.isValidPhone(phone, _selectedCountry)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Numéro invalide pour ${_selectedCountry.name} (${_selectedCountry.localDigits} chiffres attendus)"),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+    final formatted = AppConstants.formatPhoneForPawapay(phone, countryCode: _selectedCountry.dialCode);
+    widget.onPay(
+      PaymentProvider.pawapay,
+      phone: formatted,
+      correspondent: method.correspondent!,
+    );
+  }
+
+  void _showCountryPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.85,
+        minChildSize: 0.4,
+        expand: false,
+        builder: (ctx, scrollController) => Column(
+          children: [
+            const SizedBox(height: 8),
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text("Choisir votre pays", style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                itemCount: AppConstants.supportedCountries.length,
+                itemBuilder: (ctx, i) {
+                  final country = AppConstants.supportedCountries[i];
+                  final isSelected = country.code == _selectedCountry.code;
+                  return ListTile(
+                    leading: Text(country.flag, style: const TextStyle(fontSize: 24)),
+                    title: Text(country.name, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+                    subtitle: Text(
+                      country.methods.map((m) => m.name).join(' · '),
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                    ),
+                    trailing: Text('+${country.dialCode}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    selected: isSelected,
+                    selectedTileColor: AppColors.gold.withValues(alpha: 0.08),
+                    onTap: () {
+                      setState(() {
+                        _selectedCountry = country;
+                        _selectedMethod = null;
+                        _phoneController.clear();
+                      });
+                      Navigator.pop(ctx);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

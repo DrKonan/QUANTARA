@@ -39,19 +39,22 @@ class TodayMatch {
       ).toList();
   bool get hasOfficialPredictions => officialPredictions.isNotEmpty;
 
-  /// Tendances: pre-lineup signals ≥80% (shown as hints before compo)
+  /// Tendances: predictions between 70% and 79% — shown when no official prono is available.
+  /// NOT counted in history or winrate.
+  static const double tendanceMinConfidence = 0.70;
   List<TodayPrediction> get tendancePredictions {
-    final list = predictions.where((p) =>
-      (p.confidence ?? 0) >= minConfidence && !p.isRefined && !p.isLive
-    ).toList()
+    final list = predictions.where((p) {
+      final c = p.confidence ?? 0;
+      return c >= tendanceMinConfidence && c < minConfidence;
+    }).toList()
       ..sort((a, b) => (b.confidence ?? 0).compareTo(a.confidence ?? 0));
-    return list.take(2).toList(); // Max 2 tendances
+    return list.take(3).toList();
   }
   bool get hasTendances => tendancePredictions.isNotEmpty;
 
-  /// Everything visible to the user (official + tendances depending on state)
+  /// Everything visible to the user (official + tendances as fallback)
   bool get hasVisibleContent =>
-      hasOfficialPredictions || (!hasLineup && hasTendances);
+      hasOfficialPredictions || hasTendances;
 
   List<TodayPrediction> get topPicks => predictions.where((p) => p.isTopPick).toList();
   List<TodayPrediction> get otherPredictions => predictions.where((p) => !p.isTopPick).toList();
@@ -64,7 +67,7 @@ class TodayMatch {
   /// Best visible prediction (official if available, else best tendance)
   TodayPrediction? get bestVisiblePrediction {
     if (hasOfficialPredictions) return bestTopPick ?? officialPredictions.first;
-    if (!hasLineup && hasTendances) return tendancePredictions.first;
+    if (hasTendances) return tendancePredictions.first;
     return null;
   }
 

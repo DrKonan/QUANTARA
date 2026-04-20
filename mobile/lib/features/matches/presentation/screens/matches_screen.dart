@@ -41,7 +41,7 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> with SingleTicker
         child: RefreshIndicator(
           color: AppColors.gold,
           backgroundColor: AppColors.surface,
-          onRefresh: () async => ref.invalidate(todayEligibleMatchesProvider),
+          onRefresh: () => ref.refresh(todayEligibleMatchesProvider.future),
           child: NestedScrollView(
             headerSliverBuilder: (context, _) => [
               SliverToBoxAdapter(
@@ -133,91 +133,96 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> with SingleTicker
   }
 
   Widget _buildMatchList(AsyncValue<List<TodayMatch>> matchesAsync, {required bool isFinished}) {
-    return matchesAsync.when(
-      data: (allMatches) {
-        final filtered = _search.isEmpty
-            ? allMatches
-            : allMatches.where((m) {
-                final q = _search;
-                return m.match.homeTeam.name.toLowerCase().contains(q) ||
-                    m.match.awayTeam.name.toLowerCase().contains(q) ||
-                    m.match.league.name.toLowerCase().contains(q) ||
-                    m.match.league.country.toLowerCase().contains(q);
-              }).toList();
+    // Always show data if available (even during background refresh) → silent refresh
+    if (matchesAsync.hasValue) {
+      final allMatches = matchesAsync.value!;
+      final filtered = _search.isEmpty
+          ? allMatches
+          : allMatches.where((m) {
+              final q = _search;
+              return m.match.homeTeam.name.toLowerCase().contains(q) ||
+                  m.match.awayTeam.name.toLowerCase().contains(q) ||
+                  m.match.league.name.toLowerCase().contains(q) ||
+                  m.match.league.country.toLowerCase().contains(q);
+            }).toList();
 
-        if (filtered.isEmpty && _search.isNotEmpty) return _buildNoResults();
-        if (filtered.isEmpty) {
-          return isFinished ? _buildEmptyFinished() : _buildEmpty();
-        }
+      if (filtered.isEmpty && _search.isNotEmpty) return _buildNoResults();
+      if (filtered.isEmpty) {
+        return isFinished ? _buildEmptyFinished() : _buildEmpty();
+      }
 
-        final live = filtered.where((m) => m.isLive).length;
-        final withPred = filtered.where((m) => m.hasOfficialPredictions).length;
-        final groups = _groupByCategoryCountryLeague(filtered);
+      final live = filtered.where((m) => m.isLive).length;
+      final withPred = filtered.where((m) => m.hasOfficialPredictions).length;
+      final groups = _groupByCategoryCountryLeague(filtered);
 
-        return CustomScrollView(
-          slivers: [
-            // Summary badges
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Wrap(
-                  spacing: 8,
-                  children: [
-                    _badge("${filtered.length} matchs", AppColors.textSecondary),
-                    if (live > 0) _badge("$live LIVE", AppColors.error),
-                    if (withPred > 0) _badge("$withPred pronos", AppColors.emerald),
-                    if (isFinished) ...[
-                      _badge(
-                        "${filtered.where((m) => m.officialPredictions.any((p) => p.isCorrect == true)).length} \u2705",
-                        AppColors.success,
-                      ),
-                    ],
+      return CustomScrollView(
+        key: PageStorageKey(isFinished ? 'finished_matches' : 'active_matches'),
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  _badge("${filtered.length} matchs", AppColors.textSecondary),
+                  if (live > 0) _badge("$live LIVE", AppColors.error),
+                  if (withPred > 0) _badge("$withPred pronos", AppColors.emerald),
+                  if (isFinished) ...[
+                    _badge(
+                      "${filtered.where((m) => m.officialPredictions.any((p) => p.isCorrect == true)).length} \u2705",
+                      AppColors.success,
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
-            // Category → Country → League → Matches
-            ...groups.expand((cat) => [
-              SliverToBoxAdapter(child: _CategoryHeader(group: cat)),
-              ...cat.countries.expand((country) => [
-                SliverToBoxAdapter(child: _CountryHeader(group: country)),
-                ...country.leagues.expand((league) => [
-                  SliverToBoxAdapter(child: _LeagueSubHeader(league: league)),
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (ctx, i) => _MatchTile(todayMatch: league.matches[i]),
-                        childCount: league.matches.length,
-                      ),
+          ),
+          ...groups.expand((cat) => [
+            SliverToBoxAdapter(child: _CategoryHeader(group: cat)),
+            ...cat.countries.expand((country) => [
+              SliverToBoxAdapter(child: _CountryHeader(group: country)),
+              ...country.leagues.expand((league) => [
+                SliverToBoxAdapter(child: _LeagueSubHeader(league: league)),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (ctx, i) => _MatchTile(todayMatch: league.matches[i]),
+                      childCount: league.matches.length,
                     ),
                   ),
-                ]),
+                ),
               ]),
             ]),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          ]),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        ],
+      );
+    }
+
+    // First load only — no previous data yet
+    if (matchesAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.gold));
+    }
+
+    // Error with no cached data
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.wifi_off_rounded, color: AppColors.textSecondary, size: 40),
+            const SizedBox(height: 12),
+            const Text("Erreur de chargement", style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: () => ref.invalidate(todayEligibleMatchesProvider),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text("R\u00e9essayer"),
+              style: TextButton.styleFrom(foregroundColor: AppColors.gold),
+            ),
           ],
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator(color: AppColors.gold)),
-      error: (e, st) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.wifi_off_rounded, color: AppColors.textSecondary, size: 40),
-              const SizedBox(height: 12),
-              const Text("Erreur de chargement", style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
-              const SizedBox(height: 16),
-              TextButton.icon(
-                onPressed: () => ref.invalidate(todayEligibleMatchesProvider),
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text("R\u00e9essayer"),
-                style: TextButton.styleFrom(foregroundColor: AppColors.gold),
-              ),
-            ],
-          ),
         ),
       ),
     );

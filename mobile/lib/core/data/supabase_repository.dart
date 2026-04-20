@@ -304,8 +304,8 @@ class SupabaseRepository {
     return (data as List).map((json) => _parsePrediction(json)).toList();
   }
 
-  Future<List<Prediction>> fetchRecentResults({int limit = 50}) async {
-    // Only fetch official predictions (refined top picks ≥80% + live ≥80%) for history/winrate
+  Future<List<Prediction>> fetchRecentResults() async {
+    // Fetch ALL official predictions (refined top picks ≥80% + live ≥80%) — no limit
     final topPickData = await _client
         .from('predictions')
         .select('*, matches!inner(*)')
@@ -314,8 +314,7 @@ class SupabaseRepository {
         .eq('is_refined', true)
         .gte('confidence', 0.80)
         .not('is_correct', 'is', null)
-        .order('created_at', ascending: false)
-        .limit(limit);
+        .order('created_at', ascending: false);
 
     final liveData = await _client
         .from('predictions')
@@ -324,10 +323,9 @@ class SupabaseRepository {
         .eq('is_live', true)
         .gte('confidence', 0.80)
         .not('is_correct', 'is', null)
-        .order('created_at', ascending: false)
-        .limit(limit);
+        .order('created_at', ascending: false);
 
-    // Merge & deduplicate by id, sort by created_at desc
+    // Merge & deduplicate by id, sort by match date (kick_off) desc
     final allRows = <String, Map<String, dynamic>>{};
     for (final row in (topPickData as List)) {
       allRows[row['id'].toString()] = row as Map<String, dynamic>;
@@ -336,9 +334,15 @@ class SupabaseRepository {
       allRows[row['id'].toString()] = row as Map<String, dynamic>;
     }
     final merged = allRows.values.toList()
-      ..sort((a, b) => (b['created_at'] as String).compareTo(a['created_at'] as String));
+      ..sort((a, b) {
+        final matchA = a['matches'] as Map<String, dynamic>?;
+        final matchB = b['matches'] as Map<String, dynamic>?;
+        final dateA = matchA?['kick_off'] as String? ?? a['created_at'] as String;
+        final dateB = matchB?['kick_off'] as String? ?? b['created_at'] as String;
+        return dateB.compareTo(dateA);
+      });
 
-    return merged.take(limit).map((json) => _parsePrediction(json)).toList();
+    return merged.map((json) => _parsePrediction(json)).toList();
   }
 
   // ── Stats ──

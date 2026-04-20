@@ -17,7 +17,7 @@ class ProfileScreen extends ConsumerWidget {
         child: RefreshIndicator(
           color: AppColors.gold,
           backgroundColor: AppColors.surface,
-          onRefresh: () async => ref.invalidate(userProfileProvider),
+          onRefresh: () => ref.refresh(userProfileProvider.future),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16),

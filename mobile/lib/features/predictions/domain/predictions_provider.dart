@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/data/supabase_repository.dart';
+import '../../../core/services/notification_service.dart';
 import 'combo_prediction_model.dart';
 import 'match_model.dart';
 import 'prediction_model.dart';
@@ -61,6 +62,32 @@ final _dailyResponseProvider = FutureProvider<DailyResponse>((ref) async {
       '(${result.matches.where((m) => m.isLive).length} live, '
       '${result.matches.where((m) => !m.isEffectivelyFinished && !m.isLive && m.minutesUntilKickoff <= 60 && m.minutesUntilKickoff > 0).length} pre-KO)');
 
+  // Trigger local notifications for new predictions & combos
+  final notifService = NotificationService();
+  final allPredictions = <Map<String, dynamic>>[];
+  for (final m in result.matches) {
+    for (final p in m.officialPredictions) {
+      allPredictions.add({
+        'id': '${m.match.id}_${p.predictionType}_${p.id}',
+        'match': {'home_team': m.match.homeTeam.name, 'away_team': m.match.awayTeam.name},
+      });
+    }
+    if (m.isLive) {
+      for (final p in m.officialPredictions) {
+        notifService.notifyLivePrediction({
+          'id': 'live_${m.match.id}_${p.id}',
+          'match': {'home_team': m.match.homeTeam.name, 'away_team': m.match.awayTeam.name},
+        });
+      }
+    }
+  }
+  notifService.notifyNewPredictions(allPredictions);
+  if (result.combos.isNotEmpty) {
+    notifService.notifyCombosAvailable(
+      result.combos.map((c) => {'id': c.id.toString()}).toList(),
+    );
+  }
+
   final timer = Timer(interval, () {
     debugPrint('[Quantara] Auto-refresh daily data (adaptive)');
     ref.invalidateSelf();
@@ -85,17 +112,25 @@ final todayCombosProvider = FutureProvider<List<ComboPrediction>>((ref) async {
 });
 
 /// Active matches only (upcoming + live, excluding finished/effectively finished)
+/// Uses hasValue check to always show previous data during refresh (silent refresh).
 final activeMatchesProvider = Provider<AsyncValue<List<TodayMatch>>>((ref) {
-  return ref.watch(todayEligibleMatchesProvider).whenData(
-    (all) => all.where((m) => !m.isEffectivelyFinished).toList(),
-  );
+  final async = ref.watch(todayEligibleMatchesProvider);
+  if (async.hasValue) {
+    return AsyncData(async.value!.where((m) => !m.isEffectivelyFinished).toList());
+  }
+  if (async.isLoading) return const AsyncLoading();
+  return AsyncError(async.error!, async.stackTrace ?? StackTrace.empty);
 });
 
 /// Finished matches only (status=finished or effectively finished)
+/// Uses hasValue check to always show previous data during refresh (silent refresh).
 final finishedMatchesProvider = Provider<AsyncValue<List<TodayMatch>>>((ref) {
-  return ref.watch(todayEligibleMatchesProvider).whenData(
-    (all) => all.where((m) => m.isEffectivelyFinished).toList(),
-  );
+  final async = ref.watch(todayEligibleMatchesProvider);
+  if (async.hasValue) {
+    return AsyncData(async.value!.where((m) => m.isEffectivelyFinished).toList());
+  }
+  if (async.isLoading) return const AsyncLoading();
+  return AsyncError(async.error!, async.stackTrace ?? StackTrace.empty);
 });
 
 // ── Home data: live predictions + today predictions + stats ──

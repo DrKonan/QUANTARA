@@ -85,15 +85,12 @@ class PaymentService {
       'provider': provider == PaymentProvider.wave ? 'wave' : 'pawapay',
     };
 
-    // Format phone number for PawaPay
+    // Phone for PawaPay (already formatted as MSISDN by the UI)
     if (provider == PaymentProvider.pawapay) {
       if (phone == null || phone.trim().isEmpty) {
         throw Exception('Numéro de téléphone requis pour le paiement mobile');
       }
-      if (!AppConstants.isValidIvoryCoastPhone(phone)) {
-        throw Exception('Numéro de téléphone invalide. Format attendu: 07 XX XX XX XX');
-      }
-      body['phone'] = AppConstants.formatPhoneForPawapay(phone);
+      body['phone'] = phone;
       body['correspondent'] = correspondent;
     }
 

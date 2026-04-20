@@ -18,17 +18,53 @@ const PLAN_DURATIONS: Record<string, number> = {
   vip: 30,
 };
 
-// PawaPay correspondents for Côte d'Ivoire
-const PAWAPAY_CORRESPONDENTS: Record<string, string> = {
-  orange_ci: "ORANGE_CIV",
-  mtn_ci: "MTN_MOMO_CIV",
-};
+// Valid PawaPay correspondent codes (app sends these directly)
+const VALID_CORRESPONDENTS = new Set([
+  // Côte d'Ivoire (XOF)
+  "ORANGE_CIV", "MTN_MOMO_CIV",
+  // Sénégal (XOF)
+  "ORANGE_SEN", "FREE_SEN",
+  // Mali (XOF)
+  "ORANGE_MLI", "MOOV_MLI",
+  // Burkina Faso (XOF)
+  "ORANGE_BFA", "MOOV_BFA",
+  // Bénin (XOF)
+  "MTN_MOMO_BEN", "MOOV_BEN",
+  // Togo (XOF)
+  "MOOV_TGO",
+  // Niger (XOF)
+  "AIRTEL_NER",
+  // Guinée (GNF)
+  "ORANGE_GIN", "MTN_MOMO_GIN",
+  // Cameroun (XAF)
+  "ORANGE_CMR", "MTN_MOMO_CMR",
+  // Gabon (XAF)
+  "AIRTEL_GAB",
+  // Congo-Brazzaville (XAF)
+  "MTN_MOMO_COG", "AIRTEL_COG",
+  // RD Congo (CDF)
+  "VODACOM_COD", "ORANGE_COD", "AIRTEL_COD",
+]);
+
+// Map correspondent to currency
+function getCurrencyForCorrespondent(correspondent: string): string {
+  if (correspondent.endsWith("_CMR") || correspondent.endsWith("_GAB") || correspondent.endsWith("_COG")) {
+    return "XAF";
+  }
+  if (correspondent.endsWith("_COD")) {
+    return "CDF";
+  }
+  if (correspondent.endsWith("_GIN")) {
+    return "GNF";
+  }
+  return "XOF"; // UEMOA countries
+}
 
 interface CreatePaymentRequest {
   plan: string;          // 'starter' | 'pro' | 'vip'
   provider: string;      // 'wave' | 'pawapay'
   phone?: string;        // Required for PawaPay (MSISDN format)
-  correspondent?: string; // 'orange_ci' | 'mtn_ci' — required for PawaPay
+  correspondent?: string; // PawaPay correspondent code (e.g. 'ORANGE_CIV', 'MTN_MOMO_CMR')
 }
 
 Deno.serve(async (req: Request) => {
@@ -169,8 +205,8 @@ async function handlePawapayPayment(
   if (!phone) {
     return jsonResponse({ error: "Phone number required for PawaPay" }, 400);
   }
-  if (!correspondentKey || !PAWAPAY_CORRESPONDENTS[correspondentKey]) {
-    return jsonResponse({ error: "Invalid correspondent. Use: orange_ci or mtn_ci" }, 400);
+  if (!correspondentKey || !VALID_CORRESPONDENTS.has(correspondentKey)) {
+    return jsonResponse({ error: `Invalid correspondent: ${correspondentKey}` }, 400);
   }
 
   const pawapayToken = Deno.env.get("PAWAPAY_API_TOKEN");
@@ -181,13 +217,14 @@ async function handlePawapayPayment(
     return jsonResponse({ error: "PawaPay not configured" }, 500);
   }
 
-  const correspondent = PAWAPAY_CORRESPONDENTS[correspondentKey];
+  const correspondent = correspondentKey;
+  const currency = getCurrencyForCorrespondent(correspondent);
   const msisdn = phone.startsWith("+") ? phone.slice(1) : phone.replace(/\s/g, "");
 
   const depositPayload = {
     depositId: paymentId,
     amount: amount.toString(),
-    currency: "XOF",
+    currency,
     correspondent,
     payer: {
       type: "MSISDN",
@@ -222,7 +259,7 @@ async function handlePawapayPayment(
     external_id: paymentId,
     plan,
     amount,
-    currency: "XOF",
+    currency,
     correspondent,
     status: ppData.status === "ACCEPTED" ? "submitted" : "pending",
   });

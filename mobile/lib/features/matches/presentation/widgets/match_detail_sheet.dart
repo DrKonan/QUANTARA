@@ -261,10 +261,12 @@ class _MatchDetailSheetState extends ConsumerState<MatchDetailSheet> {
       return _buildOfficialSection(home, away);
     }
 
-    // ── PRE-COMPO: show tendances if available ──
-    if (!todayMatch.hasLineup && todayMatch.hasTendances) {
-      return [
-        _buildWaitingCard(),
+    // ── No official prono (≥80%) available — show contextual message + tendances ──
+    final widgets = <Widget>[_buildNoOfficialPronoCard()];
+
+    // Show tendances (70-79%) as fallback hints
+    if (todayMatch.hasTendances) {
+      widgets.addAll([
         const SizedBox(height: 16),
         Row(
           children: [
@@ -272,24 +274,55 @@ class _MatchDetailSheetState extends ConsumerState<MatchDetailSheet> {
             const SizedBox(width: 8),
             const Expanded(
               child: Text(
-                "Tendances fortes détectées",
+                "Tendances détectées",
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                "70-79%",
+                style: TextStyle(color: AppColors.warning, fontSize: 10, fontWeight: FontWeight.w700),
               ),
             ),
           ],
         ),
         const SizedBox(height: 4),
         const Text(
-          "Sera confirmé ou ajusté avec les compositions officielles",
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+          "Confiance insuffisante pour le coupon officiel, mais notre IA a détecté des signaux intéressants.",
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 11, height: 1.5),
         ),
         const SizedBox(height: 10),
         ...todayMatch.tendancePredictions.map((p) => _buildHintTile(p, home, away)),
-      ];
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.warning.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.warning.withValues(alpha: 0.15)),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.info_outline_rounded, color: AppColors.warning, size: 14),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Les tendances ne comptent pas dans l'historique ni le winrate.",
+                  style: TextStyle(color: AppColors.warning, fontSize: 10, height: 1.4),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ]);
     }
 
-    // ── No prediction available yet ──
-    return [_buildWaitingCard()];
+    return widgets;
   }
 
   /// Build the official "Notre Pronostic" section (post-compo / live)
@@ -503,29 +536,49 @@ class _MatchDetailSheetState extends ConsumerState<MatchDetailSheet> {
     );
   }
 
-  Widget _buildWaitingCard() {
-    final status = todayMatch.predictionStatus;
+  /// Contextual card explaining why no official prono (≥80%) is available
+  Widget _buildNoOfficialPronoCard() {
     IconData icon;
     Color color;
     String title;
+    String message;
 
-    switch (status) {
-      case 'generating':
-        icon = Icons.autorenew_rounded;
-        color = AppColors.gold;
-        title = "Génération en cours";
-      case 'pending_live':
-        icon = Icons.autorenew_rounded;
-        color = AppColors.warning;
-        title = "Analyse live en cours";
-      case 'waiting_lineups':
-        icon = Icons.people_rounded;
-        color = AppColors.info;
-        title = "En attente des compositions";
-      default:
-        icon = Icons.schedule_rounded;
-        color = AppColors.textSecondary;
-        title = "Prédiction pas encore disponible";
+    if (todayMatch.isLive) {
+      // Match is live but no prediction reached 80%
+      icon = Icons.manage_search_rounded;
+      color = AppColors.warning;
+      title = "Recherche de prono en cours";
+      message = "Le match est en direct. Notre IA analyse la physionomie "
+          "du jeu en temps réel à la recherche d'un pronostic avec "
+          "au moins 80% de confiance. Restez connecté !";
+    } else if (todayMatch.hasLineup) {
+      // Has lineups but nothing strong enough
+      icon = Icons.analytics_outlined;
+      color = AppColors.info;
+      title = "Aucun prono à 80%+ disponible";
+      message = "Les compositions officielles sont connues, mais l'analyse "
+          "n'a pas encore trouvé de pari avec au moins 80% de confiance. "
+          "Un pronostic live pourrait émerger en cours de match.";
+    } else if (todayMatch.predictionStatus == 'generating') {
+      icon = Icons.autorenew_rounded;
+      color = AppColors.gold;
+      title = "Génération en cours";
+      message = "Notre IA est en train d'analyser ce match. "
+          "Les pronostics seront disponibles dans quelques instants.";
+    } else if (todayMatch.predictionStatus == 'waiting_lineups') {
+      icon = Icons.people_rounded;
+      color = AppColors.info;
+      title = "En attente des compositions";
+      message = "Les compositions officielles ne sont pas encore publiées. "
+          "Dès qu'elles seront connues, notre IA affinera son analyse "
+          "et pourra potentiellement proposer un pronostic à 80%+.";
+    } else {
+      // Default: too early or no data yet
+      icon = Icons.schedule_rounded;
+      color = AppColors.textSecondary;
+      title = "Analyse pas encore disponible";
+      message = "Ce match est encore loin. Notre IA lancera l'analyse "
+          "complète à l'approche du coup d'envoi.";
     }
 
     return Container(
@@ -547,11 +600,12 @@ class _MatchDetailSheetState extends ConsumerState<MatchDetailSheet> {
           const SizedBox(height: 14),
           Text(
             title,
+            textAlign: TextAlign.center,
             style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           Text(
-            todayMatch.predictionMessage,
+            message,
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.5),
           ),
@@ -569,11 +623,18 @@ class _MatchDetailSheetState extends ConsumerState<MatchDetailSheet> {
               ),
             ),
           ],
-          const SizedBox(height: 16),
-          const Text(
-            "Notre IA analyse les compositions officielles,\nles statistiques et la forme des équipes\npour générer des prédictions fiables.",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 11, height: 1.6),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.gold.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text(
+              "💡 Seuls les pronostics à 80%+ de confiance sont retenus pour le coupon officiel.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.gold, fontSize: 11, height: 1.5),
+            ),
           ),
         ],
       ),

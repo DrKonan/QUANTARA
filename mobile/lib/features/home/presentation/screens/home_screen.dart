@@ -32,10 +32,12 @@ class HomeScreen extends ConsumerWidget {
           color: AppColors.gold,
           backgroundColor: AppColors.surface,
           onRefresh: () async {
-            ref.invalidate(todayEligibleMatchesProvider);
-            ref.invalidate(todayCombosProvider);
-            ref.invalidate(monthlyStatsProvider);
-            ref.invalidate(userProfileProvider);
+            await Future.wait([
+              ref.refresh(todayEligibleMatchesProvider.future),
+              ref.refresh(todayCombosProvider.future),
+              ref.refresh(monthlyStatsProvider.future),
+              ref.refresh(userProfileProvider.future),
+            ]);
           },
           child: CustomScrollView(
             slivers: [
@@ -46,20 +48,24 @@ class HomeScreen extends ConsumerWidget {
                   child: StatsCard(),
                 ),
               ),
-              matchesAsync.when(
-                data: (activeMatches) {
+              // Matches — silent refresh: always show data if available
+              if (matchesAsync.hasValue) ...[
+                Builder(builder: (context) {
+                  final activeMatches = matchesAsync.value!;
                   final finishedCount = allMatchesAsync.whenOrNull(
                     data: (all) => all.where((m) => m.isEffectivelyFinished).length,
                   ) ?? 0;
                   return _buildContent(context, activeMatches, finishedCount);
-                },
-                loading: () => const SliverToBoxAdapter(
+                }),
+              ] else if (matchesAsync.isLoading) ...[
+                const SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.all(40),
                     child: Center(child: CircularProgressIndicator(color: AppColors.gold)),
                   ),
                 ),
-                error: (e, st) => SliverToBoxAdapter(
+              ] else ...[
+                SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
@@ -70,35 +76,21 @@ class HomeScreen extends ConsumerWidget {
                           "Impossible de charger les matchs",
                           style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          e.toString(),
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
                         const SizedBox(height: 12),
                         TextButton.icon(
                           onPressed: () => ref.invalidate(todayEligibleMatchesProvider),
                           icon: const Icon(Icons.refresh_rounded, size: 16),
-                          label: const Text("R\u00e9essayer"),
+                          label: const Text("Réessayer"),
                           style: TextButton.styleFrom(foregroundColor: AppColors.gold),
                         ),
                       ],
                     ),
                   ),
                 ),
-              ),
-              // Combos section
-              combosAsync.when(
-                data: (combos) {
-                  if (combos.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
-                  return _buildCombosSection(context, combos, userProfile);
-                },
-                loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
-                error: (_, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
-              ),
+              ],
+              // Combos section — silent refresh
+              if (combosAsync.hasValue && combosAsync.value!.isNotEmpty)
+                _buildCombosSection(context, combosAsync.value!, userProfile),
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
             ],
           ),

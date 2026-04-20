@@ -9,6 +9,7 @@ const _kMaster = 'notif_master';
 const _kPredictions = 'notif_predictions';
 const _kResults = 'notif_results';
 const _kLive = 'notif_live';
+const _kCombos = 'notif_combos';
 const _kPromos = 'notif_promos';
 
 final _notifPrefsProvider = FutureProvider<Map<String, bool>>((ref) async {
@@ -18,6 +19,7 @@ final _notifPrefsProvider = FutureProvider<Map<String, bool>>((ref) async {
     _kPredictions: prefs.getBool(_kPredictions) ?? true,
     _kResults: prefs.getBool(_kResults) ?? true,
     _kLive: prefs.getBool(_kLive) ?? true,
+    _kCombos: prefs.getBool(_kCombos) ?? true,
     _kPromos: prefs.getBool(_kPromos) ?? false,
   };
 });
@@ -36,6 +38,7 @@ class _NotificationSettingsScreenState
   bool _predictions = true;
   bool _results = true;
   bool _live = true;
+  bool _combos = true;
   bool _promos = false;
   bool _loaded = false;
 
@@ -53,6 +56,7 @@ class _NotificationSettingsScreenState
       _predictions = prefs.getBool(_kPredictions) ?? true;
       _results = prefs.getBool(_kResults) ?? true;
       _live = prefs.getBool(_kLive) ?? true;
+      _combos = prefs.getBool(_kCombos) ?? true;
       _promos = prefs.getBool(_kPromos) ?? false;
       _loaded = true;
     });
@@ -168,6 +172,16 @@ class _NotificationSettingsScreenState
                             value: _live,
                             onChanged: (v) => _toggle(
                                 _kLive, v, (val) => setState(() => _live = val)),
+                          ),
+
+                          _buildToggleTile(
+                            icon: Icons.layers_rounded,
+                            iconColor: AppColors.gold,
+                            title: "Combinaisons",
+                            subtitle: "Quand un combo est disponible",
+                            value: _combos,
+                            onChanged: (v) => _toggle(
+                                _kCombos, v, (val) => setState(() => _combos = val)),
                           ),
 
                           _buildToggleTile(
