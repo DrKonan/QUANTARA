@@ -17,6 +17,7 @@ import '../../features/profile/presentation/screens/change_password_screen.dart'
 import '../../features/profile/presentation/screens/privacy_policy_screen.dart';
 import '../../features/profile/presentation/screens/help_support_screen.dart';
 import '../../features/profile/presentation/screens/about_screen.dart';
+import '../../features/profile/presentation/screens/terms_of_service_screen.dart';
 import '../../features/subscription/presentation/screens/subscription_screen.dart';
 import '../../features/notifications/presentation/screens/notification_center_screen.dart';
 import '../../shared/widgets/main_shell.dart';
@@ -65,6 +66,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/profile/privacy', builder: (context, state) => const PrivacyPolicyScreen()),
       GoRoute(path: '/profile/help', builder: (context, state) => const HelpSupportScreen()),
       GoRoute(path: '/profile/about', builder: (context, state) => const AboutScreen()),
+      GoRoute(path: '/profile/terms', builder: (context, state) => const TermsOfServiceScreen()),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
         routes: [

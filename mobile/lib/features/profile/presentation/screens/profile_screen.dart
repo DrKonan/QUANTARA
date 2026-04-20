@@ -315,6 +315,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   title: "À propos de Quantara",
                   onTap: () => context.push('/profile/about'),
                 ),
+                _buildMenuItem(
+                  icon: Icons.gavel_rounded,
+                  title: "Conditions d'utilisation",
+                  subtitle: "CGU et mentions légales",
+                  onTap: () => context.push('/profile/terms'),
+                ),
 
                 const SizedBox(height: 16),
 

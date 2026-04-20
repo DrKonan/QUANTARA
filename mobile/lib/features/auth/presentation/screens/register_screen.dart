@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../domain/auth_provider.dart';
@@ -22,6 +23,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   PaymentCountry _selectedCountry = AppConstants.defaultCountry;
   bool _registered = false;
   bool _trialGranted = true;
+  bool _acceptedTerms = false;
   String? _previousContact;
 
   @override
@@ -292,12 +294,55 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ),
             const SizedBox(height: 28),
 
+            // Terms acceptance
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 24, height: 24,
+                  child: Checkbox(
+                    value: _acceptedTerms,
+                    onChanged: (v) => setState(() => _acceptedTerms = v ?? false),
+                    activeColor: AppColors.gold,
+                    side: BorderSide(color: AppColors.textSecondary.withValues(alpha: 0.4)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => context.push('/profile/terms'),
+                    child: Text.rich(
+                      TextSpan(
+                        text: "J'accepte les ",
+                        style: TextStyle(
+                          color: AppColors.textSecondary.withValues(alpha: 0.7),
+                          fontSize: 12,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: "Conditions d'utilisation",
+                            style: TextStyle(
+                              color: AppColors.gold,
+                              fontSize: 12,
+                              decoration: TextDecoration.underline,
+                              decorationColor: AppColors.gold.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
             // Register button
             SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: isLoading ? null : _register,
+                onPressed: isLoading || !_acceptedTerms ? null : _register,
                 child: isLoading
                     ? const SizedBox(
                         height: 22, width: 22,
