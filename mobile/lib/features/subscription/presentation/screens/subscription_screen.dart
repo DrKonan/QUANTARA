@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../auth/domain/auth_provider.dart';
 import '../../data/payment_service.dart';
 import '../../domain/subscription_provider.dart';
 
@@ -16,13 +17,13 @@ class SubscriptionScreen extends ConsumerStatefulWidget {
 class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   String _selectedPlan = AppConstants.planPro;
 
-  List<_Plan> get _plans {
+  List<_Plan> _plans(String currency) {
     return [
       _Plan(
         id: AppConstants.planStarter,
         label: "Starter",
         emoji: "⚽",
-        price: AppConstants.formatPrice(AppConstants.priceStarter, 'XOF'),
+        price: AppConstants.formatPrice(AppConstants.getPriceInCurrency(AppConstants.planStarter, currency), currency),
         subtitle: "5 matchs/jour · Football",
         duration: "/mois",
       ),
@@ -30,7 +31,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         id: AppConstants.planPro,
         label: "Pro",
         emoji: "🏆",
-        price: AppConstants.formatPrice(AppConstants.pricePro, 'XOF'),
+        price: AppConstants.formatPrice(AppConstants.getPriceInCurrency(AppConstants.planPro, currency), currency),
         subtitle: "15 matchs/jour · LIVE · 1 combo/jour",
         duration: "/mois",
         badge: "Recommandé",
@@ -39,7 +40,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         id: AppConstants.planVip,
         label: "VIP",
         emoji: "👑",
-        price: AppConstants.formatPrice(AppConstants.priceVip, 'XOF'),
+        price: AppConstants.formatPrice(AppConstants.getPriceInCurrency(AppConstants.planVip, currency), currency),
         subtitle: "Illimité · Tous sports · 3 combos/jour",
         duration: "/mois",
         badge: "Complet",
@@ -51,6 +52,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   Widget build(BuildContext context) {
     final paymentState = ref.watch(paymentNotifierProvider);
     final activeSub = ref.watch(activeSubscriptionProvider);
+    final currency = ref.watch(userCurrencyProvider);
 
     // If already premium, show active subscription info
     final sub = activeSub.valueOrNull;
@@ -69,7 +71,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                 child: Column(
                   children: [
                     const SizedBox(height: 16),
-                    _buildHero(),
+                    _buildHero(currency),
                     const SizedBox(height: 28),
 
                     _buildFeature(Icons.analytics_rounded, "Analyses complètes", "Pronos avec confiance ≥ 80% garantie"),
@@ -79,8 +81,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 
                     const SizedBox(height: 28),
 
-                    ...List.generate(_plans.length, (i) {
-                      final plan = _plans[i];
+                    ...List.generate(_plans(currency).length, (i) {
+                      final plan = _plans(currency)[i];
                       return _buildPlanCard(plan, _selectedPlan == plan.id);
                     }),
 
@@ -191,7 +193,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   }
 
   // ── Hero Section ──
-  Widget _buildHero() {
+  Widget _buildHero(String currency) {
+    final starterPrice = AppConstants.formatPrice(
+      AppConstants.getPriceInCurrency(AppConstants.planStarter, currency), currency);
     return Column(
       children: [
         Container(
@@ -212,7 +216,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          "Des pronos IA fiables\nà partir de ${AppConstants.formatPrice(AppConstants.priceStarter, 'XOF')}/mois",
+          "Des pronos IA fiables\nà partir de $starterPrice/mois",
           textAlign: TextAlign.center,
           style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
         ),
@@ -420,6 +424,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 
   // ── Payment Method Bottom Sheet ──
   void _showPaymentMethodSheet(BuildContext context) {
+    final profile = ref.read(userProfileProvider).valueOrNull;
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
@@ -429,6 +434,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       ),
       builder: (ctx) => _PaymentMethodSheet(
         selectedPlan: _selectedPlan,
+        userPhone: profile?.phone,
         onPay: (provider, {String? phone, String? correspondent, String? currency}) {
           Navigator.pop(ctx);
           _initiatePayment(provider, phone: phone, correspondent: correspondent, currency: currency);
@@ -660,18 +666,25 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 // ══════════════════════════════════════════════════════════════
 class _PaymentMethodSheet extends StatefulWidget {
   final String selectedPlan;
+  final String? userPhone;
   final void Function(PaymentProvider provider, {String? phone, String? correspondent, String? currency}) onPay;
 
-  const _PaymentMethodSheet({required this.selectedPlan, required this.onPay});
+  const _PaymentMethodSheet({required this.selectedPlan, required this.onPay, this.userPhone});
 
   @override
   State<_PaymentMethodSheet> createState() => _PaymentMethodSheetState();
 }
 
 class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
-  PaymentCountry _selectedCountry = AppConstants.defaultCountry;
+  late PaymentCountry _selectedCountry;
   PaymentMethod? _selectedMethod;
   final _phoneController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCountry = AppConstants.countryFromPhone(widget.userPhone) ?? AppConstants.defaultCountry;
+  }
 
   @override
   void dispose() {

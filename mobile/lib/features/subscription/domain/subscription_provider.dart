@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../auth/domain/auth_provider.dart';
 import '../data/payment_service.dart';
 
@@ -44,6 +45,12 @@ final hasComboAccessProvider = Provider<bool>((ref) {
 final hasLiveAccessProvider = Provider<bool>((ref) {
   final profile = ref.watch(userProfileProvider).valueOrNull;
   return profile?.hasLiveAccess ?? false;
+});
+
+// ── User currency (derived from phone country) ──
+final userCurrencyProvider = Provider<String>((ref) {
+  final profile = ref.watch(userProfileProvider).valueOrNull;
+  return AppConstants.currencyFromPhone(profile?.phone);
 });
 
 // ── Payment State ──

@@ -124,6 +124,29 @@ abstract class AppConstants {
     }
   }
 
+  /// Detect country from a phone number (with or without +).
+  /// Matches longest dial code first for accuracy.
+  static PaymentCountry? countryFromPhone(String? phone) {
+    if (phone == null || phone.isEmpty) return null;
+    final digits = phone.replaceAll(RegExp(r'[^\d]'), '');
+    // Try longest dial codes first (3 digits) then 2
+    for (final len in [3, 2]) {
+      if (digits.length < len) continue;
+      final prefix = digits.substring(0, len);
+      for (final country in supportedCountries) {
+        if (country.dialCode == prefix) return country;
+      }
+    }
+    return null;
+  }
+
+  /// Get currency from a phone number
+  static String currencyFromPhone(String? phone) {
+    final country = countryFromPhone(phone);
+    if (country == null) return 'XOF';
+    return currencyForCountry(country.code);
+  }
+
   // PawaPay correspondents (legacy keys)
   static const correspondentOrangeCi = 'orange_ci';
   static const correspondentMtnCi = 'mtn_ci';
