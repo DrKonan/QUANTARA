@@ -16,6 +16,7 @@ import {
   Zap,
   History,
   Layers,
+  LogOut,
 } from "lucide-react";
 
 const navItems = [
@@ -78,6 +79,7 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -86,8 +88,14 @@ export default function DashboardLayout({
   const isActive = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
 
+  async function handleLogout() {
+    setLoggingOut(true);
+    await fetch("/quantara/api/auth/logout", { method: "POST" });
+    window.location.href = "/quantara/login";
+  }
+
   return (
-    <div className="flex min-h-screen bg-[var(--bg-primary)]">
+    <div className="flex h-screen overflow-hidden bg-[var(--bg-primary)]">
       {/* Overlay mobile */}
       {sidebarOpen && (
         <div
@@ -96,11 +104,11 @@ export default function DashboardLayout({
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — fixe, ne scroll pas */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#0F0F1A] border-r border-white/[0.06] flex flex-col
           transform transition-transform duration-200 ease-out
-          lg:relative lg:translate-x-0
+          lg:sticky lg:top-0 lg:h-screen lg:translate-x-0
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
         {/* Logo */}
@@ -139,17 +147,27 @@ export default function DashboardLayout({
 
         <div className="p-4">
           <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-4" />
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-[#34D399] live-pulse" />
-            <p className="text-xs text-[#6B6B80]">v1.2 — Pipeline actif</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-[#34D399] live-pulse" />
+              <p className="text-xs text-[#6B6B80]">v1.2 — Pipeline actif</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="p-2 rounded-lg text-[#6B6B80] hover:text-[#F87171] hover:bg-[#F87171]/10 transition-all disabled:opacity-50"
+              title="Déconnexion"
+            >
+              <LogOut size={16} />
+            </button>
           </div>
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main content — scrollable */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Topbar mobile */}
-        <header className="lg:hidden flex items-center gap-3 p-4 border-b border-white/[0.06] bg-[var(--bg-primary)]">
+        <header className="lg:hidden flex items-center gap-3 p-4 border-b border-white/[0.06] bg-[var(--bg-primary)] shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-[#6B6B80] hover:text-white transition-colors"
@@ -163,7 +181,7 @@ export default function DashboardLayout({
             <h1 className="text-lg font-bold text-gold-gradient">Quantara</h1>
           </div>
         </header>
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );
