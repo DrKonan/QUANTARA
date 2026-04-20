@@ -20,6 +20,8 @@ interface MatchWithPredictions {
   away_team: string;
   league: string;
   league_id: number;
+  league_country: string | null;
+  tier: number;
   match_date: string;
   status: string;
   home_score: number | null;
@@ -68,7 +70,7 @@ async function getDashboardStats() {
       const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
       return supabase
         .from("matches")
-        .select("id, home_team, away_team, league, league_id, match_date, status, home_score, away_score")
+        .select("id, home_team, away_team, league, league_id, league_country, tier, match_date, status, home_score, away_score")
         .gte("match_date", `${today}T06:00:00+00:00`)
         .lte("match_date", `${tomorrow}T05:59:59+00:00`)
         .not("status", "eq", "cancelled")
@@ -101,11 +103,11 @@ async function getDashboardStats() {
 
   // Enrich matches — exclut les terminés sans prono (inutiles dans l'admin)
   const enrichedMatches: MatchWithPredictions[] = (todayMatches ?? [])
-    .map((m: { id: number; home_team: string; away_team: string; league: string; league_id: number; match_date: string; status: string; home_score: number | null; away_score: number | null }) => ({
+    .map((m: { id: number; home_team: string; away_team: string; league: string; league_id: number; league_country: string | null; tier: number; match_date: string; status: string; home_score: number | null; away_score: number | null }) => ({
       ...m,
       prediction_count: predCountMap.get(m.id) ?? 0,
       category: leagueMap.get(m.league_id)?.category ?? "other",
-      country: leagueMap.get(m.league_id)?.country ?? "",
+      country: m.league_country ?? leagueMap.get(m.league_id)?.country ?? "",
     }))
     .filter((m) => !(m.status === "finished" && m.prediction_count === 0));
 
@@ -322,7 +324,7 @@ function MatchCard({ match }: { match: MatchWithPredictions }) {
   return (
     <div className={`glass-card p-4 animate-fade-up ${isLive ? "border-[#F87171]/30" : ""}`}>
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-[#6B6B80] truncate">{match.league}{match.country ? ` · ${match.country}` : ""}</span>
+        <span className="text-xs text-[#6B6B80] truncate">{match.league}{match.country ? ` · ${match.country}` : ""}{match.tier === 3 ? " ✦" : ""}</span>
         {isLive ? (
           <span className="flex items-center gap-1 text-xs font-medium text-[#F87171]">
             <span className="w-1.5 h-1.5 rounded-full bg-[#F87171] live-pulse" /> LIVE

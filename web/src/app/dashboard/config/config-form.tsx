@@ -17,8 +17,7 @@ const CONFIG_LABELS: Record<string, string> = {
   publish_threshold: "Seuil de publication (0.0–1.0)",
   maintenance_mode: "Mode maintenance (true/false)",
   trial_duration_days: "Durée de l'essai (jours)",
-  max_predictions_per_match: "Pronos max par match",
-  openai_model: "Modèle OpenAI",
+  max_predictions_per_match: "Pronos max par match",  min_daily_matches: "Matchs minimum par jour (auto-expansion)",  openai_model: "Modèle OpenAI",
   live_analysis_interval: "Intervalle analyse live (min)",
 };
 

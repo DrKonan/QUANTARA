@@ -43,6 +43,7 @@ interface Prediction {
     away_team: string;
     league: string;
     league_id: number;
+    league_country: string | null;
     match_date: string;
     status: string;
     home_score: number | null;
@@ -71,7 +72,7 @@ export default async function PredictionsPage() {
   const [{ data: predictions }, { data: leaguesMeta }] = await Promise.all([
     supabase
       .from("predictions")
-      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_premium, is_published, is_refined, created_at, match_id, matches(home_team, away_team, league, league_id, match_date, status, home_score, away_score)")
+      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_premium, is_published, is_refined, created_at, match_id, matches(home_team, away_team, league, league_id, league_country, match_date, status, home_score, away_score)")
       .eq("is_published", true)
       .gte("confidence", 0.70)
       .order("created_at", { ascending: false })
@@ -103,7 +104,7 @@ export default async function PredictionsPage() {
         home_score: pred.matches.home_score,
         away_score: pred.matches.away_score,
         category: leagueMap.get(pred.matches.league_id)?.category ?? "other",
-        country: leagueMap.get(pred.matches.league_id)?.country ?? "",
+        country: pred.matches.league_country ?? leagueMap.get(pred.matches.league_id)?.country ?? "",
         predictions: [],
       });
     }

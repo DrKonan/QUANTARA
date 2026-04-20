@@ -34,6 +34,7 @@ interface HistoryPrediction {
     away_team: string;
     league: string;
     league_id: number;
+    league_country: string | null;
     match_date: string;
     status: string;
     home_score: number | null;
@@ -62,7 +63,7 @@ export default async function HistoryPage() {
   const [{ data: predictions }, { data: leaguesMeta }] = await Promise.all([
     supabase
       .from("predictions")
-      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_premium, is_refined, is_top_pick, created_at, match_id, matches(home_team, away_team, league, league_id, match_date, status, home_score, away_score)")
+      .select("id, prediction, prediction_type, confidence, confidence_label, is_correct, is_live, is_premium, is_refined, is_top_pick, created_at, match_id, matches(home_team, away_team, league, league_id, league_country, match_date, status, home_score, away_score)")
       .eq("is_published", true)
       .gte("confidence", 0.70)
       .not("matches.status", "eq", "scheduled")
@@ -93,7 +94,7 @@ export default async function HistoryPage() {
         match_date: pred.matches.match_date,
         home_score: pred.matches.home_score,
         away_score: pred.matches.away_score,
-        country: countryMap.get(pred.matches.league_id) ?? "",
+        country: pred.matches.league_country ?? countryMap.get(pred.matches.league_id) ?? "",
         predictions: [],
         correct: 0,
         incorrect: 0,
