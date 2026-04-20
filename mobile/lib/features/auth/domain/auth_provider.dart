@@ -5,6 +5,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/analytics_service.dart';
 import '../../../core/services/biometric_service.dart';
+import '../../../core/services/device_fingerprint_service.dart';
 import '../../profile/domain/user_profile_model.dart';
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
@@ -58,12 +59,17 @@ class AuthService {
 
   /// Register with phone + password + optional email.
   /// Supabase auth uses email/password under the hood.
-  Future<AuthResponse> signUpWithPhone({
+  /// Returns a SignUpResult with the auth response and trial info.
+  Future<SignUpResult> signUpWithPhone({
     required String phone,
     required String password,
     required String username,
     String? email,
   }) async {
+    // Check if this device already used a trial
+    final trialCheck = await DeviceFingerprintService().checkTrialUsed();
+    final trialAllowed = trialCheck == null;
+
     final authEmail = email?.isNotEmpty == true ? email! : phoneToAuthEmail(phone);
     final hasRealEmail = email?.isNotEmpty == true;
 
@@ -95,13 +101,24 @@ class AuthService {
           username: username,
           phone: phone,
           email: hasRealEmail ? email : null,
+          grantTrial: trialAllowed,
         );
         NotificationService().registerToken();
         AnalyticsService().logSignUp(hasRealEmail ? 'email' : 'phone');
         AnalyticsService().setUserId(loginResponse.user?.id);
-        AnalyticsService().logTrialStart();
+        if (trialAllowed) AnalyticsService().logTrialStart();
         _saveBiometricCredentials(authEmail, password);
-        return loginResponse;
+        // Register device trial
+        await DeviceFingerprintService().registerTrial(
+          userId: loginResponse.user!.id,
+          phone: phone,
+          email: hasRealEmail ? email : null,
+        );
+        return SignUpResult(
+          response: loginResponse,
+          trialGranted: trialAllowed,
+          previousContact: trialCheck?.displayContact,
+        );
       } catch (loginErr) {
         debugPrint('[Quantara] Auto-login FAILED: $loginErr');
         if (response.user != null) {
@@ -110,6 +127,7 @@ class AuthService {
             username: username,
             phone: phone,
             email: hasRealEmail ? email : null,
+            grantTrial: trialAllowed,
           );
         }
         if (hasRealEmail) {
@@ -128,6 +146,7 @@ class AuthService {
           username: username,
           phone: phone,
           email: hasRealEmail ? email : null,
+          grantTrial: trialAllowed,
         );
         debugPrint('[Quantara] Profile upsert OK');
       } catch (upsertErr) {
@@ -139,9 +158,23 @@ class AuthService {
     NotificationService().registerToken();
     AnalyticsService().logSignUp(hasRealEmail ? 'email' : 'phone');
     AnalyticsService().setUserId(response.user?.id);
-    AnalyticsService().logTrialStart();
+    if (trialAllowed) AnalyticsService().logTrialStart();
     _saveBiometricCredentials(authEmail, password);
-    return response;
+
+    // Register device trial
+    if (response.user != null) {
+      await DeviceFingerprintService().registerTrial(
+        userId: response.user!.id,
+        phone: phone,
+        email: hasRealEmail ? email : null,
+      );
+    }
+
+    return SignUpResult(
+      response: response,
+      trialGranted: trialAllowed,
+      previousContact: trialCheck?.displayContact,
+    );
   }
 
   Future<void> _upsertProfile({
@@ -149,17 +182,26 @@ class AuthService {
     required String username,
     required String phone,
     String? email,
+    bool grantTrial = true,
   }) async {
-    final trialEnd = DateTime.now().add(const Duration(days: AppConstants.trialDurationDays));
-    await _client.from('users').upsert({
+    final data = <String, dynamic>{
       'id': userId,
       'username': username,
       'phone': phone,
       'email': email,
       'plan': 'free',
-      'trial_used': true,
-      'trial_ends_at': trialEnd.toIso8601String(),
-    });
+    };
+
+    if (grantTrial) {
+      final trialEnd = DateTime.now().add(const Duration(days: AppConstants.trialDurationDays));
+      data['trial_used'] = true;
+      data['trial_ends_at'] = trialEnd.toIso8601String();
+    } else {
+      data['trial_used'] = true;
+      data['trial_ends_at'] = DateTime.now().toIso8601String(); // Already expired
+    }
+
+    await _client.from('users').upsert(data);
   }
 
   /// Upsert profile using service role or without RLS (for pre-auth scenarios)
@@ -168,18 +210,27 @@ class AuthService {
     required String username,
     required String phone,
     String? email,
+    bool grantTrial = true,
   }) async {
     try {
-      final trialEnd = DateTime.now().add(const Duration(days: AppConstants.trialDurationDays));
-      await _client.from('users').upsert({
+      final data = <String, dynamic>{
         'id': userId,
         'username': username,
         'phone': phone,
         'email': email,
         'plan': 'free',
-        'trial_used': true,
-        'trial_ends_at': trialEnd.toIso8601String(),
-      });
+      };
+
+      if (grantTrial) {
+        final trialEnd = DateTime.now().add(const Duration(days: AppConstants.trialDurationDays));
+        data['trial_used'] = true;
+        data['trial_ends_at'] = trialEnd.toIso8601String();
+      } else {
+        data['trial_used'] = true;
+        data['trial_ends_at'] = DateTime.now().toIso8601String();
+      }
+
+      await _client.from('users').upsert(data);
     } catch (_) {
       // Silently fail — profile will be created on first login
     }
@@ -264,3 +315,16 @@ final authServiceProvider = Provider<AuthService>((ref) {
   final client = ref.watch(supabaseClientProvider);
   return AuthService(client);
 });
+
+/// Result of a signup attempt, includes trial eligibility info.
+class SignUpResult {
+  final AuthResponse response;
+  final bool trialGranted;
+  final String? previousContact;
+
+  const SignUpResult({
+    required this.response,
+    required this.trialGranted,
+    this.previousContact,
+  });
+}

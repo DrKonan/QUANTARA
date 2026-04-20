@@ -21,6 +21,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   PaymentCountry _selectedCountry = AppConstants.defaultCountry;
   bool _registered = false;
+  bool _trialGranted = true;
+  String? _previousContact;
 
   @override
   void dispose() {
@@ -48,13 +50,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       final phone = _buildFullPhone();
       final email = _emailCtrl.text.trim();
 
-      await ref.read(authServiceProvider).signUpWithPhone(
+      final result = await ref.read(authServiceProvider).signUpWithPhone(
             phone: phone,
             password: _passwordCtrl.text,
             username: _nameCtrl.text.trim(),
             email: email.isNotEmpty ? email : null,
           );
-      if (mounted) setState(() => _registered = true);
+      if (mounted) {
+        setState(() {
+          _registered = true;
+          _trialGranted = result.trialGranted;
+          _previousContact = result.previousContact;
+        });
+      }
     } catch (e, stack) {
       debugPrint('[Quantara] SIGNUP ERROR: $e');
       debugPrint('[Quantara] STACK: $stack');
@@ -329,11 +337,47 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
           ),
           const SizedBox(height: 12),
-          Text(
-            "Bienvenue ${_nameCtrl.text.trim()} !\nVotre essai gratuit de ${AppConstants.trialDurationDays} jours a commencé.",
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
-          ),
+          if (_trialGranted)
+            Text(
+              "Bienvenue ${_nameCtrl.text.trim()} !\nVotre essai gratuit de ${AppConstants.trialDurationDays} jours a commencé.",
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+            )
+          else ...[
+            Text(
+              "Bienvenue ${_nameCtrl.text.trim()} !",
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: AppColors.warning, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "Votre période d'essai a déjà été utilisée "
+                      "avec le compte ${_previousContact ?? 'précédent'}.\n\n"
+                      "Abonnez-vous pour accéder aux fonctionnalités Premium.",
+                      style: TextStyle(
+                        color: AppColors.textSecondary.withValues(alpha: 0.8),
+                        fontSize: 13,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
