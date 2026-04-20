@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createSupabaseClient } from "@/lib/supabase/client";
+import { updateConfig } from "./actions";
 
 interface ConfigEntry {
   key: string;
@@ -17,7 +17,9 @@ const CONFIG_LABELS: Record<string, string> = {
   publish_threshold: "Seuil de publication (0.0–1.0)",
   maintenance_mode: "Mode maintenance (true/false)",
   trial_duration_days: "Durée de l'essai (jours)",
-  max_predictions_per_match: "Pronos max par match",  min_daily_matches: "Matchs minimum par jour (auto-expansion)",  openai_model: "Modèle OpenAI",
+  max_predictions_per_match: "Pronos max par match",
+  min_daily_matches: "Matchs minimum par jour (auto-expansion)",
+  openai_model: "Modèle OpenAI",
   live_analysis_interval: "Intervalle analyse live (min)",
 };
 
@@ -26,18 +28,19 @@ export function ConfigForm({ configs }: ConfigFormProps) {
     Object.fromEntries(Object.entries(configs).map(([k, v]) => [k, v.value]))
   );
   const [saving, setSaving] = useState<string | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
+  const [status, setStatus] = useState<Record<string, "saved" | "error">>({});
 
   async function handleSave(key: string) {
     setSaving(key);
-    const supabase = createSupabaseClient();
-    await supabase
-      .from("app_config")
-      .update({ value: values[key] })
-      .eq("key", key);
+    const result = await updateConfig(key, values[key]);
     setSaving(null);
-    setSaved(key);
-    setTimeout(() => setSaved(null), 2000);
+
+    if (result.success) {
+      setStatus((s) => ({ ...s, [key]: "saved" }));
+    } else {
+      setStatus((s) => ({ ...s, [key]: "error" }));
+    }
+    setTimeout(() => setStatus((s) => { const n = { ...s }; delete n[key]; return n; }), 2500);
   }
 
   return (
@@ -60,9 +63,15 @@ export function ConfigForm({ configs }: ConfigFormProps) {
             <button
               onClick={() => handleSave(key)}
               disabled={saving === key}
-              className="px-5 py-2.5 bg-gradient-to-r from-[#D4AF37] to-[#B8961F] text-black text-sm font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 transition-all"
+              className={`px-5 py-2.5 text-sm font-semibold rounded-lg transition-all disabled:opacity-50 ${
+                status[key] === "error"
+                  ? "bg-[#F87171]/20 text-[#F87171] border border-[#F87171]/30"
+                  : status[key] === "saved"
+                  ? "bg-[#34D399]/20 text-[#34D399] border border-[#34D399]/30"
+                  : "bg-gradient-to-r from-[#D4AF37] to-[#B8961F] text-black hover:opacity-90"
+              }`}
             >
-              {saving === key ? "…" : saved === key ? "✓" : "Sauver"}
+              {saving === key ? "…" : status[key] === "saved" ? "✓ Sauvé" : status[key] === "error" ? "✗ Erreur" : "Sauver"}
             </button>
           </div>
         </div>
