@@ -85,60 +85,85 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     _buildSection(
                       "1. Données collectées",
                       "Quantara collecte uniquement les données nécessaires au fonctionnement de l'application :\n\n"
-                          "• Adresse e-mail ou numéro de téléphone (pour l'authentification)\n"
+                          "• Numéro de téléphone (identifiant principal du compte)\n"
+                          "• Adresse e-mail (optionnelle, pour récupération de compte)\n"
                           "• Nom d'utilisateur (affiché dans votre profil)\n"
                           "• Photo de profil (optionnelle)\n"
+                          "• Pays détecté via l'indicatif téléphonique (pour la devise)\n"
                           "• Token de notification push (pour les alertes)\n"
-                          "• Données d'utilisation anonymisées (amélioration du service)",
+                          "• Données biométriques locales (Face ID / Touch ID, stockées uniquement sur votre appareil)\n"
+                          "• Données d'utilisation anonymisées via Firebase Analytics",
                     ),
 
                     _buildSection(
                       "2. Utilisation des données",
                       "Vos données sont utilisées exclusivement pour :\n\n"
                           "• Authentifier votre compte et sécuriser l'accès\n"
-                          "• Personnaliser votre expérience (préférences, historique)\n"
-                          "• Vous envoyer des notifications de pronostics\n"
-                          "• Améliorer nos algorithmes de prédiction\n"
-                          "• Assurer le support technique",
+                          "• Permettre la reconnexion rapide via biométrie (Face ID / Touch ID)\n"
+                          "• Détecter votre pays et devise pour l'affichage des tarifs\n"
+                          "• Personnaliser votre expérience (préférences, historique de notifications)\n"
+                          "• Vous envoyer des notifications de pronostics et résultats\n"
+                          "• Améliorer nos algorithmes de prédiction et l'expérience utilisateur\n"
+                          "• Gérer vos abonnements et paiements mobiles",
                     ),
 
                     _buildSection(
                       "3. Stockage et sécurité",
                       "Vos données sont stockées de manière sécurisée sur des serveurs Supabase (infrastructure cloud). "
                           "Les mots de passe sont hashés avec des algorithmes de chiffrement modernes. "
-                          "Les communications sont chiffrées via HTTPS/TLS.",
+                          "Les communications sont chiffrées via HTTPS/TLS.\n\n"
+                          "Les identifiants biométriques sont stockés localement dans le stockage sécurisé de votre appareil "
+                          "(Keychain sur iOS, Keystore sur Android) et ne sont jamais transmis à nos serveurs.\n\n"
+                          "L'historique de vos notifications est stocké localement sur votre appareil.",
                     ),
 
                     _buildSection(
-                      "4. Partage des données",
+                      "4. Paiements",
+                      "Les paiements sont traités via PawaPay (mobile money) et Wave. "
+                          "Quantara ne stocke aucune donnée financière. Les transactions sont gérées "
+                          "intégralement par les opérateurs de paiement. Seuls le statut et la référence "
+                          "de la transaction sont conservés pour le suivi de votre abonnement.",
+                    ),
+
+                    _buildSection(
+                      "5. Partage des données",
                       "Quantara ne vend, ne loue et ne partage jamais vos données personnelles avec des tiers. "
-                          "Aucune donnée n'est transmise à des fins publicitaires.",
+                          "Aucune donnée n'est transmise à des fins publicitaires.\n\n"
+                          "Les seuls services tiers utilisés sont :\n"
+                          "• Supabase (authentification et base de données)\n"
+                          "• Firebase (notifications push et analytics anonymes)\n"
+                          "• PawaPay / Wave (traitement des paiements)",
                     ),
 
                     _buildSection(
-                      "5. Vos droits",
+                      "6. Vos droits",
                       "Vous disposez des droits suivants :\n\n"
                           "• Accès : consulter vos données dans votre profil\n"
                           "• Rectification : modifier vos informations à tout moment\n"
-                          "• Suppression : demander la suppression de votre compte\n"
+                          "• Suppression : supprimer votre compte directement dans Profil → Supprimer mon compte\n"
+                          "• Désactivation biométrique : désactiver Face ID / Touch ID dans Profil\n"
                           "• Portabilité : exporter vos données sur demande\n\n"
                           "Pour exercer ces droits, contactez-nous à support@quantara.app",
                     ),
 
                     _buildSection(
-                      "6. Notifications",
+                      "7. Notifications",
                       "Vous pouvez gérer vos préférences de notification directement dans l'application "
-                          "(Profil → Notifications). Vous pouvez désactiver toutes les notifications à tout moment.",
+                          "(Profil → Notifications). Vous pouvez désactiver toutes les notifications à tout moment.\n\n"
+                          "L'historique de vos notifications est consultable dans le Centre de notifications "
+                          "(icône cloche sur l'accueil) et stocké localement sur votre appareil.",
                     ),
 
                     _buildSection(
-                      "7. Cookies et tracking",
+                      "8. Cookies et tracking",
                       "Quantara n'utilise pas de cookies. L'application ne contient aucun tracker publicitaire. "
-                          "Seules des données d'analyse anonymes sont collectées pour améliorer le service.",
+                          "Firebase Analytics collecte uniquement des données d'utilisation anonymes "
+                          "(écrans visités, événements) pour améliorer le service. Aucune donnée personnelle "
+                          "identifiable n'est envoyée à Firebase.",
                     ),
 
                     _buildSection(
-                      "8. Contact",
+                      "9. Contact",
                       "Pour toute question relative à la confidentialité :\n\n"
                           "📧 support@quantara.app\n"
                           "📍 Abidjan, Côte d'Ivoire",

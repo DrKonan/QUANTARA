@@ -119,15 +119,43 @@ class HelpSupportScreen extends StatelessWidget {
                     ),
 
                     _buildFaqItem(
-                      "Comment devenir Premium ?",
-                      "Rendez-vous dans Profil → Passer à Premium. Vous pourrez choisir un abonnement hebdomadaire, "
-                          "mensuel ou annuel. Le paiement se fait via Wave, Orange Money ou MTN Money.",
+                      "Quels sont les abonnements disponibles ?",
+                      "Quantara propose 4 formules :\n\n"
+                          "• Gratuit — 1 match/jour, pas de combo\n"
+                          "• Starter (1 000 F/mois) — 5 matchs/jour\n"
+                          "• Pro (2 000 F/mois) — 15 matchs/jour + 1 combo\n"
+                          "• VIP (4 000 F/mois) — Matchs illimités + 3 combos\n\n"
+                          "Les prix sont adaptés en fonction de votre pays (XOF, XAF, GNF, CDF). "
+                          "Les nouveaux inscrits bénéficient de 3 jours d'essai VIP gratuit.",
+                    ),
+
+                    _buildFaqItem(
+                      "Comment payer mon abonnement ?",
+                      "Rendez-vous dans Profil → Passer à Premium. Choisissez votre plan puis votre moyen de paiement. "
+                          "Nous supportons Wave, Orange Money, MTN MoMo, Moov Money, Airtel Money et Vodacom M-Pesa "
+                          "selon votre pays.\n\n"
+                          "Pays supportés : Côte d'Ivoire, Sénégal, Mali, Burkina Faso, Bénin, Togo, Niger, "
+                          "Guinée, Cameroun, Gabon, Congo, RD Congo.",
                     ),
 
                     _buildFaqItem(
                       "Puis-je annuler mon abonnement ?",
                       "Oui, vous pouvez annuler votre abonnement à tout moment. Votre accès Premium restera actif "
                           "jusqu'à la fin de la période payée.",
+                    ),
+
+                    _buildFaqItem(
+                      "Comment activer Face ID / Touch ID ?",
+                      "Allez dans Profil et activez l'option « Face ID » ou « Touch ID ». "
+                          "Lors de votre prochaine connexion, vos identifiants seront sauvegardés de manière sécurisée. "
+                          "Vous pourrez ensuite vous reconnecter d'un simple geste biométrique.",
+                    ),
+
+                    _buildFaqItem(
+                      "Où voir mes anciennes notifications ?",
+                      "Appuyez sur l'icône cloche 🔔 en haut de l'écran d'accueil. "
+                          "Le Centre de notifications affiche l'historique de toutes vos alertes "
+                          "(pronostics, résultats, combos, live). Les 50 dernières notifications sont conservées.",
                     ),
 
                     _buildFaqItem(
@@ -138,9 +166,9 @@ class HelpSupportScreen extends StatelessWidget {
                     ),
 
                     _buildFaqItem(
-                      "Comment modifier mon profil ?",
-                      "Allez dans Profil → Modifier le profil. Vous pouvez changer votre nom d'utilisateur, "
-                          "votre photo de profil et votre numéro de téléphone. L'adresse e-mail ne peut pas être modifiée.",
+                      "Comment supprimer mon compte ?",
+                      "Allez dans Profil → Supprimer mon compte. Cette action est irréversible : "
+                          "toutes vos données, votre historique et votre abonnement seront définitivement supprimés.",
                     ),
 
                     const SizedBox(height: 40),

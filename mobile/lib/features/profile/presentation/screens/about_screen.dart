@@ -90,7 +90,7 @@ class AboutScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
-                        "v1.0.0",
+                        "v2.0.0",
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 13,
@@ -147,8 +147,26 @@ class AboutScreen extends StatelessWidget {
                       "Seuil de confiance minimum de 80% pour chaque pronostic",
                     ),
                     _buildFeatureRow(
-                      Icons.security_rounded,
+                      Icons.fingerprint_rounded,
                       AppColors.warning,
+                      "Biométrie",
+                      "Reconnexion rapide via Face ID ou Touch ID",
+                    ),
+                    _buildFeatureRow(
+                      Icons.notifications_active_rounded,
+                      AppColors.gold,
+                      "Notifications",
+                      "Alertes push et centre de notifications avec historique",
+                    ),
+                    _buildFeatureRow(
+                      Icons.payments_rounded,
+                      AppColors.emerald,
+                      "Mobile Money",
+                      "Wave, Orange Money, MTN, Moov, Airtel — 12 pays d'Afrique",
+                    ),
+                    _buildFeatureRow(
+                      Icons.security_rounded,
+                      AppColors.info,
                       "Sécurité",
                       "Données chiffrées, aucun partage avec des tiers",
                     ),
@@ -172,6 +190,36 @@ class AboutScreen extends StatelessWidget {
                         color: AppColors.textSecondary.withValues(alpha: 0.5),
                         fontSize: 11,
                         height: 1.6,
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Countries
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.surfaceLight.withValues(alpha: 0.5)),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            "Disponible dans 12 pays",
+                            style: TextStyle(
+                              color: AppColors.textSecondary.withValues(alpha: 0.7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            "🇨🇮 🇸🇳 🇲🇱 🇧🇫 🇧🇯 🇹🇬 🇳🇪 🇬🇳 🇨🇲 🇬🇦 🇨🇬 🇨🇩",
+                            style: TextStyle(fontSize: 22, letterSpacing: 4),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     ),
 
