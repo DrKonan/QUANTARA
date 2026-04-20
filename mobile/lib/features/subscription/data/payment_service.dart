@@ -94,25 +94,33 @@ class PaymentService {
       body['correspondent'] = correspondent;
     }
 
-    debugPrint('[PaymentService] Creating payment: plan=$plan, provider=${body['provider']}');
+    debugPrint('[PaymentService] Creating payment: plan=$plan, provider=${body['provider']}, phone=${body['phone']}, correspondent=${body['correspondent']}');
 
-    final response = await _client.functions.invoke(
-      'create-payment',
-      body: body,
-    );
-
-    if (response.status != 200) {
-      final data = response.data is String
-          ? jsonDecode(response.data as String)
-          : response.data;
-      final errorMsg = data?['error'] ?? 'Erreur lors de la création du paiement';
-      debugPrint('[PaymentService] Error: $errorMsg (status ${response.status})');
+    late Map<String, dynamic> data;
+    try {
+      final response = await _client.functions.invoke(
+        'create-payment',
+        body: body,
+      );
+      data = response.data is String
+          ? jsonDecode(response.data as String) as Map<String, dynamic>
+          : response.data as Map<String, dynamic>;
+    } on FunctionException catch (e) {
+      debugPrint('[PaymentService] FunctionException status=${e.status} details=${e.details}');
+      String errorMsg = 'Erreur lors du paiement (${e.status})';
+      final details = e.details;
+      if (details is Map<String, dynamic>) {
+        errorMsg = (details['error'] as String?) ?? errorMsg;
+      } else if (details is String && details.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(details) as Map<String, dynamic>;
+          errorMsg = (decoded['error'] as String?) ?? errorMsg;
+        } catch (_) {
+          errorMsg = details;
+        }
+      }
       throw Exception(errorMsg);
     }
-
-    final data = response.data is String
-        ? jsonDecode(response.data as String) as Map<String, dynamic>
-        : response.data as Map<String, dynamic>;
 
     debugPrint('[PaymentService] Payment created: ${data['payment_id']}');
 

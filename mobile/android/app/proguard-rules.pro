@@ -3,6 +3,10 @@
 -keep class io.flutter.** { *; }
 -keep class io.flutter.plugins.** { *; }
 
+# Play Core (deferred components / split install)
+-dontwarn com.google.android.play.core.**
+-keep class com.google.android.play.core.** { *; }
+
 # Supabase / GoTrue
 -keep class io.supabase.** { *; }
 -keep class com.haibin.calendarview.** { *; }

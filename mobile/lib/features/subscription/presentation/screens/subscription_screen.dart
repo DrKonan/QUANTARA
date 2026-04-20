@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/services/analytics_service.dart';
@@ -135,8 +135,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _paymentBadge("🌊 Wave"),
-                        const SizedBox(width: 8),
                         _paymentBadge("🟠 Orange Money"),
                         const SizedBox(width: 8),
                         _paymentBadge("🟡 MTN"),
@@ -527,14 +525,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     if (state.phase == PaymentPhase.error) {
       _showErrorSnackBar(state.errorMessage ?? "Erreur inconnue");
       return;
-    }
-
-    // Wave: open checkout URL in browser
-    if (provider == PaymentProvider.wave && state.result?.checkoutUrl != null) {
-      final url = Uri.parse(state.result!.checkoutUrl!);
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      }
     }
 
     if (!mounted) return;
@@ -1148,9 +1138,6 @@ class _PaymentStatusPageState extends ConsumerState<_PaymentStatusPage> {
       case PaymentPhase.error:
         return state.errorMessage ?? "Une erreur est survenue. Veuillez réessayer.";
       default:
-        if (widget.provider == PaymentProvider.wave) {
-          return "Complétez le paiement de $priceLabel dans l'application Wave.\nNous vérifions automatiquement...";
-        }
         return widget.message ?? "Un push USSD a été envoyé sur votre téléphone.\nEntrez votre code PIN pour confirmer le paiement de $priceLabel.";
     }
   }

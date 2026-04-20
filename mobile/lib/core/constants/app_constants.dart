@@ -152,13 +152,12 @@ abstract class AppConstants {
   static const correspondentMtnCi = 'mtn_ci';
 
   // ── Supported countries with their payment methods ──
-  // Each country lists the mobile money providers available via PawaPay
-  // + Wave where supported. The `correspondent` key is sent to the backend.
+  // Each country lists the mobile money providers available via PawaPay.
+  // The `correspondent` key is sent to the backend.
   static const supportedCountries = [
     PaymentCountry(
       code: 'CI', name: "Côte d'Ivoire", dialCode: '225', flag: '🇨🇮', localDigits: 10,
       methods: [
-        PaymentMethod(id: 'wave', name: 'Wave', correspondent: null, color: 0xFF1DC2FF, icon: 'waves'),
         PaymentMethod(id: 'orange_ci', name: 'Orange Money', correspondent: 'ORANGE_CIV', color: 0xFFFF6600, icon: 'phone'),
         PaymentMethod(id: 'mtn_ci', name: 'MTN MoMo', correspondent: 'MTN_MOMO_CIV', color: 0xFFFFCC00, icon: 'phone'),
       ],
@@ -166,7 +165,6 @@ abstract class AppConstants {
     PaymentCountry(
       code: 'SN', name: 'Sénégal', dialCode: '221', flag: '🇸🇳', localDigits: 9,
       methods: [
-        PaymentMethod(id: 'wave', name: 'Wave', correspondent: null, color: 0xFF1DC2FF, icon: 'waves'),
         PaymentMethod(id: 'orange_sn', name: 'Orange Money', correspondent: 'ORANGE_SEN', color: 0xFFFF6600, icon: 'phone'),
         PaymentMethod(id: 'free_sn', name: 'Free Money', correspondent: 'FREE_SEN', color: 0xFF00C896, icon: 'phone'),
       ],
