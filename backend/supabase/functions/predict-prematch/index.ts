@@ -624,6 +624,22 @@ Deno.serve(async (req: Request) => {
 
       console.log(`[predict-prematch] Published ${predictions.length} initial predictions for match ${match_id}`);
 
+      // Déclenche la notification push
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      fetch(`${supabaseUrl}/functions/v1/notify-users`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({
+          type: "new_predictions",
+          match_id,
+          count: predictions.length,
+        }),
+      }).catch((err) => console.warn("[predict-prematch] notify-users failed:", err));
+
       return jsonResponse({ success: true, mode: "initial", match_id, predictions_count: predictions.length });
     }
   } catch (err) {

@@ -284,45 +284,26 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[generate-combos] Generated ${combosToInsert.length} combo(s) for ${today}`);
 
-    // Notifie les utilisateurs PRO/VIP
+    // Notifie les utilisateurs PRO/VIP via notify-users
     try {
-      const { data: tokens } = await supabase
-        .from("push_tokens")
-        .select("token, users!inner(plan)")
-        .in("users.plan", ["pro", "vip"]);
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const safeCombo = combosToInsert.find(c => c.combo_type === "safe");
 
-      if (tokens && tokens.length > 0) {
-        const fcmTokens = tokens.map((t: { token: string }) => t.token);
-        const safeCombo = combosToInsert.find(c => c.combo_type === "safe");
-        const body = safeCombo
-          ? `Combiné du jour : ${safeCombo.leg_count} sélections · Cote ${safeCombo.combined_odds.toFixed(2)}`
-          : `${combosToInsert.length} combiné(s) disponible(s)`;
-
-        // Envoi FCM en batch
-        const FCM_URL = "https://fcm.googleapis.com/fcm/send";
-        const FCM_KEY = Deno.env.get("FCM_SERVER_KEY");
-        if (FCM_KEY) {
-          for (let i = 0; i < fcmTokens.length; i += 500) {
-            const batch = fcmTokens.slice(i, i + 500);
-            await fetch(FCM_URL, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `key=${FCM_KEY}`,
-              },
-              body: JSON.stringify({
-                registration_ids: batch,
-                notification: {
-                  title: "🎯 Combiné du jour disponible",
-                  body,
-                },
-                data: { type: "combo", date: today },
-              }),
-            });
-          }
-          console.log(`[generate-combos] Notified ${fcmTokens.length} PRO/VIP users`);
-        }
-      }
+      await fetch(`${supabaseUrl}/functions/v1/notify-users`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({
+          type: "combo_available",
+          combo_count: combosToInsert.length,
+          safe_legs: safeCombo?.leg_count,
+          safe_odds: safeCombo?.combined_odds,
+        }),
+      });
+      console.log(`[generate-combos] Notification sent via notify-users`);
     } catch (notifErr) {
       console.warn(`[generate-combos] Notification failed:`, notifErr);
     }

@@ -1,8 +1,11 @@
 // ============================================================
 // QUANTARA — Edge Function : notify-users
-// Déclencheur : appelée par predict-prematch et evaluate-predictions
+// Déclencheur : appelée par predict-prematch, predict-live-t1,
+//               generate-combos et evaluate-predictions
 // Body attendu :
 //   { type: "new_predictions", match_id: number, count: number }
+//   { type: "live_prediction", match_id: number, count: number }
+//   { type: "combo_available", combo_count: number, safe_legs?: number, safe_odds?: number }
 //   { type: "prediction_results", match_id: number, results: Array<{id, is_correct}> }
 // Rôle : Envoie les notifications push via FCM (Firebase).
 // ============================================================
@@ -11,6 +14,8 @@ import { jsonResponse } from "../_shared/helpers.ts";
 
 type NotifyPayload =
   | { type: "new_predictions"; match_id: number; count: number }
+  | { type: "live_prediction"; match_id: number; count: number }
+  | { type: "combo_available"; combo_count: number; safe_legs?: number; safe_odds?: number }
   | { type: "prediction_results"; match_id: number; results: Array<{ id: number; is_correct: boolean }> };
 
 interface PushToken {
@@ -101,6 +106,56 @@ Deno.serve(async (req: Request) => {
       const sent = await sendFCMNotification(tokenList, title, body, {
         type: "new_predictions",
         match_id: String(payload.match_id),
+      });
+
+      return jsonResponse({ success: true, sent });
+    }
+
+    if (payload.type === "live_prediction") {
+      const { data: match } = await supabase
+        .from("matches")
+        .select("home_team, away_team, league")
+        .eq("id", payload.match_id)
+        .single();
+
+      if (!match) return jsonResponse({ error: "Match not found" }, 404);
+
+      const { data: tokens } = await supabase
+        .from("push_tokens")
+        .select("token")
+        .eq("is_active", true);
+
+      const tokenList = (tokens ?? []).map((t: { token: string }) => t.token);
+
+      const title = `⚡ Prono LIVE — ${match.league}`;
+      const body = `${match.home_team} vs ${match.away_team} · ${payload.count} prono${payload.count > 1 ? "s" : ""} LIVE`;
+
+      const sent = await sendFCMNotification(tokenList, title, body, {
+        type: "live_prediction",
+        match_id: String(payload.match_id),
+      });
+
+      return jsonResponse({ success: true, sent });
+    }
+
+    if (payload.type === "combo_available") {
+      // Notifie uniquement les PRO/VIP
+      const { data: tokens } = await supabase
+        .from("push_tokens")
+        .select("token, users!inner(plan)")
+        .eq("is_active", true)
+        .in("users.plan", ["pro", "vip"]);
+
+      const tokenList = (tokens ?? []).map((t: { token: string }) => t.token);
+
+      const title = "🎯 Combiné du jour disponible";
+      const body = payload.safe_legs && payload.safe_odds
+        ? `Combiné du jour : ${payload.safe_legs} sélections · Cote ${payload.safe_odds.toFixed(2)}`
+        : `${payload.combo_count} combiné(s) disponible(s)`;
+
+      const sent = await sendFCMNotification(tokenList, title, body, {
+        type: "combo",
+        date: new Date().toISOString().slice(0, 10),
       });
 
       return jsonResponse({ success: true, sent });

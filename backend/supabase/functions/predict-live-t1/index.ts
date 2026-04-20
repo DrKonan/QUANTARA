@@ -185,6 +185,27 @@ Deno.serve(async (_req: Request) => {
     }
 
     console.log(`[predict-live-t1] Published ${totalPublished} new live predictions`);
+
+    // Déclenche les notifications push pour chaque match ayant de nouveaux pronos LIVE
+    if (totalPublished > 0) {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      for (const match of liveMatches) {
+        fetch(`${supabaseUrl}/functions/v1/notify-users`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({
+            type: "live_prediction",
+            match_id: match.id,
+            count: totalPublished,
+          }),
+        }).catch((err) => console.warn("[predict-live-t1] notify-users failed:", err));
+      }
+    }
+
     return jsonResponse({ success: true, matches_processed: liveMatches.length, published: totalPublished });
   } catch (err) {
     console.error("[predict-live-t1] Error:", err);
