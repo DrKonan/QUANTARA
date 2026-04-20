@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -505,6 +506,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     );
 
     if (confirmed != true || !mounted) return;
+    HapticFeedback.mediumImpact();
 
     AnalyticsService().logStartPayment(
       _selectedPlan,
@@ -602,7 +604,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 
   Widget _buildPlanCard(_Plan plan, bool isSelected) {
     return GestureDetector(
-      onTap: () => setState(() => _selectedPlan = plan.id),
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _selectedPlan = plan.id);
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),

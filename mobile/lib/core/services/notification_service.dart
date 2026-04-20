@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../features/notifications/presentation/screens/notification_center_screen.dart';
 
 /// Top-level handler for background messages (must be top-level function).
 @pragma('vm:entry-point')
@@ -110,7 +111,16 @@ class NotificationService {
     required String title,
     required String body,
     String? payload,
+    String? type,
   }) async {
+    // Store in notification center
+    NotificationStore.add(NotificationItem(
+      title: title,
+      body: body,
+      timestamp: DateTime.now().toIso8601String(),
+      type: type,
+    ));
+
     await _localNotifications.show(
       id,
       title,
@@ -163,7 +173,7 @@ class NotificationService {
         : '$count pronostics officiels viennent d\'être publiés';
 
     debugPrint('[Quantara] Notifying $count new predictions');
-    await _showLocal(id: 1001, title: title, body: body);
+    await _showLocal(id: 1001, title: title, body: body, type: 'prediction');
   }
 
   /// Called when live predictions arrive.
@@ -183,6 +193,7 @@ class NotificationService {
       title: '⚡ Prono LIVE disponible',
       body: matchName,
       payload: id,
+      type: 'live',
     );
   }
 
@@ -210,6 +221,7 @@ class NotificationService {
       id: 3001,
       title: '🔥 ${count == 1 ? "Combinaison" : "$count Combinaisons"} disponible${count > 1 ? "s" : ""}',
       body: 'Une nouvelle combinaison a été générée par notre IA',
+      type: 'combo',
     );
   }
 
@@ -225,6 +237,7 @@ class NotificationService {
       id: 4000 + matchName.hashCode.abs() % 1000,
       title: won ? '✅ Prono gagné !' : '❌ Prono perdu',
       body: matchName,
+      type: 'result',
     );
   }
 
@@ -267,6 +280,14 @@ class NotificationService {
 
     final notification = message.notification;
     if (notification == null) return;
+
+    // Store in notification center
+    NotificationStore.add(NotificationItem(
+      title: notification.title ?? '',
+      body: notification.body ?? '',
+      timestamp: DateTime.now().toIso8601String(),
+      type: message.data['type'],
+    ));
 
     _localNotifications.show(
       notification.hashCode,

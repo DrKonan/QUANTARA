@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +13,7 @@ import '../../../predictions/domain/today_match_model.dart';
 import '../../../predictions/domain/match_model.dart';
 import '../../../matches/presentation/widgets/match_detail_sheet.dart';
 import '../../../matches/presentation/widgets/combo_card.dart';
+import '../../../notifications/presentation/screens/notification_center_screen.dart';
 import '../../../profile/domain/user_profile_model.dart';
 import '../widgets/stats_card.dart';
 
@@ -32,6 +34,7 @@ class HomeScreen extends ConsumerWidget {
           color: AppColors.gold,
           backgroundColor: AppColors.surface,
           onRefresh: () async {
+            HapticFeedback.mediumImpact();
             await Future.wait([
               ref.refresh(todayEligibleMatchesProvider.future),
               ref.refresh(todayCombosProvider.future),
@@ -41,7 +44,7 @@ class HomeScreen extends ConsumerWidget {
           },
           child: CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(child: _buildHeader(userProfile?.username)),
+              SliverToBoxAdapter(child: _buildHeader(context, userProfile?.username)),
               const SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -248,7 +251,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(String? username) {
+  Widget _buildHeader(BuildContext context, String? username) {
     final greeting = username != null ? "Salut $username \ud83d\udc4b" : "Bonjour \ud83d\udc4b";
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -269,10 +272,27 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
           ),
-          Container(
-            width: 42, height: 42,
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12)),
-            child: const Center(child: Icon(Icons.notifications_outlined, color: AppColors.textPrimary, size: 22)),
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.push('/notifications');
+            },
+            child: FutureBuilder<int>(
+              future: NotificationStore.unreadCount,
+              builder: (ctx, snap) {
+                final count = snap.data ?? 0;
+                return Badge(
+                  isLabelVisible: count > 0,
+                  label: Text('$count', style: const TextStyle(fontSize: 10)),
+                  backgroundColor: AppColors.error,
+                  child: Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(12)),
+                    child: const Center(child: Icon(Icons.notifications_outlined, color: AppColors.textPrimary, size: 22)),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),

@@ -18,6 +18,7 @@ import '../../features/profile/presentation/screens/privacy_policy_screen.dart';
 import '../../features/profile/presentation/screens/help_support_screen.dart';
 import '../../features/profile/presentation/screens/about_screen.dart';
 import '../../features/subscription/presentation/screens/subscription_screen.dart';
+import '../../features/notifications/presentation/screens/notification_center_screen.dart';
 import '../../shared/widgets/main_shell.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -57,6 +58,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/auth', builder: (context, state) => const AuthScreen()),
       GoRoute(path: '/auth/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),
       GoRoute(path: '/subscription', builder: (context, state) => const SubscriptionScreen()),
+      GoRoute(path: '/notifications', builder: (context, state) => const NotificationCenterScreen()),
       GoRoute(path: '/profile/edit', builder: (context, state) => const EditProfileScreen()),
       GoRoute(path: '/profile/notifications', builder: (context, state) => const NotificationSettingsScreen()),
       GoRoute(path: '/profile/password', builder: (context, state) => const ChangePasswordScreen()),
