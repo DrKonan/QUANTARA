@@ -114,6 +114,48 @@ Deno.serve(async (req: Request) => {
       return true;
     });
 
+    const primaryCount = filtered.length;
+
+    // 4. AUTO-EXPANSION : si pas assez de matchs, enrichir avec les ligues Tier 3
+    const { data: minDailyRow } = await supabase
+      .from("app_config")
+      .select("value")
+      .eq("key", "min_daily_matches")
+      .single();
+    const MIN_DAILY_MATCHES = minDailyRow ? parseInt(minDailyRow.value, 10) : 25;
+
+    let expansionUsed = 0;
+    if (filtered.length < MIN_DAILY_MATCHES) {
+      console.log(`[fetch-matches] Only ${filtered.length} matches from active leagues (need ${MIN_DAILY_MATCHES}). Auto-expanding...`);
+
+      const { data: expansionLeagues } = await supabase
+        .from("leagues_config")
+        .select("league_id")
+        .eq("tier", 3);
+
+      if (expansionLeagues && expansionLeagues.length > 0) {
+        const expansionIds = new Set(expansionLeagues.map((l: { league_id: number }) => l.league_id));
+
+        const expansionFixtures = allFixtures.filter((f) => {
+          if (!expansionIds.has(f.league.id)) return false;
+          if (!f.teams.home.id || !f.teams.away.id) return false;
+          return true;
+        });
+
+        const needed = MIN_DAILY_MATCHES - filtered.length;
+        const extra = expansionFixtures.slice(0, needed);
+
+        for (const f of extra) {
+          filtered.push(f);
+          leagueTierMap.set(f.league.id, 3);
+        }
+        expansionUsed = extra.length;
+        if (expansionUsed > 0) {
+          console.log(`[fetch-matches] Auto-expansion: +${expansionUsed} matches from ${new Set(extra.map(f => f.league.name)).size} expansion leagues`);
+        }
+      }
+    }
+
     if (filtered.length === 0) {
       return jsonResponse({
         message: `No fixtures for our leagues`,
@@ -198,7 +240,9 @@ Deno.serve(async (req: Request) => {
       mode,
       dates: datesToFetch,
       totalFromApi: allFixtures.length,
-      filteredForOurLeagues: filtered.length,
+      primaryLeagues: primaryCount,
+      expansionMatches: expansionUsed,
+      totalFiltered: filtered.length,
       upserted: rows.length,
       newMatches: newExternalIds.length,
       predictionsTriggered: predictTriggered,
