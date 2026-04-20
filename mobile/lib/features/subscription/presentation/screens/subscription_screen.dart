@@ -696,11 +696,19 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
   late PaymentCountry _selectedCountry;
   PaymentMethod? _selectedMethod;
   final _phoneController = TextEditingController();
+  String? _phoneError;
 
   @override
   void initState() {
     super.initState();
     _selectedCountry = AppConstants.countryFromPhone(widget.userPhone) ?? AppConstants.defaultCountry;
+    // Pre-fill with local part of stored phone number
+    if (widget.userPhone != null) {
+      final msisdn = AppConstants.formatPhoneForPawapay(widget.userPhone!, countryCode: _selectedCountry.dialCode);
+      if (msisdn.startsWith(_selectedCountry.dialCode)) {
+        _phoneController.text = msisdn.substring(_selectedCountry.dialCode.length);
+      }
+    }
   }
 
   @override
@@ -787,16 +795,27 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
                     style: const TextStyle(color: AppColors.textPrimary),
+                    onChanged: (_) => setState(() => _phoneError = null),
                     decoration: InputDecoration(
                       labelText: "Numéro de téléphone",
                       labelStyle: const TextStyle(color: AppColors.textSecondary),
                       hintText: 'X' * _selectedCountry.localDigits,
                       hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.4)),
+                      errorText: _phoneError,
+                      errorStyle: const TextStyle(color: AppColors.error, fontSize: 11),
                       filled: true,
-                      fillColor: AppColors.surfaceLight,
+                      fillColor: _phoneError != null
+                          ? AppColors.error.withValues(alpha: 0.08)
+                          : AppColors.surfaceLight,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: _phoneError != null
+                            ? const BorderSide(color: AppColors.error, width: 1)
+                            : BorderSide.none,
                       ),
                     ),
                   ),
@@ -890,20 +909,14 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
 
     final phone = _phoneController.text.trim();
     if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Veuillez entrer votre numéro de téléphone"), backgroundColor: AppColors.error),
-      );
+      setState(() => _phoneError = "Entrez votre numéro (${_selectedCountry.localDigits} chiffres)");
       return;
     }
     if (!AppConstants.isValidPhone(phone, _selectedCountry)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Numéro invalide pour ${_selectedCountry.name} (${_selectedCountry.localDigits} chiffres attendus)"),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      setState(() => _phoneError = "Numéro invalide — ${_selectedCountry.localDigits} chiffres attendus (ex: ${_selectedCountry.dialCode == '225' ? '0707070707' : '0' * _selectedCountry.localDigits})");
       return;
     }
+    setState(() => _phoneError = null);
     final formatted = AppConstants.formatPhoneForPawapay(phone, countryCode: _selectedCountry.dialCode);
     widget.onPay(
       PaymentProvider.pawapay,
@@ -960,6 +973,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                         _selectedCountry = country;
                         _selectedMethod = null;
                         _phoneController.clear();
+                        _phoneError = null;
                       });
                       Navigator.pop(ctx);
                     },

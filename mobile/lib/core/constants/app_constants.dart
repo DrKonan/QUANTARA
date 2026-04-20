@@ -246,10 +246,12 @@ abstract class AppConstants {
   /// Format phone number for PawaPay with country code
   static String formatPhoneForPawapay(String phone, {String countryCode = '225'}) {
     var cleaned = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+    // Strip + or 00 international prefix
     if (cleaned.startsWith('+')) cleaned = cleaned.substring(1);
-    if (cleaned.startsWith('0')) {
-      cleaned = '$countryCode${cleaned.substring(1)}';
-    } else if (!cleaned.startsWith(countryCode)) {
+    if (cleaned.startsWith('00')) cleaned = cleaned.substring(2);
+    // Prepend country code only if not already present
+    // NOTE: do NOT strip a leading 0 — in West Africa the 0 is part of the local number
+    if (!cleaned.startsWith(countryCode)) {
       cleaned = '$countryCode$cleaned';
     }
     return cleaned;
