@@ -82,6 +82,20 @@ class BiometricService {
     debugPrint('[Nakora] Biometric credentials cleared');
   }
 
+  /// Just verify biometrics (no sign-in). Used when enabling biometric login.
+  Future<bool> authenticateBiometricOnly() async {
+    try {
+      return await _auth.authenticate(
+        localizedReason: 'Vérifiez votre identité pour activer la connexion biométrique',
+        biometricOnly: true,
+        persistAcrossBackgrounding: true,
+      );
+    } catch (e) {
+      debugPrint('[Nakora] Biometric check failed: $e');
+      return false;
+    }
+  }
+
   /// Authenticate with biometrics then sign in via Supabase.
   /// Returns true on success, false on cancellation/failure.
   Future<bool> authenticateAndSignIn() async {

@@ -33,20 +33,35 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _toggleBiometric(bool value) async {
+    final bio = BiometricService();
     if (value) {
-      await BiometricService().enable();
+      // Vérifier la biométrie immédiatement avant d'activer
+      final authenticated = await bio.authenticateBiometricOnly();
+      if (!authenticated) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Authentification biométrique annulée ou échouée"),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return; // Ne pas activer
+      }
+      await bio.enable();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("$_bioLabel sera actif dès votre prochaine connexion"),
+            content: Text("$_bioLabel activé — entrez votre mot de passe une fois pour finaliser"),
             backgroundColor: AppColors.surface,
           ),
         );
+        setState(() => _bioEnabled = true);
       }
     } else {
-      await BiometricService().disable();
+      await bio.disable();
+      if (mounted) setState(() => _bioEnabled = false);
     }
-    if (mounted) setState(() => _bioEnabled = value);
   }
 
   @override
