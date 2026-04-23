@@ -263,8 +263,8 @@ class HomeScreen extends ConsumerWidget {
               children: [
                 RichText(
                   text: const TextSpan(children: [
-                    TextSpan(text: 'Q', style: TextStyle(color: AppColors.gold, fontSize: 22, fontWeight: FontWeight.w800)),
-                    TextSpan(text: 'uantara', style: TextStyle(color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.w600)),
+                    TextSpan(text: 'N', style: TextStyle(color: AppColors.gold, fontSize: 22, fontWeight: FontWeight.w800)),
+                    TextSpan(text: 'akora', style: TextStyle(color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.w600)),
                   ]),
                 ),
                 const SizedBox(height: 4),
