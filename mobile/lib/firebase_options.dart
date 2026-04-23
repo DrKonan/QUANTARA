@@ -30,6 +30,6 @@ class DefaultFirebaseOptions {
     messagingSenderId: '828179538034',
     projectId: 'quantara-app-45ced',
     storageBucket: 'quantara-app-45ced.firebasestorage.app',
-    iosBundleId: 'com.quantara.quantara',
+    iosBundleId: 'app.nakora.nakora',
   );
 }

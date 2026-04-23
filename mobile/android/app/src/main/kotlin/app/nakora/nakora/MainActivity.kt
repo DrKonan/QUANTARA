@@ -1,4 +1,4 @@
-package com.quantara.quantara
+package app.nakora.nakora
 
 import io.flutter.embedding.android.FlutterActivity
 
