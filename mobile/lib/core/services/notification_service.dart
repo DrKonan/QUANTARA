@@ -27,7 +27,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(const AndroidNotificationChannel(
-        'quantara_predictions',
+        'nakora_predictions',
         'Pronos Nakora',
         description: 'Notifications de pronostics et résultats',
         importance: Importance.high,
@@ -39,7 +39,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     notification.body,
     const NotificationDetails(
       android: AndroidNotificationDetails(
-        'quantara_predictions',
+        'nakora_predictions',
         'Pronos Nakora',
         channelDescription: 'Notifications de pronostics et résultats',
         importance: Importance.high,
@@ -77,7 +77,7 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   static const _androidChannel = AndroidNotificationChannel(
-    'quantara_predictions',
+    'nakora_predictions',
     'Pronos Nakora',
     description: 'Notifications de pronostics et résultats',
     importance: Importance.high,

@@ -38,7 +38,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
               text: const TextSpan(
                 children: [
                   TextSpan(
-                    text: 'Q',
+                    text: 'N',
                     style: TextStyle(
                       color: AppColors.gold,
                       fontSize: 36,
@@ -46,7 +46,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                     ),
                   ),
                   TextSpan(
-                    text: 'uantara',
+                    text: 'akora',
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 36,

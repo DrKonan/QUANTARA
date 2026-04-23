@@ -60,7 +60,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     text: const TextSpan(
                       children: [
                         TextSpan(
-                          text: 'Q',
+                          text: 'N',
                           style: TextStyle(
                             color: AppColors.gold,
                             fontSize: 24,
@@ -68,7 +68,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           ),
                         ),
                         TextSpan(
-                          text: 'uantara',
+                          text: 'akora',
                           style: TextStyle(
                             color: AppColors.textPrimary,
                             fontSize: 24,

@@ -6,7 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// On iOS, Keychain persists across app reinstalls.
 /// On Android, Keystore persists across app reinstalls (unless factory reset).
 class DeviceFingerprintService {
-  static const _storageKey = 'quantara_installation_id';
+  static const _storageKey = 'nakora_installation_id';
   static final _storage = FlutterSecureStorage();
 
   static DeviceFingerprintService? _instance;
