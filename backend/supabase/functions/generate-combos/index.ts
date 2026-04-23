@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Edge Function : generate-combos
+// NAKORA — Edge Function : generate-combos
 //
 // Génère 1 à 2 combinés du jour à partir des TOP PICKS prematch.
 // 

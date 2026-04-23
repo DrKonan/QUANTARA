@@ -44,10 +44,10 @@ class SupabaseRepository {
         };
       }
       _leagueMetaCache = map;
-      debugPrint('[Quantara] Loaded ${map.length} league configs');
+      debugPrint('[Nakora] Loaded ${map.length} league configs');
       return map;
     } catch (e) {
-      debugPrint('[Quantara] Failed to load leagues_config: $e');
+      debugPrint('[Nakora] Failed to load leagues_config: $e');
       return {};
     }
   }
@@ -56,7 +56,7 @@ class SupabaseRepository {
 
   Future<DailyResponse> fetchTodayEligibleMatches({String? date, bool useEdgeFunction = true}) async {
     if (!useEdgeFunction) {
-      debugPrint('[Quantara] Skipping Edge Function (no auth), using DB fallback');
+      debugPrint('[Nakora] Skipping Edge Function (no auth), using DB fallback');
       final matches = await _fetchTodayMatchesFallback(date);
       return DailyResponse(matches: matches, combos: const []);
     }
@@ -68,8 +68,8 @@ class SupabaseRepository {
       );
 
       if (response.status != 200) {
-        debugPrint('[Quantara] Edge function status: ${response.status}');
-        debugPrint('[Quantara] Edge function body: ${response.data}');
+        debugPrint('[Nakora] Edge function status: ${response.status}');
+        debugPrint('[Nakora] Edge function body: ${response.data}');
         throw Exception('Edge function error: ${response.status}');
       }
 
@@ -78,7 +78,7 @@ class SupabaseRepository {
           : response.data as Map<String, dynamic>;
 
       final matchesList = body['matches'] as List<dynamic>? ?? [];
-      debugPrint('[Quantara] Edge function returned ${matchesList.length} matches');
+      debugPrint('[Nakora] Edge function returned ${matchesList.length} matches');
       final matches = matchesList
           .map((m) => TodayMatch.fromJson(m as Map<String, dynamic>))
           .toList();
@@ -88,19 +88,19 @@ class SupabaseRepository {
       final combos = combosList
           .map((c) => ComboPrediction.fromJson(c as Map<String, dynamic>))
           .toList();
-      debugPrint('[Quantara] Edge function returned ${combos.length} combos');
+      debugPrint('[Nakora] Edge function returned ${combos.length} combos');
 
       return DailyResponse(matches: matches, combos: combos);
     } catch (e, st) {
-      debugPrint('[Quantara] Edge function failed: $e');
-      debugPrint('[Quantara] Stack: $st');
+      debugPrint('[Nakora] Edge function failed: $e');
+      debugPrint('[Nakora] Stack: $st');
       // Fallback: query DB directly if Edge Function unavailable
       try {
         final matches = await _fetchTodayMatchesFallback(date);
-        debugPrint('[Quantara] Fallback succeeded: ${matches.length} matches');
+        debugPrint('[Nakora] Fallback succeeded: ${matches.length} matches');
         return DailyResponse(matches: matches, combos: const []);
       } catch (e2) {
-        debugPrint('[Quantara] Fallback also failed: $e2');
+        debugPrint('[Nakora] Fallback also failed: $e2');
         rethrow;
       }
     }
@@ -146,9 +146,9 @@ class SupabaseRepository {
           predsByMatch.putIfAbsent(matchId, () => []);
           predsByMatch[matchId]!.add(TodayPrediction.fromPredRow(p));
         }
-        debugPrint('[Quantara] Loaded predictions for ${predsByMatch.length} matches');
+        debugPrint('[Nakora] Loaded predictions for ${predsByMatch.length} matches');
       } catch (e) {
-        debugPrint('[Quantara] Failed to fetch predictions: $e');
+        debugPrint('[Nakora] Failed to fetch predictions: $e');
       }
     }
 

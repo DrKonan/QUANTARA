@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Edge Function : evaluate-predictions
+// NAKORA — Edge Function : evaluate-predictions
 // Déclencheur : Cron 30 min après la fin de chaque match
 //               (en pratique : cron toutes les 30 min, filtre
 //               les matchs terminés depuis moins de 1h)

@@ -28,7 +28,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
           AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(const AndroidNotificationChannel(
         'quantara_predictions',
-        'Pronos Quantara',
+        'Pronos Nakora',
         description: 'Notifications de pronostics et résultats',
         importance: Importance.high,
       ));
@@ -40,7 +40,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     const NotificationDetails(
       android: AndroidNotificationDetails(
         'quantara_predictions',
-        'Pronos Quantara',
+        'Pronos Nakora',
         channelDescription: 'Notifications de pronostics et résultats',
         importance: Importance.high,
         priority: Priority.high,
@@ -55,7 +55,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     payload: message.data['match_id']?.toString(),
   );
 
-  debugPrint('[Quantara] Background notification shown: ${notification.title}');
+  debugPrint('[Nakora] Background notification shown: ${notification.title}');
 }
 
 // Preference keys (must match notification_settings_screen.dart)
@@ -78,7 +78,7 @@ class NotificationService {
 
   static const _androidChannel = AndroidNotificationChannel(
     'quantara_predictions',
-    'Pronos Quantara',
+    'Pronos Nakora',
     description: 'Notifications de pronostics et résultats',
     importance: Importance.high,
   );
@@ -101,10 +101,10 @@ class NotificationService {
       provisional: false,
     );
 
-    debugPrint('[Quantara] Notification permission: ${settings.authorizationStatus}');
+    debugPrint('[Nakora] Notification permission: ${settings.authorizationStatus}');
 
     if (settings.authorizationStatus == AuthorizationStatus.denied) {
-      debugPrint('[Quantara] Notifications denied by user');
+      debugPrint('[Nakora] Notifications denied by user');
       return;
     }
 
@@ -133,7 +133,7 @@ class NotificationService {
     await _localNotifications.initialize(
       const InitializationSettings(android: androidInit, iOS: iosInit),
       onDidReceiveNotificationResponse: (response) {
-        debugPrint('[Quantara] Local notification tapped: ${response.payload}');
+        debugPrint('[Nakora] Local notification tapped: ${response.payload}');
       },
     );
 
@@ -218,7 +218,7 @@ class NotificationService {
         ? matchName
         : '$count pronostics officiels viennent d\'être publiés';
 
-    debugPrint('[Quantara] Notifying $count new predictions');
+    debugPrint('[Nakora] Notifying $count new predictions');
     await _showLocal(id: 1001, title: title, body: body, type: 'prediction');
   }
 
@@ -233,7 +233,7 @@ class NotificationService {
     if (_knownLiveIds.length <= 1 && _knownPredictionIds.isEmpty) return;
 
     final matchName = _extractMatchName(prediction) ?? 'Match en cours';
-    debugPrint('[Quantara] Notifying live prediction: $matchName');
+    debugPrint('[Nakora] Notifying live prediction: $matchName');
     await _showLocal(
       id: 2001,
       title: '⚡ Prono LIVE disponible',
@@ -262,7 +262,7 @@ class NotificationService {
     if (newCombos.isEmpty) return;
 
     final count = newCombos.length;
-    debugPrint('[Quantara] Notifying $count new combos');
+    debugPrint('[Nakora] Notifying $count new combos');
     await _showLocal(
       id: 3001,
       title: '🔥 ${count == 1 ? "Combinaison" : "$count Combinaisons"} disponible${count > 1 ? "s" : ""}',
@@ -278,7 +278,7 @@ class NotificationService {
   }) async {
     if (!await _isEnabled(_kResults)) return;
 
-    debugPrint('[Quantara] Notifying result: $matchName ${won ? "WON" : "LOST"}');
+    debugPrint('[Nakora] Notifying result: $matchName ${won ? "WON" : "LOST"}');
     await _showLocal(
       id: 4000 + matchName.hashCode.abs() % 1000,
       title: won ? '✅ Prono gagné !' : '❌ Prono perdu',
@@ -322,7 +322,7 @@ class NotificationService {
   // ── Firebase push handling ──
 
   void _handleForegroundMessage(RemoteMessage message) {
-    debugPrint('[Quantara] Foreground message: ${message.notification?.title}');
+    debugPrint('[Nakora] Foreground message: ${message.notification?.title}');
 
     final notification = message.notification;
     if (notification == null) return;
@@ -359,7 +359,7 @@ class NotificationService {
   }
 
   void _handleNotificationTap(RemoteMessage message) {
-    debugPrint('[Quantara] Notification tapped: ${message.data}');
+    debugPrint('[Nakora] Notification tapped: ${message.data}');
   }
 
   /// Register FCM token with Supabase backend.
@@ -370,28 +370,28 @@ class NotificationService {
         onTimeout: () => null,
       );
       if (token == null) {
-        debugPrint('[Quantara] No FCM token available (simulator?)');
+        debugPrint('[Nakora] No FCM token available (simulator?)');
         return;
       }
 
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
-        debugPrint('[Quantara] No authenticated user, skipping token registration');
+        debugPrint('[Nakora] No authenticated user, skipping token registration');
         return;
       }
 
       final platform = Platform.isIOS ? 'ios' : 'android';
 
-      debugPrint('[Quantara] Registering push token ($platform): ${token.substring(0, 20)}...');
+      debugPrint('[Nakora] Registering push token ($platform): ${token.substring(0, 20)}...');
 
       await Supabase.instance.client.functions.invoke(
         'register-push-token',
         body: {'token': token, 'platform': platform},
       );
 
-      debugPrint('[Quantara] Push token registered successfully');
+      debugPrint('[Nakora] Push token registered successfully');
     } catch (e) {
-      debugPrint('[Quantara] Failed to register push token: $e');
+      debugPrint('[Nakora] Failed to register push token: $e');
     }
   }
 }

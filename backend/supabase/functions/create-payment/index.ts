@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Edge Function : create-payment
+// NAKORA — Edge Function : create-payment
 // Crée un paiement PawaPay (deposit) ou Wave (checkout session)
 // Appelé depuis l'app Flutter.
 // ============================================================
@@ -249,7 +249,7 @@ async function handlePawapayPayment(
       address: { value: msisdn },
     },
     customerTimestamp: new Date().toISOString(),
-    statementDescription: `Quantara ${plan}`,
+    statementDescription: `Nakora ${plan}`,
   };
 
   const ppResponse = await fetch(`${pawapayBaseUrl}/deposits`, {

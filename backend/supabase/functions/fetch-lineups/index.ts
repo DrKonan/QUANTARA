@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Edge Function : fetch-lineups
+// NAKORA — Edge Function : fetch-lineups
 // Déclencheur : Cron toutes les 10 min
 // Rôle : Vérifie UNIQUEMENT les matchs dont le kick-off est
 //        dans les 90 prochaines minutes (les compos officielles

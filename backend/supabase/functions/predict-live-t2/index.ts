@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Edge Function : predict-live-t2
+// NAKORA — Edge Function : predict-live-t2
 // Déclencheur : Cron toutes les 5 minutes
 // Rôle : Une seule analyse live par match Tier 2 — fenêtre
 //        élargie 45–80 minutes (2ème mi-temps).

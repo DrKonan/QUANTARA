@@ -82,22 +82,22 @@ class TermsOfServiceScreen extends StatelessWidget {
 
                     _buildSection(
                       "1. Acceptation des conditions",
-                      "En téléchargeant, installant ou utilisant l'application Quantara, "
+                      "En téléchargeant, installant ou utilisant l'application Nakora, "
                       "vous acceptez d'être lié par les présentes Conditions Générales "
                       "d'Utilisation (CGU). Si vous n'acceptez pas ces conditions, "
                       "veuillez ne pas utiliser l'application.\n\n"
-                      "Quantara se réserve le droit de modifier ces CGU à tout moment. "
+                      "Nakora se réserve le droit de modifier ces CGU à tout moment. "
                       "Les modifications prennent effet dès leur publication dans l'application.",
                     ),
 
                     _buildSection(
                       "2. Description du service",
-                      "Quantara est une application d'analyse sportive basée sur "
+                      "Nakora est une application d'analyse sportive basée sur "
                       "l'intelligence artificielle. Elle fournit des prédictions et "
                       "analyses pour le football, le basketball et le hockey sur glace.\n\n"
                       "Les prédictions sont fournies à titre informatif uniquement et "
                       "ne constituent en aucun cas des conseils de paris ou d'investissement. "
-                      "Quantara ne garantit pas l'exactitude des prédictions.",
+                      "Nakora ne garantit pas l'exactitude des prédictions.",
                     ),
 
                     _buildSection(
@@ -105,7 +105,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                       "• Vous devez fournir un numéro de téléphone valide pour créer un compte\n"
                       "• Vous êtes responsable de la confidentialité de votre mot de passe\n"
                       "• Un seul compte par personne est autorisé\n"
-                      "• Vous devez avoir au moins 18 ans pour utiliser Quantara\n"
+                      "• Vous devez avoir au moins 18 ans pour utiliser Nakora\n"
                       "• Toute information fournie doit être exacte et à jour",
                     ),
 
@@ -126,13 +126,13 @@ class TermsOfServiceScreen extends StatelessWidget {
                       "• Les paiements s'effectuent via Mobile Money (PawaPay, Wave)\n"
                       "• Les abonnements se renouvellent automatiquement sauf annulation\n"
                       "• Aucun remboursement n'est accordé pour la période en cours\n"
-                      "• Quantara se réserve le droit de modifier les tarifs avec préavis",
+                      "• Nakora se réserve le droit de modifier les tarifs avec préavis",
                     ),
 
                     _buildSection(
                       "6. Utilisation acceptable",
                       "Il est interdit de :\n\n"
-                      "• Partager, redistribuer ou revendre les prédictions de Quantara\n"
+                      "• Partager, redistribuer ou revendre les prédictions de Nakora\n"
                       "• Utiliser des robots ou scripts pour accéder au service\n"
                       "• Tenter de contourner les mesures de sécurité\n"
                       "• Utiliser le service à des fins illégales\n"
@@ -142,17 +142,17 @@ class TermsOfServiceScreen extends StatelessWidget {
 
                     _buildSection(
                       "7. Propriété intellectuelle",
-                      "Tous les contenus de Quantara (textes, graphiques, logos, algorithmes, "
+                      "Tous les contenus de Nakora (textes, graphiques, logos, algorithmes, "
                       "prédictions, design) sont protégés par le droit de la propriété "
-                      "intellectuelle et appartiennent à Quantara.\n\n"
+                      "intellectuelle et appartiennent à Nakora.\n\n"
                       "Toute reproduction, modification ou distribution non autorisée est "
                       "strictement interdite.",
                     ),
 
                     _buildSection(
                       "8. Limitation de responsabilité",
-                      "Quantara fournit ses analyses à titre informatif. En aucun cas "
-                      "Quantara ne pourra être tenu responsable :\n\n"
+                      "Nakora fournit ses analyses à titre informatif. En aucun cas "
+                      "Nakora ne pourra être tenu responsable :\n\n"
                       "• Des pertes financières liées aux paris sportifs\n"
                       "• De l'inexactitude des prédictions\n"
                       "• Des interruptions de service\n"
@@ -162,7 +162,7 @@ class TermsOfServiceScreen extends StatelessWidget {
 
                     _buildSection(
                       "9. Suspension et résiliation",
-                      "Quantara se réserve le droit de suspendre ou résilier votre compte "
+                      "Nakora se réserve le droit de suspendre ou résilier votre compte "
                       "en cas de violation des présentes CGU, sans préavis ni remboursement.\n\n"
                       "Vous pouvez à tout moment supprimer votre compte depuis les paramètres "
                       "de l'application. La suppression est irréversible et entraîne la perte "
@@ -173,7 +173,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                       "10. Protection des données",
                       "Le traitement de vos données personnelles est régi par notre "
                       "Politique de Confidentialité, accessible depuis l'application.\n\n"
-                      "En utilisant Quantara, vous consentez à la collecte et au traitement "
+                      "En utilisant Nakora, vous consentez à la collecte et au traitement "
                       "de vos données conformément à cette politique.",
                     ),
 

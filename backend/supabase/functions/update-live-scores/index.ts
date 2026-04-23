@@ -1,8 +1,8 @@
 // ============================================================
-// QUANTARA — Edge Function : update-live-scores
+// NAKORA — Edge Function : update-live-scores
 // Déclencheur : Cron toutes les 30 minutes
 // Rôle : Suivi léger des transitions de statut (pas du live).
-//        QUANTARA n'est PAS une app de scores en direct.
+//        NAKORA n'est PAS une app de scores en direct.
 //        On suit juste : scheduled → live → finished pour savoir
 //        quand déclencher predict-live et evaluate-predictions.
 //        Si aucun match actif en DB → 0 appel API.

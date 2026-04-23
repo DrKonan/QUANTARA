@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Shared : client API-Football
+// NAKORA — Shared : client API-Football
 // Rate-limité : pour rester safe sur le plan Ultra (75k/jour)
 // ============================================================
 

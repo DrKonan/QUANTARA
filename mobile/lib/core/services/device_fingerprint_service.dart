@@ -24,7 +24,7 @@ class DeviceFingerprintService {
       // Generate a UUID-like ID without external package
       id = _generateUuid();
       await _storage.write(key: _storageKey, value: id);
-      debugPrint('[Quantara] New installation ID generated: ${id.substring(0, 8)}...');
+      debugPrint('[Nakora] New installation ID generated: ${id.substring(0, 8)}...');
     }
     _cachedId = id;
     return id;
@@ -54,7 +54,7 @@ class DeviceFingerprintService {
         maskedEmail: email != null ? _maskEmail(email) : null,
       );
     } catch (e) {
-      debugPrint('[Quantara] Trial check error: $e');
+      debugPrint('[Nakora] Trial check error: $e');
       return null; // On error, allow trial (fail open)
     }
   }
@@ -75,9 +75,9 @@ class DeviceFingerprintService {
         'phone': phone,
         'email': email,
       });
-      debugPrint('[Quantara] Device trial registered');
+      debugPrint('[Nakora] Device trial registered');
     } catch (e) {
-      debugPrint('[Quantara] Device trial registration error: $e');
+      debugPrint('[Nakora] Device trial registration error: $e');
     }
   }
 

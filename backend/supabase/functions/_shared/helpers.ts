@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Shared : helpers communs
+// NAKORA — Shared : helpers communs
 // ============================================================
 
 /** Retourne une réponse JSON standard */

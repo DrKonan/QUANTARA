@@ -33,20 +33,20 @@ void main() async {
 
   // Initialize notifications in background (never block app startup)
   NotificationService().initialize().catchError((e) {
-    debugPrint('[Quantara] Notification init error (non-blocking): $e');
+    debugPrint('[Nakora] Notification init error (non-blocking): $e');
   });
 
-  runApp(const ProviderScope(child: QuantaraApp()));
+  runApp(const ProviderScope(child: NakoraApp()));
 }
 
-class QuantaraApp extends ConsumerWidget {
-  const QuantaraApp({super.key});
+class NakoraApp extends ConsumerWidget {
+  const NakoraApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     return MaterialApp.router(
-      title: 'Quantara',
+      title: 'Nakora',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
       routerConfig: router,

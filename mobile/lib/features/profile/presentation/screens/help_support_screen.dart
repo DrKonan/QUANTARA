@@ -120,7 +120,7 @@ class HelpSupportScreen extends StatelessWidget {
 
                     _buildFaqItem(
                       "Quels sont les abonnements disponibles ?",
-                      "Quantara propose 4 formules :\n\n"
+                      "Nakora propose 4 formules :\n\n"
                           "• Gratuit — 1 match/jour, pas de combo\n"
                           "• Starter (1 000 F/mois) — 5 matchs/jour\n"
                           "• Pro (2 000 F/mois) — 15 matchs/jour + 1 combo\n"
@@ -161,7 +161,7 @@ class HelpSupportScreen extends StatelessWidget {
                     _buildFaqItem(
                       "Les notifications ne fonctionnent pas",
                       "Vérifiez que les notifications sont activées dans Profil → Notifications. "
-                          "Assurez-vous aussi que les notifications de Quantara sont autorisées dans les paramètres de votre appareil. "
+                          "Assurez-vous aussi que les notifications de Nakora sont autorisées dans les paramètres de votre appareil. "
                           "Si le problème persiste, contactez notre support.",
                     ),
 
@@ -322,7 +322,7 @@ class HelpSupportScreen extends StatelessWidget {
     final uri = Uri(
       scheme: 'mailto',
       path: _email,
-      queryParameters: {'subject': 'Support Quantara'},
+      queryParameters: {'subject': 'Support Nakora'},
     );
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);

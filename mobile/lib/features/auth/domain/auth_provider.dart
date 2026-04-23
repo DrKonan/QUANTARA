@@ -73,7 +73,7 @@ class AuthService {
     final authEmail = email?.isNotEmpty == true ? email! : phoneToAuthEmail(phone);
     final hasRealEmail = email?.isNotEmpty == true;
 
-    debugPrint('[Quantara] signUp authEmail=$authEmail hasRealEmail=$hasRealEmail');
+    debugPrint('[Nakora] signUp authEmail=$authEmail hasRealEmail=$hasRealEmail');
 
     final response = await _client.auth.signUp(
       email: authEmail,
@@ -84,18 +84,18 @@ class AuthService {
       },
     );
 
-    debugPrint('[Quantara] signUp response: user=${response.user?.id}, session=${response.session != null}, identities=${response.user?.identities?.length}');
+    debugPrint('[Nakora] signUp response: user=${response.user?.id}, session=${response.session != null}, identities=${response.user?.identities?.length}');
 
     // Supabase may return a user without session if email confirmation is on.
     // For phone-derived emails we auto-login immediately after signup.
     if (response.session == null && response.user != null) {
-      debugPrint('[Quantara] No session after signUp, trying auto-login...');
+      debugPrint('[Nakora] No session after signUp, trying auto-login...');
       try {
         final loginResponse = await _client.auth.signInWithPassword(
           email: authEmail,
           password: password,
         );
-        debugPrint('[Quantara] Auto-login OK');
+        debugPrint('[Nakora] Auto-login OK');
         await _upsertProfile(
           userId: loginResponse.user!.id,
           username: username,
@@ -120,7 +120,7 @@ class AuthService {
           previousContact: trialCheck?.displayContact,
         );
       } catch (loginErr) {
-        debugPrint('[Quantara] Auto-login FAILED: $loginErr');
+        debugPrint('[Nakora] Auto-login FAILED: $loginErr');
         if (response.user != null) {
           await _upsertProfileAnon(
             userId: response.user!.id,
@@ -139,7 +139,7 @@ class AuthService {
 
     // Session exists — normal flow
     if (response.user != null) {
-      debugPrint('[Quantara] Session exists, upserting profile...');
+      debugPrint('[Nakora] Session exists, upserting profile...');
       try {
         await _upsertProfile(
           userId: response.user!.id,
@@ -148,9 +148,9 @@ class AuthService {
           email: hasRealEmail ? email : null,
           grantTrial: trialAllowed,
         );
-        debugPrint('[Quantara] Profile upsert OK');
+        debugPrint('[Nakora] Profile upsert OK');
       } catch (upsertErr) {
-        debugPrint('[Quantara] Profile upsert FAILED: $upsertErr');
+        debugPrint('[Nakora] Profile upsert FAILED: $upsertErr');
         rethrow;
       }
     }

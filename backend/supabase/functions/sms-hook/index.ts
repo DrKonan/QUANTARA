@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Edge Function : sms-hook
+// NAKORA — Edge Function : sms-hook
 // 
 // Auth Hook « Custom SMS Sender » pour Supabase Auth.
 // Intercepte l'OTP généré par Supabase et l'envoie via
@@ -135,7 +135,7 @@ Deno.serve(async (req: Request) => {
           to: waPhone,
           type: "text",
           text: {
-            body: `🔐 Quantara — Votre code de vérification est : *${sms.otp}*\n\nCe code expire dans 5 minutes. Ne le partagez avec personne.`,
+            body: `🔐 Nakora — Votre code de vérification est : *${sms.otp}*\n\nCe code expire dans 5 minutes. Ne le partagez avec personne.`,
           },
         }),
       },

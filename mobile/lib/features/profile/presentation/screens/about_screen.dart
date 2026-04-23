@@ -73,7 +73,7 @@ class AboutScreen extends StatelessWidget {
                     const SizedBox(height: 20),
 
                     const Text(
-                      "Quantara",
+                      "Nakora",
                       style: TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 28,
@@ -182,7 +182,7 @@ class AboutScreen extends StatelessWidget {
 
                     // Legal
                     Text(
-                      "Quantara est une application d'analyse sportive.\n"
+                      "Nakora est une application d'analyse sportive.\n"
                       "Les prédictions sont fournies à titre informatif.\n"
                       "Le jeu comporte des risques, jouez de manière responsable.",
                       textAlign: TextAlign.center,
@@ -226,7 +226,7 @@ class AboutScreen extends StatelessWidget {
                     const SizedBox(height: 20),
 
                     Text(
-                      "© 2026 Quantara — Tous droits réservés",
+                      "© 2026 Nakora — Tous droits réservés",
                       style: TextStyle(
                         color: AppColors.textSecondary.withValues(alpha: 0.4),
                         fontSize: 11,

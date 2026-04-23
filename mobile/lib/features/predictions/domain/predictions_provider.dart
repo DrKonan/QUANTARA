@@ -58,7 +58,7 @@ final _dailyResponseProvider = FutureProvider<DailyResponse>((ref) async {
 
   // Adaptive polling based on match states
   final interval = _computePollingInterval(result.matches);
-  debugPrint('[Quantara] Next refresh in ${interval.inSeconds}s '
+  debugPrint('[Nakora] Next refresh in ${interval.inSeconds}s '
       '(${result.matches.where((m) => m.isLive).length} live, '
       '${result.matches.where((m) => !m.isEffectivelyFinished && !m.isLive && m.minutesUntilKickoff <= 60 && m.minutesUntilKickoff > 0).length} pre-KO)');
 
@@ -89,7 +89,7 @@ final _dailyResponseProvider = FutureProvider<DailyResponse>((ref) async {
   }
 
   final timer = Timer(interval, () {
-    debugPrint('[Quantara] Auto-refresh daily data (adaptive)');
+    debugPrint('[Nakora] Auto-refresh daily data (adaptive)');
     ref.invalidateSelf();
   });
   ref.onDispose(timer.cancel);

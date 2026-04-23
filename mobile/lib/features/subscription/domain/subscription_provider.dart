@@ -211,7 +211,7 @@ class DailyViewNotifier extends StateNotifier<DailyViewState> {
   void _ensureToday() {
     if (state.date != _today) {
       state = DailyViewState(viewedMatchIds: {}, date: _today);
-      debugPrint('[Quantara] Daily views reset for $_today');
+      debugPrint('[Nakora] Daily views reset for $_today');
     }
   }
 

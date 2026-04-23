@@ -308,7 +308,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 _buildMenuItem(
                   icon: Icons.info_outline_rounded,
-                  title: "À propos de Quantara",
+                  title: "À propos de Nakora",
                   onTap: () => context.push('/profile/about'),
                 ),
                 _buildMenuItem(
@@ -365,7 +365,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
                 // Version
                 const Text(
-                  "Quantara v1.0.0",
+                  "Nakora v1.0.0",
                   style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
                 ),
                 const SizedBox(height: 24),

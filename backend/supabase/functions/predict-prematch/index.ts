@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Edge Function : predict-prematch
+// NAKORA — Edge Function : predict-prematch
 // 
 // DEUX MODES DE FONCTIONNEMENT :
 // 
@@ -16,7 +16,7 @@
 //    → Marqués is_refined = true + refined_at
 //
 // Ce mécanisme de raffinement est la clé de la proposition de valeur
-// de QUANTARA : les infos de dernière minute changent tout.
+// de NAKORA : les infos de dernière minute changent tout.
 // Exemple : PSG-Brest, compo révèle des jeunes alignés →
 // prono passe de "victoire PSG" à confiance réduite.
 // ============================================================

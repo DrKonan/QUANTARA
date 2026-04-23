@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Shared : moteur de scoring (pré-match) V1.1
+// NAKORA — Shared : moteur de scoring (pré-match) V1.1
 // Marchés : result, double_chance, over_under, btts, corners, cards
 // V1.1 : calibration odds, vrais xG/corners, filtres anti-faux positifs
 // ============================================================

@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Shared : moteur de scoring live
+// NAKORA — Shared : moteur de scoring live
 // Indicateurs : possession, tirs cadrés, corners, cartons,
 //               score actuel, xG ajustés
 // Marchés : result, over_under, btts, corners, cards

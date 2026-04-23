@@ -84,7 +84,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
                     _buildSection(
                       "1. Données collectées",
-                      "Quantara collecte uniquement les données nécessaires au fonctionnement de l'application :\n\n"
+                      "Nakora collecte uniquement les données nécessaires au fonctionnement de l'application :\n\n"
                           "• Numéro de téléphone (identifiant principal du compte)\n"
                           "• Adresse e-mail (optionnelle, pour récupération de compte)\n"
                           "• Nom d'utilisateur (affiché dans votre profil)\n"
@@ -120,14 +120,14 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     _buildSection(
                       "4. Paiements",
                       "Les paiements sont traités via PawaPay (mobile money) et Wave. "
-                          "Quantara ne stocke aucune donnée financière. Les transactions sont gérées "
+                          "Nakora ne stocke aucune donnée financière. Les transactions sont gérées "
                           "intégralement par les opérateurs de paiement. Seuls le statut et la référence "
                           "de la transaction sont conservés pour le suivi de votre abonnement.",
                     ),
 
                     _buildSection(
                       "5. Partage des données",
-                      "Quantara ne vend, ne loue et ne partage jamais vos données personnelles avec des tiers. "
+                      "Nakora ne vend, ne loue et ne partage jamais vos données personnelles avec des tiers. "
                           "Aucune donnée n'est transmise à des fins publicitaires.\n\n"
                           "Les seuls services tiers utilisés sont :\n"
                           "• Supabase (authentification et base de données)\n"
@@ -156,7 +156,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
                     _buildSection(
                       "8. Cookies et tracking",
-                      "Quantara n'utilise pas de cookies. L'application ne contient aucun tracker publicitaire. "
+                      "Nakora n'utilise pas de cookies. L'application ne contient aucun tracker publicitaire. "
                           "Firebase Analytics collecte uniquement des données d'utilisation anonymes "
                           "(écrans visités, événements) pour améliorer le service. Aucune donnée personnelle "
                           "identifiable n'est envoyée à Firebase.",

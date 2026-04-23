@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Shared : génération analyse textuelle (OpenAI)
+// NAKORA — Shared : génération analyse textuelle (OpenAI)
 // ============================================================
 
 export interface AnalysisInput {

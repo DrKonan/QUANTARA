@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Edge Function : get-today-matches
+// NAKORA — Edge Function : get-today-matches
 // Auth : JWT requis (utilisateur connecté)
 // Rôle : Retourne les matchs éligibles du jour avec leur
 //        statut de prédiction. Un match terminé n'apparaît pas.

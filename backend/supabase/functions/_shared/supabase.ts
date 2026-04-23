@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Shared : client Supabase (service role)
+// NAKORA — Shared : client Supabase (service role)
 // ============================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 

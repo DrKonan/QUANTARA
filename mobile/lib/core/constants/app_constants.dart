@@ -1,5 +1,5 @@
 abstract class AppConstants {
-  static const appName = 'Quantara';
+  static const appName = 'Nakora';
   static const trialDurationDays = 3;
   static const minConfidenceThreshold = 0.80;
 

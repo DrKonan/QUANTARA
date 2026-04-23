@@ -60,7 +60,7 @@ class BiometricService {
   /// Enable biometric login (flag only — credentials saved on next password login).
   Future<void> enable() async {
     await _storage.write(key: _keyEnabled, value: 'true');
-    debugPrint('[Quantara] Biometric enabled (awaiting credentials on next login)');
+    debugPrint('[Nakora] Biometric enabled (awaiting credentials on next login)');
   }
 
   /// Save credentials securely. Called after a successful password login
@@ -71,7 +71,7 @@ class BiometricService {
   }) async {
     await _storage.write(key: _keyEmail, value: authEmail);
     await _storage.write(key: _keyPassword, value: password);
-    debugPrint('[Quantara] Biometric credentials saved');
+    debugPrint('[Nakora] Biometric credentials saved');
   }
 
   /// Disable biometric login and clear stored credentials.
@@ -79,7 +79,7 @@ class BiometricService {
     await _storage.delete(key: _keyEmail);
     await _storage.delete(key: _keyPassword);
     await _storage.write(key: _keyEnabled, value: 'false');
-    debugPrint('[Quantara] Biometric credentials cleared');
+    debugPrint('[Nakora] Biometric credentials cleared');
   }
 
   /// Authenticate with biometrics then sign in via Supabase.
@@ -87,7 +87,7 @@ class BiometricService {
   Future<bool> authenticateAndSignIn() async {
     try {
       final authenticated = await _auth.authenticate(
-        localizedReason: 'Connectez-vous à Quantara',
+        localizedReason: 'Connectez-vous à Nakora',
         biometricOnly: true,
         persistAcrossBackgrounding: true,
       );
@@ -98,7 +98,7 @@ class BiometricService {
       final password = await _storage.read(key: _keyPassword);
 
       if (email == null || password == null) {
-        debugPrint('[Quantara] Biometric auth OK but no stored credentials');
+        debugPrint('[Nakora] Biometric auth OK but no stored credentials');
         return false;
       }
 
@@ -111,10 +111,10 @@ class BiometricService {
       AnalyticsService().logLogin('biometric');
       AnalyticsService().setUserId(Supabase.instance.client.auth.currentUser?.id);
 
-      debugPrint('[Quantara] Biometric sign-in successful');
+      debugPrint('[Nakora] Biometric sign-in successful');
       return true;
     } catch (e) {
-      debugPrint('[Quantara] Biometric sign-in failed: $e');
+      debugPrint('[Nakora] Biometric sign-in failed: $e');
       return false;
     }
   }

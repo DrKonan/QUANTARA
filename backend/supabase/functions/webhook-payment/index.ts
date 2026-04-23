@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Edge Function : webhook-payment
+// NAKORA — Edge Function : webhook-payment
 // Webhook public appelé par PawaPay et Wave après chaque paiement.
 // Détecte le provider à partir du payload et active l'abonnement.
 // ============================================================

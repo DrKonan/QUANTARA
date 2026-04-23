@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Edge Function : fetch-matches
+// NAKORA — Edge Function : fetch-matches
 // Déclencheur : Cron 2×/jour — 3h UTC + 20h UTC
 // 
 // • 3h UTC (morning) → récupère TOUS les matchs du jour UTC

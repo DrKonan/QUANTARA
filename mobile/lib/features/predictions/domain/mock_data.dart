@@ -1,13 +1,13 @@
 import 'match_model.dart';
 import 'prediction_model.dart';
 
-class QuantaraStats {
+class NakoraStats {
   final double successRate;
   final int totalPredictions;
   final int won;
   final int lost;
 
-  const QuantaraStats({
+  const NakoraStats({
     required this.successRate,
     required this.totalPredictions,
     required this.won,
@@ -17,7 +17,7 @@ class QuantaraStats {
 
 // Dev mock data — will be replaced by Supabase queries
 
-final mockStats = QuantaraStats(
+final mockStats = NakoraStats(
   successRate: 0.84,
   totalPredictions: 142,
   won: 119,

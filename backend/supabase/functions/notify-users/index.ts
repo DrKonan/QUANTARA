@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Edge Function : notify-users
+// NAKORA — Edge Function : notify-users
 // Déclencheur : appelée par predict-prematch, predict-live-t1,
 //               generate-combos et evaluate-predictions
 // Body attendu :

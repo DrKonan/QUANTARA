@@ -1,5 +1,5 @@
 // ============================================================
-// QUANTARA — Edge Function : predict-live-t1
+// NAKORA — Edge Function : predict-live-t1
 // Déclencheur : Cron toutes les 15 minutes (matchs Tier 1 en cours)
 // Rôle : Analyse live pour les grandes ligues (Tier 1).
 //        Récupère les stats live API-Football, recalcule les

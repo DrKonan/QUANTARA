@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('Quantara app smoke test', (WidgetTester tester) async {
+  testWidgets('Nakora app smoke test', (WidgetTester tester) async {
     expect(true, isTrue);
   });
 }
