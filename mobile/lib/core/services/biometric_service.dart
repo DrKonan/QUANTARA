@@ -87,8 +87,9 @@ class BiometricService {
     try {
       return await _auth.authenticate(
         localizedReason: 'Vérifiez votre identité pour activer la connexion biométrique',
-        biometricOnly: true,
-        persistAcrossBackgrounding: true,
+        // biometricOnly: false = accepte aussi PIN/schéma comme fallback lors de l'activation
+        biometricOnly: false,
+        persistAcrossBackgrounding: false,
       );
     } catch (e) {
       debugPrint('[Nakora] Biometric check failed: $e');
@@ -102,8 +103,8 @@ class BiometricService {
     try {
       final authenticated = await _auth.authenticate(
         localizedReason: 'Connectez-vous à Nakora',
-        biometricOnly: true,
-        persistAcrossBackgrounding: true,
+        biometricOnly: false,
+        persistAcrossBackgrounding: false,
       );
 
       if (!authenticated) return false;
