@@ -34,7 +34,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final profile = ref.read(userProfileProvider).valueOrNull;
       final email = ref.read(currentUserProvider)?.email ?? '';
-      final isPhoneSignup = email.endsWith('@phone.quantara.app');
+      final isPhoneSignup = email.endsWith('@phone.nakora.app');
 
       if (profile != null) {
         _usernameCtrl.text = profile.username ?? '';

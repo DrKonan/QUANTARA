@@ -54,7 +54,7 @@ class AuthService {
   /// Users without a real email use this as their auth identifier.
   static String phoneToAuthEmail(String phone) {
     final cleaned = phone.replaceAll(RegExp(r'[^\d]'), '');
-    return '$cleaned@phone.quantara.app';
+    return '$cleaned@phone.nakora.app';
   }
 
   /// Register with phone + password + optional email.

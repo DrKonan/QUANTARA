@@ -6,7 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 class HelpSupportScreen extends StatelessWidget {
   const HelpSupportScreen({super.key});
 
-  static const _email = 'support@quantara.app';
+  static const _email = 'support@nakora.app';
 
   @override
   Widget build(BuildContext context) {
@@ -339,7 +339,7 @@ class HelpSupportScreen extends StatelessWidget {
           children: [
             Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
             SizedBox(width: 10),
-            Text("Email copié : support@quantara.app"),
+            Text("Email copié : support@nakora.app"),
           ],
         ),
         backgroundColor: AppColors.success,

@@ -143,7 +143,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                           "• Suppression : supprimer votre compte directement dans Profil → Supprimer mon compte\n"
                           "• Désactivation biométrique : désactiver Face ID / Touch ID dans Profil\n"
                           "• Portabilité : exporter vos données sur demande\n\n"
-                          "Pour exercer ces droits, contactez-nous à support@quantara.app",
+                          "Pour exercer ces droits, contactez-nous à support@nakora.app",
                     ),
 
                     _buildSection(
@@ -165,7 +165,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     _buildSection(
                       "9. Contact",
                       "Pour toute question relative à la confidentialité :\n\n"
-                          "📧 support@quantara.app\n"
+                          "📧 support@nakora.app\n"
                           "📍 Abidjan, Côte d'Ivoire",
                     ),
 

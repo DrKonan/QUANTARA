@@ -188,7 +188,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                     _buildSection(
                       "12. Contact",
                       "Pour toute question relative aux présentes CGU :\n\n"
-                      "📧 Email : support@quantara.app\n"
+                      "📧 Email : support@nakora.app\n"
                       "📱 Application : Aide & Support > Nous contacter",
                     ),
 

@@ -87,7 +87,7 @@ class DeviceFingerprintService {
   }
 
   String _maskEmail(String email) {
-    if (email.endsWith('@phone.quantara.app')) return '';
+    if (email.endsWith('@phone.nakora.app')) return '';
     final parts = email.split('@');
     if (parts.length != 2) return '***';
     final name = parts[0];
