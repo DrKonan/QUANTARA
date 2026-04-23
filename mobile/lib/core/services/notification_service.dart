@@ -6,10 +6,56 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/notifications/presentation/screens/notification_center_screen.dart';
 
-/// Top-level handler for background messages (must be top-level function).
+/// Top-level handler for background/terminated messages (isolate séparé).
+/// Appelé par FCM quand l'app est fermée ou en arrière-plan.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('[Quantara] Background message: ${message.notification?.title}');
+  final notification = message.notification;
+  if (notification == null) return;
+
+  // Sur Android, les messages avec un payload `notification` sont affichés
+  // automatiquement par le système — on crée quand même la notification locale
+  // pour s'assurer qu'elle apparaît avec le bon channel (importance = high).
+  final localNotifications = FlutterLocalNotificationsPlugin();
+
+  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  await localNotifications.initialize(
+    const InitializationSettings(android: androidInit),
+  );
+
+  await localNotifications
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(const AndroidNotificationChannel(
+        'quantara_predictions',
+        'Pronos Quantara',
+        description: 'Notifications de pronostics et résultats',
+        importance: Importance.high,
+      ));
+
+  await localNotifications.show(
+    notification.hashCode,
+    notification.title,
+    notification.body,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'quantara_predictions',
+        'Pronos Quantara',
+        channelDescription: 'Notifications de pronostics et résultats',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    ),
+    payload: message.data['match_id']?.toString(),
+  );
+
+  debugPrint('[Quantara] Background notification shown: ${notification.title}');
 }
 
 // Preference keys (must match notification_settings_screen.dart)
