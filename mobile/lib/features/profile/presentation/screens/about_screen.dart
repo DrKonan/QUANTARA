@@ -162,7 +162,7 @@ class AboutScreen extends StatelessWidget {
                       Icons.payments_rounded,
                       AppColors.emerald,
                       "Mobile Money",
-                      "Wave, Orange Money, MTN, Moov, Airtel — 12 pays d'Afrique",
+                      "Wave, Orange Money, MTN, Moov, Airtel",
                     ),
                     _buildFeatureRow(
                       Icons.security_rounded,
@@ -193,48 +193,10 @@ class AboutScreen extends StatelessWidget {
                       ),
                     ),
 
-                    const SizedBox(height: 16),
-
-                    // Countries
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.surfaceLight.withValues(alpha: 0.5)),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            "Disponible dans 12 pays",
-                            style: TextStyle(
-                              color: AppColors.textSecondary.withValues(alpha: 0.7),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            "🇨🇮 🇸🇳 🇲🇱 🇧🇫 🇧🇯 🇹🇬 🇳🇪 🇬🇳 🇨🇲 🇬🇦 🇨🇬 🇨🇩",
-                            style: TextStyle(fontSize: 22, letterSpacing: 4),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-
                     const SizedBox(height: 20),
 
                     Text(
                       "© 2026 Nakora — Tous droits réservés",
-                      style: TextStyle(
-                        color: AppColors.textSecondary.withValues(alpha: 0.4),
-                        fontSize: 11,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Fait avec ❤️ à Abidjan, Côte d'Ivoire",
                       style: TextStyle(
                         color: AppColors.textSecondary.withValues(alpha: 0.4),
                         fontSize: 11,
