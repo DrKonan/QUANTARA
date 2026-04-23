@@ -3,7 +3,7 @@
 <plist version="1.0">
 	<dict>
 		<key>NSFaceIDUsageDescription</key>
-		<string>Quantara utilise Face ID pour vous connecter rapidement et en toute sécurité.</string>
+		<string>Nakora utilise Face ID pour vous connecter rapidement et en toute sécurité.</string>
 		<key>CADisableMinimumFrameDurationOnPhone</key>
 		<true/>
 		<key>CFBundleDevelopmentRegion</key>
@@ -50,9 +50,9 @@
 			</dict>
 		</dict>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>Quantara a besoin d'accéder à vos photos pour votre avatar de profil.</string>
+		<string>Nakora a besoin d'accéder à vos photos pour votre avatar de profil.</string>
 		<key>NSCameraUsageDescription</key>
-		<string>Quantara a besoin de l'appareil photo pour prendre votre photo de profil.</string>
+		<string>Nakora a besoin de l'appareil photo pour prendre votre photo de profil.</string>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>UILaunchStoryboardName</key>
