@@ -249,8 +249,18 @@ final dailyViewProvider =
 final canViewMatchProvider = Provider.family<bool, String>((ref, matchId) {
   final profile = ref.watch(userProfileProvider).valueOrNull;
   final limit = profile?.dailyMatchLimit ?? 1;
-  final notifier = ref.watch(dailyViewProvider.notifier);
-  return notifier.canView(matchId, limit);
+  if (limit < 0) return true; // unlimited
+
+  final state = ref.watch(dailyViewProvider);
+
+  // Check date without mutating state (reset is handled separately)
+  final now = DateTime.now();
+  final today =
+      '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  if (state.date != today) return true; // new day → always allow, notifier resets on next recordView
+
+  if (state.viewedMatchIds.contains(matchId)) return true;
+  return state.viewedMatchIds.length < limit;
 });
 
 /// Combo limit for the user's current plan
