@@ -18,7 +18,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDXkzPpGXj6oyb1A2ELH9Gx0UeGJW9FzOY',
-    appId: '1:828179538034:android:9b2bf8045a8e90bf6562eb',
+    appId: '1:828179538034:android:27e33029c611d20c6562eb',
     messagingSenderId: '828179538034',
     projectId: 'quantara-app-45ced',
     storageBucket: 'quantara-app-45ced.firebasestorage.app',

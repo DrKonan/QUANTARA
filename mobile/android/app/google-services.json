@@ -7,9 +7,28 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:828179538034:android:9b2bf8045a8e90bf6562eb",
+        "mobilesdk_app_id": "1:828179538034:android:27e33029c611d20c6562eb",
         "android_client_info": {
           "package_name": "app.nakora.nakora"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXkzPpGXj6oyb1A2ELH9Gx0UeGJW9FzOY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:828179538034:android:9b2bf8045a8e90bf6562eb",
+        "android_client_info": {
+          "package_name": "com.quantara.quantara"
         }
       },
       "oauth_client": [],
