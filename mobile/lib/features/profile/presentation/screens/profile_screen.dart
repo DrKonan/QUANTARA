@@ -35,7 +35,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _toggleBiometric(bool value) async {
     final bio = BiometricService();
     if (value) {
-      // Vérifier la biométrie immédiatement avant d'activer
+      // Step 1: verify biometric
       final authenticated = await bio.authenticateBiometricOnly();
       if (!authenticated) {
         if (mounted) {
@@ -46,22 +46,140 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           );
         }
-        return; // Ne pas activer
+        return;
       }
-      await bio.enable();
-      if (mounted) {
+
+      // Step 2: ask for password to save credentials immediately
+      if (!mounted) return;
+      final password = await _showPasswordConfirmDialog();
+      if (password == null) return; // user cancelled
+
+      // Step 3: verify password + save credentials
+      final authUser = ref.read(currentUserProvider);
+      final authEmail = authUser?.email ?? '';
+      if (authEmail.isEmpty) return;
+
+      final success = await bio.enableWithCredentials(
+        authEmail: authEmail,
+        password: password,
+      );
+
+      if (!mounted) return;
+      if (success) {
+        setState(() => _bioEnabled = true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("$_bioLabel activé — entrez votre mot de passe une fois pour finaliser"),
+            content: Text("$_bioLabel activé avec succès"),
             backgroundColor: AppColors.surface,
           ),
         );
-        setState(() => _bioEnabled = true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Mot de passe incorrect. Biométrie non activée."),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
     } else {
       await bio.disable();
       if (mounted) setState(() => _bioEnabled = false);
     }
+  }
+
+  Future<String?> _showPasswordConfirmDialog() async {
+    final ctrl = TextEditingController();
+    bool obscure = true;
+
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            left: 24, right: 24, top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "Confirmer votre mot de passe",
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                "Pour sauvegarder vos identifiants de façon sécurisée",
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: ctrl,
+                obscureText: obscure,
+                autofocus: true,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  hintText: "Mot de passe",
+                  hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.5)),
+                  prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textSecondary, size: 20),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: AppColors.textSecondary, size: 20,
+                    ),
+                    onPressed: () => setModalState(() => obscure = !obscure),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textSecondary,
+                        side: const BorderSide(color: AppColors.surfaceLight),
+                      ),
+                      child: const Text("Annuler"),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, ctrl.text),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.gold,
+                      ),
+                      child: const Text("Confirmer"),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override

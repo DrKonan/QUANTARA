@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/league_utils.dart';
 import '../../../../core/widgets/access_gate.dart';
 import '../../../auth/domain/auth_provider.dart';
+import '../../../subscription/domain/subscription_provider.dart';
 import '../../../predictions/domain/combo_prediction_model.dart';
 import '../../../predictions/domain/predictions_provider.dart';
 import '../../../predictions/domain/today_match_model.dart';
@@ -470,15 +471,15 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-// Home match card 
+// Home match card
 
-class _HomeMatchCard extends StatelessWidget {
+class _HomeMatchCard extends ConsumerWidget {
   final TodayMatch todayMatch;
   final bool compact;
   const _HomeMatchCard({required this.todayMatch, this.compact = false});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final match = todayMatch.match;
     final isLive = match.status == MatchStatus.live;
     final timeStr = isLive
@@ -489,6 +490,23 @@ class _HomeMatchCard extends StatelessWidget {
     final bestPred = todayMatch.bestTopPick ?? (officialPreds.isNotEmpty
         ? officialPreds.reduce((a, b) => (a.confidence ?? 0) >= (b.confidence ?? 0) ? a : b)
         : null);
+
+    // ── Subscription access check ──
+    final profile = ref.watch(userProfileProvider).valueOrNull;
+    final limit = profile?.dailyMatchLimit ?? 1;
+    final isUnlimited = limit < 0;
+    final viewedIds = ref.watch(dailyViewProvider).viewedMatchIds;
+    final hasViewed = viewedIds.contains(match.id);
+    final canViewMore = ref.watch(canViewMatchProvider(match.id));
+
+    // isFullyAccessible → show prono in card + can tap
+    // isLocked          → limit reached, not yet opened → disabled card
+    final isFullyAccessible = isUnlimited || hasViewed;
+    final isLocked = !isUnlimited && !hasViewed && !canViewMore;
+
+    if (isLocked) {
+      return _buildLockedCard(context, match, timeStr, profile?.effectivePlan ?? 'free');
+    }
 
     return GestureDetector(
       onTap: () => showModalBottomSheet(
@@ -548,7 +566,7 @@ class _HomeMatchCard extends StatelessWidget {
             if (!compact) ...[
               const SizedBox(height: 10),
               // Best prediction or status
-              if (bestPred != null && !bestPred.isLocked)
+              if (bestPred != null && !bestPred.isLocked && isFullyAccessible)
                 Row(
                   children: [
                     const Text("⭐", style: TextStyle(fontSize: 12)),
@@ -574,6 +592,13 @@ class _HomeMatchCard extends StatelessWidget {
                     ],
                   ],
                 )
+              else if (bestPred != null && !bestPred.isLocked && !isFullyAccessible)
+                // Slot available but prono not yet unlocked — show teaser only
+                Row(children: [
+                  const Icon(Icons.visibility_rounded, color: AppColors.gold, size: 13),
+                  const SizedBox(width: 6),
+                  const Text("Voir le prono \u2192", style: TextStyle(color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.w600)),
+                ])
               else if (bestPred != null && bestPred.isLocked)
                 Row(children: [
                   const Icon(Icons.lock_rounded, color: AppColors.gold, size: 14),
@@ -584,6 +609,60 @@ class _HomeMatchCard extends StatelessWidget {
                 _buildStatusHint(),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLockedCard(BuildContext context, dynamic match, String timeStr, String plan) {
+    final nextPlan = plan == 'free' ? 'Starter' : plan == 'starter' ? 'Pro' : 'VIP';
+    return GestureDetector(
+      onTap: () => showModalBottomSheet(
+        context: context,
+        backgroundColor: AppColors.surface,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (_) => UpgradePromptSheet(currentPlan: plan, requiredPlan: plan == 'free' ? 'starter' : plan == 'starter' ? 'pro' : 'vip'),
+      ),
+      child: Opacity(
+        opacity: 0.55,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: EdgeInsets.all(compact ? 12.0 : 14.0),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.textSecondary.withValues(alpha: 0.15)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(LeagueUtils.flag(match.league.name), style: const TextStyle(fontSize: 12)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(match.league.name, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11), overflow: TextOverflow.ellipsis),
+                  ),
+                  Text(timeStr, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text("${match.homeTeam.name}  vs  ${match.awayTeam.name}",
+                style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600)),
+              if (!compact) ...[
+                const SizedBox(height: 10),
+                Row(children: [
+                  const Icon(Icons.lock_rounded, color: AppColors.gold, size: 13),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(
+                    "Prono non disponible — Passer à $nextPlan",
+                    style: const TextStyle(color: AppColors.gold, fontSize: 11, fontWeight: FontWeight.w600),
+                  )),
+                  const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.gold, size: 10),
+                ]),
+              ],
+            ],
+          ),
         ),
       ),
     );

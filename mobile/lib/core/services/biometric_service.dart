@@ -57,10 +57,10 @@ class BiometricService {
     }
   }
 
-  /// Enable biometric login (flag only — credentials saved on next password login).
+  /// Enable biometric login (flag only).
   Future<void> enable() async {
     await _storage.write(key: _keyEnabled, value: 'true');
-    debugPrint('[Nakora] Biometric enabled (awaiting credentials on next login)');
+    debugPrint('[Nakora] Biometric enabled');
   }
 
   /// Save credentials securely. Called after a successful password login
@@ -72,6 +72,28 @@ class BiometricService {
     await _storage.write(key: _keyEmail, value: authEmail);
     await _storage.write(key: _keyPassword, value: password);
     debugPrint('[Nakora] Biometric credentials saved');
+  }
+
+  /// Enable biometric and immediately verify + save credentials via Supabase.
+  /// Returns true on success, false if password is wrong.
+  Future<bool> enableWithCredentials({
+    required String authEmail,
+    required String password,
+  }) async {
+    try {
+      // Re-authenticate to verify the password is correct
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: authEmail,
+        password: password,
+      );
+      await enable();
+      await saveCredentials(authEmail: authEmail, password: password);
+      debugPrint('[Nakora] Biometric enabled + credentials saved');
+      return true;
+    } catch (e) {
+      debugPrint('[Nakora] enableWithCredentials failed: $e');
+      return false;
+    }
   }
 
   /// Disable biometric login and clear stored credentials.

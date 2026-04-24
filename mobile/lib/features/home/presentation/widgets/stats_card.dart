@@ -2,23 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../predictions/domain/predictions_provider.dart';
+import '../../../predictions/domain/prediction_model.dart';
 
 class StatsCard extends ConsumerWidget {
   const StatsCard({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final statsAsync = ref.watch(monthlyStatsProvider);
+    final historyAsync = ref.watch(recentResultsProvider);
 
-    return statsAsync.when(
-      data: (stats) {
-        final total = (stats?['total'] as int?) ?? 0;
-        final won = (stats?['correct'] as int?) ?? 0;
-        final lost = (stats?['incorrect'] as int?) ?? 0;
-        final dbWinRate = stats?['win_rate'];
-        final rate = dbWinRate != null
-            ? (dbWinRate as num).toDouble()
-            : (total > 0 ? won / total : 0.0);
+    return historyAsync.when(
+      data: (predictions) {
+        // Filter to current month only
+        final now = DateTime.now();
+        final monthStart = DateTime(now.year, now.month, 1);
+        final monthEnd = DateTime(now.year, now.month + 1, 1);
+
+        final thisMonth = predictions.where((p) =>
+            p.createdAt.isAfter(monthStart) &&
+            p.createdAt.isBefore(monthEnd) &&
+            p.result != PredictionResult.pending).toList();
+
+        final total = thisMonth.length;
+        final won = thisMonth.where((p) => p.result == PredictionResult.won).length;
+        final lost = thisMonth.where((p) => p.result == PredictionResult.lost).length;
+        final rate = total > 0 ? won / total : 0.0;
         final ratePercent = (rate * 100).round();
 
         return _buildCard(ratePercent, total, won, lost, rate);
@@ -29,6 +37,9 @@ class StatsCard extends ConsumerWidget {
   }
 
   Widget _buildCard(int ratePercent, int total, int won, int lost, double rate) {
+    final now = DateTime.now();
+    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+    final monthLabel = months[now.month - 1];
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -50,9 +61,9 @@ class StatsCard extends ConsumerWidget {
             children: [
               const Icon(Icons.insights_rounded, color: AppColors.gold, size: 20),
               const SizedBox(width: 8),
-              const Text(
-                "Win Rate — Coupon Officiel",
-                style: TextStyle(
+              Text(
+                "Win Rate — $monthLabel ${now.year}",
+                style: const TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,

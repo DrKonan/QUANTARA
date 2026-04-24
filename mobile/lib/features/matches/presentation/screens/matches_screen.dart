@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/league_utils.dart';
+import '../../../../core/widgets/access_gate.dart';
+import '../../../auth/domain/auth_provider.dart';
 import '../../../predictions/domain/predictions_provider.dart';
 import '../../../predictions/domain/today_match_model.dart';
 import '../../../predictions/domain/match_model.dart';
+import '../../../subscription/domain/subscription_provider.dart';
 import '../widgets/match_detail_sheet.dart';
 
 class MatchesScreen extends ConsumerStatefulWidget {
@@ -522,12 +525,12 @@ class _LeagueSubHeader extends StatelessWidget {
 
 // ── Match tile ──
 
-class _MatchTile extends StatelessWidget {
+class _MatchTile extends ConsumerWidget {
   final TodayMatch todayMatch;
   const _MatchTile({required this.todayMatch});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final match = todayMatch.match;
     final isLive = match.status == MatchStatus.live;
     final isFinished = todayMatch.isFinished;
@@ -537,6 +540,75 @@ class _MatchTile extends StatelessWidget {
         : isFinished
             ? "Termin\u00e9"
             : DateFormat('HH:mm').format(match.dateTime.toLocal());
+
+    // ── Subscription access check (active matches only) ──
+    bool isLocked = false;
+    String plan = 'free';
+    if (!isFinished) {
+      final profile = ref.watch(userProfileProvider).valueOrNull;
+      plan = profile?.effectivePlan ?? 'free';
+      final limit = profile?.dailyMatchLimit ?? 1;
+      final isUnlimited = limit < 0;
+      final viewedIds = ref.watch(dailyViewProvider).viewedMatchIds;
+      final hasViewed = viewedIds.contains(match.id);
+      final canViewMore = ref.watch(canViewMatchProvider(match.id));
+      isLocked = !isUnlimited && !hasViewed && !canViewMore;
+    }
+
+    if (isLocked) {
+      final nextPlan = plan == 'free' ? 'Starter' : plan == 'starter' ? 'Pro' : 'VIP';
+      return GestureDetector(
+        onTap: () => showModalBottomSheet(
+          context: context,
+          backgroundColor: AppColors.surface,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          builder: (_) => UpgradePromptSheet(
+            currentPlan: plan,
+            requiredPlan: plan == 'free' ? 'starter' : plan == 'starter' ? 'pro' : 'vip',
+          ),
+        ),
+        child: Opacity(
+          opacity: 0.50,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.textSecondary.withValues(alpha: 0.1)),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 52,
+                  child: Text(timeStr, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(match.homeTeam.name, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 3),
+                      Text(match.awayTeam.name, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.lock_rounded, color: AppColors.gold, size: 13),
+                    const SizedBox(height: 2),
+                    Text(nextPlan, style: const TextStyle(color: AppColors.gold, fontSize: 9, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return GestureDetector(
       onTap: () => showModalBottomSheet(
