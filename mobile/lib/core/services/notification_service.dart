@@ -10,19 +10,27 @@ import '../../features/notifications/presentation/screens/notification_center_sc
 /// Appelé par FCM quand l'app est fermée ou en arrière-plan.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  final notification = message.notification;
-  if (notification == null) return;
+  // For NOTIFICATION messages (with a `notification` field):
+  //   → Android + FCM SDK already display them automatically using
+  //     the default_notification_channel_id declared in the manifest.
+  //     We must NOT show a duplicate. Just return.
+  if (message.notification != null) return;
 
-  // Sur Android, les messages avec un payload `notification` sont affichés
-  // automatiquement par le système — on crée quand même la notification locale
-  // pour s'assurer qu'elle apparaît avec le bon channel (importance = high).
+  // For DATA-ONLY messages (no `notification` field):
+  //   → Android does NOT display anything automatically.
+  //     We must build and show the local notification ourselves.
+  final title = message.data['title'] as String?;
+  final body  = message.data['body']  as String?;
+  if (title == null || title.isEmpty) return;
+
+  // Re-initialize flutter_local_notifications in this fresh isolate.
   final localNotifications = FlutterLocalNotificationsPlugin();
-
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
   await localNotifications.initialize(
     const InitializationSettings(android: androidInit),
   );
 
+  // Create the high-importance channel (idempotent — safe to call every time).
   await localNotifications
       .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>()
@@ -34,9 +42,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       ));
 
   await localNotifications.show(
-    notification.hashCode,
-    notification.title,
-    notification.body,
+    message.hashCode,
+    title,
+    body,
     const NotificationDetails(
       android: AndroidNotificationDetails(
         'nakora_predictions',
@@ -55,7 +63,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     payload: message.data['match_id']?.toString(),
   );
 
-  debugPrint('[Nakora] Background notification shown: ${notification.title}');
+  debugPrint('[Nakora] Background data-only notification shown: $title');
 }
 
 // Preference keys (must match notification_settings_screen.dart)
