@@ -332,8 +332,8 @@ async function handlePayment(
         tagline: "Analyses sportives IA",
       },
       actions: {
-        cancel_url: `${baseUrl}/functions/v1/payment-redirect?status=cancel&payment_id=${paymentId}`,
-        return_url: `${baseUrl}/functions/v1/payment-redirect?status=success&payment_id=${paymentId}`,
+        cancel_url: `nakora://payment?status=cancel&payment_id=${paymentId}`,
+        return_url: `nakora://payment?status=success&payment_id=${paymentId}`,
         callback_url: `${baseUrl}/functions/v1/webhook-payment`,
       },
       custom_data: { payment_id: paymentId, user_id: userId, plan },
