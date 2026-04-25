@@ -5,15 +5,21 @@ import '../../../core/constants/app_constants.dart';
 
 enum PaymentStatus { pending, submitted, completed, failed }
 
+enum PaymentType { wave, ussd }
+
 class PaymentResult {
   final String paymentId;
   final PaymentStatus status;
-  final String? checkoutUrl; // PayDunya hosted checkout URL
+  final String? checkoutUrl;        // Wave launch URL (wave://)
+  final PaymentType paymentType;    // wave = open Wave app, ussd = await USSD push
+  final String? paymentMethodName;  // Human-readable method name
 
   const PaymentResult({
     required this.paymentId,
     required this.status,
     this.checkoutUrl,
+    this.paymentType = PaymentType.ussd,
+    this.paymentMethodName,
   });
 }
 
@@ -60,22 +66,27 @@ class PaymentService {
 
   PaymentService(this._client);
 
-  /// Initiate a PayDunya hosted checkout payment
+  /// Initiate a direct payment — Wave (app deep link) or USSD push for other operators
   Future<PaymentResult> createPayment({
     required String plan,
     String currency = 'XOF',
+    String? phone,          // Required for USSD operators
+    String? paymentMethod,  // e.g. 'wave_sn', 'orange_ci', 'mtn_ci'
   }) async {
     if (!AppConstants.planPrices.containsKey(plan)) {
       throw Exception('Plan invalide: $plan');
     }
 
+    final isWave = paymentMethod != null && paymentMethod.startsWith('wave');
     final body = <String, dynamic>{
       'plan': plan,
-      'provider': 'paydunya',
+      'provider': isWave ? 'wave' : 'paydunya',
       'currency': currency,
+      if (phone != null) 'phone': phone,
+      if (paymentMethod != null) 'payment_method': paymentMethod,
     };
 
-    debugPrint('[PaymentService] Creating PayDunya payment: plan=$plan, currency=$currency');
+    debugPrint('[PaymentService] Creating payment: method=$paymentMethod, currency=$currency');
 
     late Map<String, dynamic> data;
     try {
@@ -103,12 +114,18 @@ class PaymentService {
       throw Exception(errorMsg);
     }
 
-    debugPrint('[PaymentService] PayDunya checkout created: ${data['payment_id']}');
+    debugPrint('[PaymentService] Payment created: ${data['payment_id']}, type=${data['payment_type']}');
+
+    final pType = (data['payment_type'] as String?) == 'wave'
+        ? PaymentType.wave
+        : PaymentType.ussd;
 
     return PaymentResult(
       paymentId: data['payment_id'] as String,
       status: PaymentStatus.pending,
       checkoutUrl: data['checkout_url'] as String?,
+      paymentType: pType,
+      paymentMethodName: data['payment_method_name'] as String?,
     );
   }
 
