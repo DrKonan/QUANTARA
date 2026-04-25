@@ -119,7 +119,10 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-// ─── Wave Checkout (direct) ───────────────────────────────────
+// ─── Wave Checkout via PayDunya ───────────────────────────────
+// Wave is integrated into PayDunya — no separate Wave API key needed.
+// We create a PayDunya invoice and return the checkout URL which
+// includes Wave as a payment option, redirecting to the Wave app.
 async function handleWavePayment(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   userId: string,
@@ -128,52 +131,80 @@ async function handleWavePayment(
   paymentId: string,
   paymentMethod?: string,
 ) {
-  const waveApiKey = Deno.env.get("WAVE_API_KEY");
-  if (!waveApiKey) {
-    console.error("[create-payment] Missing WAVE_API_KEY");
-    return jsonResponse({ error: "Wave not configured" }, 500);
+  const masterKey = Deno.env.get("PAYDUNYA_MASTER_KEY");
+  const privateKey = Deno.env.get("PAYDUNYA_PRIVATE_KEY");
+  const pdToken = Deno.env.get("PAYDUNYA_TOKEN");
+
+  if (!masterKey || !privateKey || !pdToken) {
+    console.error("[create-payment] Missing PayDunya credentials for Wave");
+    return jsonResponse({ error: "Payment not configured" }, 500);
   }
 
   const baseUrl = Deno.env.get("APP_BASE_URL") || "https://epiaxzyzrclebutxvbgp.supabase.co";
+  const planLabel = ({ starter: "Starter", pro: "Pro", vip: "VIP" } as Record<string, string>)[plan] ?? plan;
 
-  const waveResponse = await fetch("https://api.wave.com/v1/checkout/sessions", {
+  const invoiceResponse = await fetch("https://app.paydunya.com/api/v1/checkout-invoice/create", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${waveApiKey}`,
+      "PAYDUNYA-MASTER-KEY": masterKey,
+      "PAYDUNYA-PRIVATE-KEY": privateKey,
+      "PAYDUNYA-TOKEN": pdToken,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      amount: amount.toString(),
-      currency: "XOF",
-      error_url: `${baseUrl}/functions/v1/payment-redirect?status=error&payment_id=${paymentId}`,
-      success_url: `${baseUrl}/functions/v1/payment-redirect?status=success&payment_id=${paymentId}`,
-      client_reference: paymentId,
+      invoice: {
+        total_amount: amount,
+        description: `Nakora ${planLabel} — 30 jours`,
+      },
+      store: {
+        name: "Nakora",
+        tagline: "Analyses sportives IA",
+      },
+      actions: {
+        cancel_url: `${baseUrl}/functions/v1/payment-redirect?status=cancel&payment_id=${paymentId}`,
+        return_url: `${baseUrl}/functions/v1/payment-redirect?status=success&payment_id=${paymentId}`,
+        callback_url: `${baseUrl}/functions/v1/webhook-payment`,
+      },
+      custom_data: {
+        payment_id: paymentId,
+        user_id: userId,
+        plan,
+      },
     }),
   });
 
-  if (!waveResponse.ok) {
-    const errText = await waveResponse.text();
-    console.error("[create-payment] Wave API error:", errText);
+  if (!invoiceResponse.ok) {
+    const errText = await invoiceResponse.text();
+    console.error("[create-payment] PayDunya Wave invoice error:", errText);
     return jsonResponse({ error: "Wave payment creation failed" }, 502);
   }
 
-  const waveData = await waveResponse.json();
+  const invoiceData = await invoiceResponse.json();
+  if (invoiceData.response_code !== "00") {
+    console.error("[create-payment] PayDunya Wave invoice error:", invoiceData);
+    return jsonResponse({ error: invoiceData.response_text ?? "PayDunya error" }, 502);
+  }
+
+  const invoiceToken: string = invoiceData.token;
+  const checkoutUrl = `https://app.paydunya.com/checkout/${invoiceToken}`;
 
   await supabase.from("payments").insert({
     id: paymentId,
     user_id: userId,
-    provider: "wave",
-    external_id: waveData.id ?? paymentId,
+    provider: "paydunya",
+    external_id: invoiceToken,
     plan,
     amount,
     currency: "XOF",
     status: "pending",
-    payment_method: paymentMethod ?? "wave",
+    payment_method: paymentMethod ?? "wave_sn",
   });
+
+  console.log(`[create-payment] Wave via PayDunya: invoice ${invoiceToken}`);
 
   return jsonResponse({
     payment_id: paymentId,
-    checkout_url: waveData.wave_launch_url,
+    checkout_url: checkoutUrl,
     payment_type: "wave",
     payment_method_name: "Wave",
   });
