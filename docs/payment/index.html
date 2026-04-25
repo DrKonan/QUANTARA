@@ -49,7 +49,6 @@
     <h1 id="title">Traitement en cours…</h1>
     <p id="message">Redirection vers Nakora…</p>
     <a id="btn-open" class="btn btn-primary" href="#">Ouvrir Nakora</a>
-    <a id="btn-store" class="btn btn-secondary" href="https://apps.apple.com/app/nakora/id0000000000" style="display:none">Télécharger Nakora</a>
   </div>
 
   <script>
@@ -83,11 +82,6 @@
 
     // Tentative d'ouverture automatique
     window.location.href = deepLink;
-
-    // Si le deep link échoue (app non installée), montrer le bouton store après 2s
-    setTimeout(() => {
-      document.getElementById("btn-store").style.display = "block";
-    }, 2000);
   </script>
 </body>
 </html>

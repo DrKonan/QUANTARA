@@ -167,6 +167,41 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     state = const PaymentState();
   }
 
+  /// Called when the in-app browser closes OR when a deep link is received.
+  /// Does an immediate DB check instead of waiting for the next poll.
+  Future<void> forceCheckNow() async {
+    final paymentId = state.result?.paymentId;
+    if (paymentId == null) return;
+    try {
+      final status = await _service.checkPaymentStatus(paymentId);
+      state = state.copyWith(lastStatus: status);
+      if (status == PaymentStatus.completed) {
+        _pollTimer?.cancel();
+        state = state.copyWith(phase: PaymentPhase.success);
+        _ref.invalidate(activeSubscriptionProvider);
+        _ref.invalidate(userProfileProvider);
+      } else if (status == PaymentStatus.failed) {
+        _pollTimer?.cancel();
+        state = state.copyWith(
+          phase: PaymentPhase.error,
+          errorMessage: 'Le paiement a échoué. Veuillez réessayer.',
+        );
+      }
+      // If still pending, leave the polling timer running.
+    } catch (_) {
+      // Ignore — polling continues.
+    }
+  }
+
+  /// Called when the user cancels payment from the deep link.
+  void handleCancelFromDeepLink() {
+    _pollTimer?.cancel();
+    state = state.copyWith(
+      phase: PaymentPhase.error,
+      errorMessage: 'Paiement annulé.',
+    );
+  }
+
   @override
   void dispose() {
     _pollTimer?.cancel();

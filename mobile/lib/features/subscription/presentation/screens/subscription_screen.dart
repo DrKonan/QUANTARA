@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1043,13 +1045,33 @@ class _PaymentStatusPage extends ConsumerStatefulWidget {
 
 class _PaymentStatusPageState extends ConsumerState<_PaymentStatusPage> {
   bool _analyticsLogged = false;
+  StreamSubscription<Uri>? _deepLinkSub;
 
   @override
   void initState() {
     super.initState();
-    // Auto-open the PayDunya checkout page
+    _deepLinkSub = AppLinks().uriLinkStream.listen(_handleDeepLink);
     if (widget.checkoutUrl != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _openCheckout());
+    }
+  }
+
+  @override
+  void dispose() {
+    _deepLinkSub?.cancel();
+    super.dispose();
+  }
+
+  void _handleDeepLink(Uri uri) {
+    if (uri.scheme != 'nakora' || uri.host != 'payment') return;
+    final status = uri.queryParameters['status'] ?? 'error';
+    final notifier = ref.read(paymentNotifierProvider.notifier);
+    if (status == 'success') {
+      notifier.forceCheckNow();
+    } else if (status == 'cancel') {
+      notifier.handleCancelFromDeepLink();
+    } else {
+      notifier.handleCancelFromDeepLink();
     }
   }
 
@@ -1057,11 +1079,18 @@ class _PaymentStatusPageState extends ConsumerState<_PaymentStatusPage> {
     final url = widget.checkoutUrl;
     if (url == null) return;
     try {
-      // Use in-app browser (SFSafariViewController on iOS) so Wave deep links
-      // are handled correctly without leaving the app context.
+      // Use in-app browser (SFSafariViewController on iOS).
+      // When the payment page opens `nakora://payment?...`, iOS closes the SVC
+      // and fires the deep link — _handleDeepLink() catches it.
+      // When launchUrl() returns (for any reason), trigger an immediate DB check.
       await launchUrl(Uri.parse(url), mode: LaunchMode.inAppBrowserView);
+      // SFSafariViewController dismissed — check status immediately instead of
+      // waiting for the next 5-second polling tick.
+      if (mounted) {
+        ref.read(paymentNotifierProvider.notifier).forceCheckNow();
+      }
     } catch (_) {
-      // If launcher fails, show the URL manually
+      // If launcher fails, polling continues.
     }
   }
 
