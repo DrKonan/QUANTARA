@@ -116,7 +116,7 @@ class PaymentService {
       throw Exception(errorMsg);
     }
 
-    debugPrint('[PaymentService] Payment created: ${data['payment_id']}, type=${data['payment_type']}');
+    debugPrint('[PaymentService] Payment created: ${data['payment_id']}, type=${data['payment_type']}, url=${data['checkout_url']}');
 
     final pType = switch (data['payment_type'] as String? ?? '') {
       'redirect' => PaymentType.redirect,

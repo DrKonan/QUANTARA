@@ -697,7 +697,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
   bool _phoneValid = false;
 
   bool get _isWave => _selectedMethod?.isWave ?? false;
-  bool get _canPay => _selectedMethod != null && (_isWave || _phoneValid);
+  bool get _canPay => _selectedMethod != null && _phoneValid;
 
   @override
   void initState() {
@@ -831,7 +831,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                         children: [
                           Text(m.name, style: TextStyle(color: isSelected ? color : AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
                           Text(
-                            m.isWave ? "Redirection vers l'appli Wave" : "Push USSD sur votre téléphone",
+                            m.isWave ? "Paiement via l'appli Wave" : "Push USSD sur votre téléphone",
                             style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
                           ),
                         ],
@@ -845,8 +845,8 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
             );
           }),
 
-          // ── Phone input (USSD only) ──
-          if (_selectedMethod != null && !_isWave) ...[
+          // ── Phone input (all operators) ──
+          if (_selectedMethod != null) ...[
             const SizedBox(height: 8),
             const Text("Numéro de téléphone", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
@@ -900,7 +900,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                 Expanded(
                   child: Text(
                     _isWave
-                        ? "L'appli Wave s'ouvrira pour confirmer le paiement."
+                        ? "Votre numéro Wave sera utilisé pour générer le lien de paiement."
                         : "Un code USSD sera envoyé sur votre téléphone ${_selectedCountry.flag}.",
                     style: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.8), fontSize: 11),
                   ),
@@ -917,8 +917,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
             child: ElevatedButton(
               onPressed: _canPay
                   ? () {
-                      final phone = _isWave ? null
-                          : '+${_selectedCountry.dialCode}${_phoneCtrl.text.trim().replaceAll(RegExp(r'[\s\-]'), '')}';
+                      final phone = '+${_selectedCountry.dialCode}${_phoneCtrl.text.trim().replaceAll(RegExp(r'[\s\-]'), '')}';
                       widget.onPay(
                         currency: currency,
                         phone: phone,

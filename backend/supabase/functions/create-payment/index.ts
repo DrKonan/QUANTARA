@@ -299,7 +299,8 @@ async function handlePayment(
 ) {
   const masterKey = Deno.env.get("PAYDUNYA_MASTER_KEY");
   const privateKey = Deno.env.get("PAYDUNYA_PRIVATE_KEY");
-  const pdToken = Deno.env.get("PAYDUNYA_TOKEN");
+  const publicKey  = Deno.env.get("PAYDUNYA_PUBLIC_KEY");
+  const pdToken    = Deno.env.get("PAYDUNYA_TOKEN");
 
   if (!masterKey || !privateKey || !pdToken) {
     console.error("[create-payment] Missing PayDunya credentials");
@@ -310,9 +311,10 @@ async function handlePayment(
   const planLabel = ({ starter: "Starter", pro: "Pro", vip: "VIP" } as Record<string, string>)[plan] ?? plan;
 
   const pdHeaders = {
-    "PAYDUNYA-MASTER-KEY": masterKey,
+    "PAYDUNYA-MASTER-KEY":  masterKey,
     "PAYDUNYA-PRIVATE-KEY": privateKey,
-    "PAYDUNYA-TOKEN": pdToken,
+    "PAYDUNYA-PUBLIC-KEY":  publicKey ?? "",
+    "PAYDUNYA-TOKEN":       pdToken,
     "Content-Type": "application/json",
   };
 
@@ -345,13 +347,21 @@ async function handlePayment(
   }
 
   const invoiceData = await invoiceResponse.json();
+  console.log("[create-payment] PayDunya invoice response:", JSON.stringify(invoiceData));
+
   if (invoiceData.response_code !== "00") {
     console.error("[create-payment] PayDunya invoice error:", invoiceData);
     return jsonResponse({ error: invoiceData.response_text ?? "PayDunya error" }, 502);
   }
 
-  const invoiceToken: string = invoiceData.token;
-  const checkoutFallback = `https://app.paydunya.com/checkout/${invoiceToken}`;
+  const invoiceToken: string = invoiceData.token ?? invoiceData.invoice_token;
+
+  // PayDunya returns the checkout URL directly in response_text when response_code === "00"
+  // e.g. "https://paydunya.com/checkout/invoice/{token}"
+  const checkoutFallback: string =
+    (typeof invoiceData.response_text === "string" && invoiceData.response_text.startsWith("http"))
+      ? invoiceData.response_text
+      : `https://paydunya.com/checkout/invoice/${invoiceToken}`;
 
   // Step 2 — Try SoftPay if operator config exists and phone is provided
   let checkoutUrl = checkoutFallback;
