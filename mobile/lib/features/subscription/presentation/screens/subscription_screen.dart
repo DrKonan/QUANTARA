@@ -461,12 +461,23 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     );
   }
 
+  String _resolveMethodName(String? methodId) {
+    if (methodId == null) return 'Mobile Money';
+    for (final country in AppConstants.supportedCountries) {
+      for (final method in country.methods) {
+        if (method.id == methodId) return method.name;
+      }
+    }
+    return methodId;
+  }
+
   Future<void> _initiatePayment({String? currency, String? phone, String? paymentMethod}) async {
     // Show confirmation dialog first
     final planLabel = AppConstants.planLabels[_selectedPlan] ?? _selectedPlan;
     final cur = currency ?? 'XOF';
     final price = AppConstants.getPriceInCurrency(_selectedPlan, cur);
     final priceLabel = AppConstants.formatPrice(price, cur);
+    final methodName = _resolveMethodName(paymentMethod);
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -484,7 +495,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             const SizedBox(height: 8),
             _confirmRow("Montant", "$priceLabel/mois"),
             const SizedBox(height: 8),
-            _confirmRow("Paiement", "via PayDunya"),
+            _confirmRow("Paiement", "via $methodName"),
           ],
         ),
         actions: [
@@ -1044,7 +1055,9 @@ class _PaymentStatusPageState extends ConsumerState<_PaymentStatusPage> {
     final url = widget.checkoutUrl;
     if (url == null) return;
     try {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      // Use in-app browser (SFSafariViewController on iOS) so Wave deep links
+      // are handled correctly without leaving the app context.
+      await launchUrl(Uri.parse(url), mode: LaunchMode.inAppBrowserView);
     } catch (_) {
       // If launcher fails, show the URL manually
     }

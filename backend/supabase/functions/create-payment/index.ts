@@ -301,7 +301,7 @@ async function handlePaydunyaSoftPay(
     },
     body: JSON.stringify({
       invoice_token: invoiceToken,
-      phone_number: phone,
+      phone_number: phone.replace(/^\+/, ''), // PayDunya expects no leading '+'
     }),
   });
 
