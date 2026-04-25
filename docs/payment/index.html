@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nakora — Paiement</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #14172C;
+      color: #e5e7eb;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: #1e2235;
+      border-radius: 20px;
+      padding: 40px 32px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+    }
+    .icon { font-size: 72px; margin-bottom: 20px; }
+    h1 { font-size: 24px; font-weight: 700; margin-bottom: 12px; }
+    p  { font-size: 15px; color: #9ca3af; line-height: 1.6; margin-bottom: 28px; }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+    .btn-primary { background: #6C63FF; color: #fff; }
+    .btn-secondary { background: #2a2f4a; color: #e5e7eb; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon" id="icon">⏳</div>
+    <h1 id="title">Traitement en cours…</h1>
+    <p id="message">Redirection vers Nakora…</p>
+    <a id="btn-open" class="btn btn-primary" href="#">Ouvrir Nakora</a>
+    <a id="btn-store" class="btn btn-secondary" href="https://apps.apple.com/app/nakora/id0000000000" style="display:none">Télécharger Nakora</a>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const status    = params.get("status")     || "error";
+    const paymentId = params.get("payment_id") || "";
+
+    const deepLink = `nakora://payment?status=${encodeURIComponent(status)}&payment_id=${encodeURIComponent(paymentId)}`;
+
+    // UI selon statut
+    const icon    = document.getElementById("icon");
+    const title   = document.getElementById("title");
+    const message = document.getElementById("message");
+    const btnOpen = document.getElementById("btn-open");
+
+    if (status === "success") {
+      icon.textContent  = "✅";
+      title.textContent = "Paiement réussi !";
+      message.textContent = "Votre abonnement Nakora est activé. Appuyez sur le bouton ci-dessous pour retourner dans l'application.";
+    } else if (status === "cancel") {
+      icon.textContent  = "❌";
+      title.textContent = "Paiement annulé";
+      message.textContent = "Le paiement a été annulé. Vous pouvez réessayer depuis l'application Nakora.";
+    } else {
+      icon.textContent  = "⚠️";
+      title.textContent = "Une erreur est survenue";
+      message.textContent = "Le paiement n'a pas pu être traité. Veuillez réessayer ou contacter le support.";
+    }
+
+    btnOpen.href = deepLink;
+
+    // Tentative d'ouverture automatique
+    window.location.href = deepLink;
+
+    // Si le deep link échoue (app non installée), montrer le bouton store après 2s
+    setTimeout(() => {
+      document.getElementById("btn-store").style.display = "block";
+    }, 2000);
+  </script>
+</body>
+</html>

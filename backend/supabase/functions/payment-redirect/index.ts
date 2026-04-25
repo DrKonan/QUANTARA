@@ -1,8 +1,8 @@
 // ============================================================
 // NAKORA — Edge Function : payment-redirect
-// Appelée par PayDunya / Wave après paiement (return_url / success_url).
-// Redirige l'utilisateur vers l'app mobile via deep link.
-// Query params : ?status=success|cancel|error&payment_id=<uuid>
+// Appelée par PayDunya après paiement (return_url).
+// Supabase/Cloudflare force content-type: text/plain sur les Edge Functions.
+// Solution : redirect 302 vers une page HTML statique sur GitHub Pages.
 // ============================================================
 
 Deno.serve((req: Request) => {
@@ -10,8 +10,14 @@ Deno.serve((req: Request) => {
   const status = url.searchParams.get("status") ?? "error";
   const paymentId = url.searchParams.get("payment_id") ?? "";
 
-  // Deep link vers l'app Flutter
-  const deepLink = `nakora://payment?status=${status}&payment_id=${encodeURIComponent(paymentId)}`;
+  // Redirect to static GitHub Pages page that handles deep link
+  const redirectUrl = `https://drkonan.github.io/QUANTARA/payment?status=${encodeURIComponent(status)}&payment_id=${encodeURIComponent(paymentId)}`;
+
+  return new Response(null, {
+    status: 302,
+    headers: { location: redirectUrl },
+  });
+});
 
   // Fallback page HTML si l'app n'est pas installée
   const html = `<!DOCTYPE html>
@@ -98,8 +104,9 @@ Deno.serve((req: Request) => {
 </body>
 </html>`;
 
-  return new Response(html, {
-    status: 200,
-    headers: { "Content-Type": "text/html; charset=utf-8" },
-  });
+  const headers = new Headers();
+  headers.set("content-type", "text/html; charset=utf-8");
+  headers.set("x-content-type-options", "nosniff");
+
+  return new Response(html, { status: 200, headers });
 });
