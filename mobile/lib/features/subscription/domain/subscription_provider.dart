@@ -93,18 +93,14 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
 
   Future<void> initiatePayment({
     required String plan,
-    required PaymentProvider provider,
-    String? phone,
-    String? correspondent,
+    String currency = 'XOF',
   }) async {
     state = const PaymentState(phase: PaymentPhase.creating);
 
     try {
       final result = await _service.createPayment(
         plan: plan,
-        provider: provider,
-        phone: phone,
-        correspondent: correspondent,
+        currency: currency,
       );
 
       state = PaymentState(

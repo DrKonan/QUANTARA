@@ -147,125 +147,98 @@ abstract class AppConstants {
     return currencyForCountry(country.code);
   }
 
-  // PawaPay correspondents (legacy keys)
-  static const correspondentOrangeCi = 'orange_ci';
-  static const correspondentMtnCi = 'mtn_ci';
-
   // ── Supported countries with their payment methods ──
-  // Each country lists the mobile money providers available via PawaPay.
-  // The `correspondent` key is sent to the backend.
+  // Methods listed here are informational (displayed in UI).
+  // Actual payment method selection happens on PayDunya's hosted checkout page.
   static const supportedCountries = [
     PaymentCountry(
-      code: 'CI', name: "Côte d'Ivoire", dialCode: '225', flag: '🇨🇮', localDigits: 10,
+      code: 'SN', name: 'Sénégal', dialCode: '221', flag: '🇸🇳',
       methods: [
-        PaymentMethod(id: 'orange_ci', name: 'Orange Money', correspondent: 'ORANGE_CIV', color: 0xFFFF6600, icon: 'phone'),
-        PaymentMethod(id: 'mtn_ci', name: 'MTN MoMo', correspondent: 'MTN_MOMO_CIV', color: 0xFFFFCC00, icon: 'phone'),
+        PaymentMethod(id: 'wave_sn', name: 'Wave', color: 0xFF1BA8F0, icon: 'waves'),
+        PaymentMethod(id: 'orange_sn', name: 'Orange Money', color: 0xFFFF6600, icon: 'phone'),
+        PaymentMethod(id: 'free_sn', name: 'Free Money', color: 0xFF00C896, icon: 'phone'),
       ],
     ),
     PaymentCountry(
-      code: 'SN', name: 'Sénégal', dialCode: '221', flag: '🇸🇳', localDigits: 9,
+      code: 'CI', name: "Côte d'Ivoire", dialCode: '225', flag: '🇨🇮',
       methods: [
-        PaymentMethod(id: 'orange_sn', name: 'Orange Money', correspondent: 'ORANGE_SEN', color: 0xFFFF6600, icon: 'phone'),
-        PaymentMethod(id: 'free_sn', name: 'Free Money', correspondent: 'FREE_SEN', color: 0xFF00C896, icon: 'phone'),
+        PaymentMethod(id: 'wave_ci', name: 'Wave', color: 0xFF1BA8F0, icon: 'waves'),
+        PaymentMethod(id: 'orange_ci', name: 'Orange Money', color: 0xFFFF6600, icon: 'phone'),
+        PaymentMethod(id: 'mtn_ci', name: 'MTN MoMo', color: 0xFFFFCC00, icon: 'phone'),
+        PaymentMethod(id: 'moov_ci', name: 'Moov Money', color: 0xFF0066CC, icon: 'phone'),
       ],
     ),
     PaymentCountry(
-      code: 'ML', name: 'Mali', dialCode: '223', flag: '🇲🇱', localDigits: 8,
+      code: 'ML', name: 'Mali', dialCode: '223', flag: '🇲🇱',
       methods: [
-        PaymentMethod(id: 'orange_ml', name: 'Orange Money', correspondent: 'ORANGE_MLI', color: 0xFFFF6600, icon: 'phone'),
-        PaymentMethod(id: 'moov_ml', name: 'Moov Money', correspondent: 'MOOV_MLI', color: 0xFF0066CC, icon: 'phone'),
+        PaymentMethod(id: 'orange_ml', name: 'Orange Money', color: 0xFFFF6600, icon: 'phone'),
+        PaymentMethod(id: 'moov_ml', name: 'Moov Money', color: 0xFF0066CC, icon: 'phone'),
       ],
     ),
     PaymentCountry(
-      code: 'BF', name: 'Burkina Faso', dialCode: '226', flag: '🇧🇫', localDigits: 8,
+      code: 'BF', name: 'Burkina Faso', dialCode: '226', flag: '🇧🇫',
       methods: [
-        PaymentMethod(id: 'orange_bf', name: 'Orange Money', correspondent: 'ORANGE_BFA', color: 0xFFFF6600, icon: 'phone'),
-        PaymentMethod(id: 'moov_bf', name: 'Moov Money', correspondent: 'MOOV_BFA', color: 0xFF0066CC, icon: 'phone'),
+        PaymentMethod(id: 'orange_bf', name: 'Orange Money', color: 0xFFFF6600, icon: 'phone'),
+        PaymentMethod(id: 'moov_bf', name: 'Moov Money', color: 0xFF0066CC, icon: 'phone'),
       ],
     ),
     PaymentCountry(
-      code: 'BJ', name: 'Bénin', dialCode: '229', flag: '🇧🇯', localDigits: 8,
+      code: 'BJ', name: 'Bénin', dialCode: '229', flag: '🇧🇯',
       methods: [
-        PaymentMethod(id: 'mtn_bj', name: 'MTN MoMo', correspondent: 'MTN_MOMO_BEN', color: 0xFFFFCC00, icon: 'phone'),
-        PaymentMethod(id: 'moov_bj', name: 'Moov Money', correspondent: 'MOOV_BEN', color: 0xFF0066CC, icon: 'phone'),
+        PaymentMethod(id: 'mtn_bj', name: 'MTN MoMo', color: 0xFFFFCC00, icon: 'phone'),
+        PaymentMethod(id: 'moov_bj', name: 'Moov Money', color: 0xFF0066CC, icon: 'phone'),
       ],
     ),
     PaymentCountry(
-      code: 'TG', name: 'Togo', dialCode: '228', flag: '🇹🇬', localDigits: 8,
+      code: 'TG', name: 'Togo', dialCode: '228', flag: '🇹🇬',
       methods: [
-        PaymentMethod(id: 'moov_tg', name: 'Moov Money', correspondent: 'MOOV_TGO', color: 0xFF0066CC, icon: 'phone'),
+        PaymentMethod(id: 'moov_tg', name: 'Moov Money', color: 0xFF0066CC, icon: 'phone'),
       ],
     ),
     PaymentCountry(
-      code: 'NE', name: 'Niger', dialCode: '227', flag: '🇳🇪', localDigits: 8,
+      code: 'NE', name: 'Niger', dialCode: '227', flag: '🇳🇪',
       methods: [
-        PaymentMethod(id: 'airtel_ne', name: 'Airtel Money', correspondent: 'AIRTEL_NER', color: 0xFFED1C24, icon: 'phone'),
+        PaymentMethod(id: 'airtel_ne', name: 'Airtel Money', color: 0xFFED1C24, icon: 'phone'),
       ],
     ),
     PaymentCountry(
-      code: 'GN', name: 'Guinée', dialCode: '224', flag: '🇬🇳', localDigits: 9,
+      code: 'GN', name: 'Guinée', dialCode: '224', flag: '🇬🇳',
       methods: [
-        PaymentMethod(id: 'orange_gn', name: 'Orange Money', correspondent: 'ORANGE_GIN', color: 0xFFFF6600, icon: 'phone'),
-        PaymentMethod(id: 'mtn_gn', name: 'MTN MoMo', correspondent: 'MTN_MOMO_GIN', color: 0xFFFFCC00, icon: 'phone'),
+        PaymentMethod(id: 'orange_gn', name: 'Orange Money', color: 0xFFFF6600, icon: 'phone'),
+        PaymentMethod(id: 'mtn_gn', name: 'MTN MoMo', color: 0xFFFFCC00, icon: 'phone'),
       ],
     ),
     PaymentCountry(
-      code: 'CM', name: 'Cameroun', dialCode: '237', flag: '🇨🇲', localDigits: 9,
+      code: 'CM', name: 'Cameroun', dialCode: '237', flag: '🇨🇲',
       methods: [
-        PaymentMethod(id: 'orange_cm', name: 'Orange Money', correspondent: 'ORANGE_CMR', color: 0xFFFF6600, icon: 'phone'),
-        PaymentMethod(id: 'mtn_cm', name: 'MTN MoMo', correspondent: 'MTN_MOMO_CMR', color: 0xFFFFCC00, icon: 'phone'),
+        PaymentMethod(id: 'orange_cm', name: 'Orange Money', color: 0xFFFF6600, icon: 'phone'),
+        PaymentMethod(id: 'mtn_cm', name: 'MTN MoMo', color: 0xFFFFCC00, icon: 'phone'),
       ],
     ),
     PaymentCountry(
-      code: 'GA', name: 'Gabon', dialCode: '241', flag: '🇬🇦', localDigits: 7,
+      code: 'GA', name: 'Gabon', dialCode: '241', flag: '🇬🇦',
       methods: [
-        PaymentMethod(id: 'airtel_ga', name: 'Airtel Money', correspondent: 'AIRTEL_GAB', color: 0xFFED1C24, icon: 'phone'),
+        PaymentMethod(id: 'airtel_ga', name: 'Airtel Money', color: 0xFFED1C24, icon: 'phone'),
       ],
     ),
     PaymentCountry(
-      code: 'CG', name: 'Congo', dialCode: '242', flag: '🇨🇬', localDigits: 9,
+      code: 'CG', name: 'Congo', dialCode: '242', flag: '🇨🇬',
       methods: [
-        PaymentMethod(id: 'airtel_cg', name: 'Airtel Money', correspondent: 'AIRTEL_COG', color: 0xFFED1C24, icon: 'phone'),
-        PaymentMethod(id: 'mtn_cg', name: 'MTN MoMo', correspondent: 'MTN_MOMO_COG', color: 0xFFFFCC00, icon: 'phone'),
+        PaymentMethod(id: 'airtel_cg', name: 'Airtel Money', color: 0xFFED1C24, icon: 'phone'),
+        PaymentMethod(id: 'mtn_cg', name: 'MTN MoMo', color: 0xFFFFCC00, icon: 'phone'),
       ],
     ),
     PaymentCountry(
-      code: 'CD', name: 'RD Congo', dialCode: '243', flag: '🇨🇩', localDigits: 9,
+      code: 'CD', name: 'RD Congo', dialCode: '243', flag: '🇨🇩',
       methods: [
-        PaymentMethod(id: 'orange_cd', name: 'Orange Money', correspondent: 'ORANGE_COD', color: 0xFFFF6600, icon: 'phone'),
-        PaymentMethod(id: 'airtel_cd', name: 'Airtel Money', correspondent: 'AIRTEL_COD', color: 0xFFED1C24, icon: 'phone'),
-        PaymentMethod(id: 'vodacom_cd', name: 'Vodacom M-Pesa', correspondent: 'VODACOM_COD', color: 0xFFE60000, icon: 'phone'),
+        PaymentMethod(id: 'orange_cd', name: 'Orange Money', color: 0xFFFF6600, icon: 'phone'),
+        PaymentMethod(id: 'airtel_cd', name: 'Airtel Money', color: 0xFFED1C24, icon: 'phone'),
+        PaymentMethod(id: 'vodacom_cd', name: 'Vodacom M-Pesa', color: 0xFFE60000, icon: 'phone'),
       ],
     ),
   ];
 
   static PaymentCountry get defaultCountry => supportedCountries.first;
-
-  /// Format phone number for PawaPay with country code
-  static String formatPhoneForPawapay(String phone, {String countryCode = '225'}) {
-    var cleaned = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
-    // Strip + or 00 international prefix
-    if (cleaned.startsWith('+')) cleaned = cleaned.substring(1);
-    if (cleaned.startsWith('00')) cleaned = cleaned.substring(2);
-    // Prepend country code only if not already present
-    // NOTE: do NOT strip a leading 0 — in West Africa the 0 is part of the local number
-    if (!cleaned.startsWith(countryCode)) {
-      cleaned = '$countryCode$cleaned';
-    }
-    return cleaned;
-  }
-
-  /// Validate phone number for a given country
-  static bool isValidPhone(String phone, PaymentCountry country) {
-    final cleaned = formatPhoneForPawapay(phone, countryCode: country.dialCode);
-    final expectedLength = country.dialCode.length + country.localDigits;
-    return RegExp(r'^\d+$').hasMatch(cleaned) && cleaned.length == expectedLength;
-  }
-
-  /// Legacy — still works for CI
-  static bool isValidIvoryCoastPhone(String phone) {
-    return isValidPhone(phone, defaultCountry);
-  }
 }
 
 /// A supported country with its available payment methods
@@ -274,38 +247,35 @@ class PaymentCountry {
   final String name;
   final String dialCode;
   final String flag;
-  final int localDigits;
   final List<PaymentMethod> methods;
+  final int localDigits;
 
   const PaymentCountry({
     required this.code,
     required this.name,
     required this.dialCode,
     required this.flag,
-    required this.localDigits,
     required this.methods,
+    this.localDigits = 9,
   });
 
   String get label => '$flag +$dialCode';
   String get fullLabel => '$flag $name (+$dialCode)';
-  bool get hasWave => methods.any((m) => m.id == 'wave');
 }
 
-/// A mobile money payment method for a country
+/// A payment method available in a country (informational — user picks on PayDunya page)
 class PaymentMethod {
   final String id;
   final String name;
-  final String? correspondent; // PawaPay correspondent code (null for Wave)
   final int color;
   final String icon; // 'waves' or 'phone'
 
   const PaymentMethod({
     required this.id,
     required this.name,
-    required this.correspondent,
     required this.color,
     required this.icon,
   });
 
-  bool get isWave => correspondent == null;
+  bool get isWave => icon == 'waves';
 }

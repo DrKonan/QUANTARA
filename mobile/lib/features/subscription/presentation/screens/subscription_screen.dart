@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -135,9 +136,21 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        _paymentBadge("🔵 Wave"),
+                        const SizedBox(width: 8),
                         _paymentBadge("🟠 Orange Money"),
                         const SizedBox(width: 8),
                         _paymentBadge("🟡 MTN"),
+                      ],
+                    ),
+
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _paymentBadge("🟢 Free Money"),
+                        const SizedBox(width: 8),
+                        _paymentBadge("🔵 Moov Money"),
                       ],
                     ),
 
@@ -428,7 +441,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     return "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
   }
 
-  // ── Payment Method Bottom Sheet ──
   void _showPaymentMethodSheet(BuildContext context) {
     final profile = ref.read(userProfileProvider).valueOrNull;
     showModalBottomSheet(
@@ -441,26 +453,20 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       builder: (ctx) => _PaymentMethodSheet(
         selectedPlan: _selectedPlan,
         userPhone: profile?.phone,
-        onPay: (provider, {String? phone, String? correspondent, String? currency}) {
+        onPay: ({String? currency}) {
           Navigator.pop(ctx);
-          _initiatePayment(provider, phone: phone, correspondent: correspondent, currency: currency);
+          _initiatePayment(currency: currency);
         },
       ),
     );
   }
 
-  Future<void> _initiatePayment(
-    PaymentProvider provider, {
-    String? phone,
-    String? correspondent,
-    String? currency,
-  }) async {
+  Future<void> _initiatePayment({String? currency}) async {
     // Show confirmation dialog first
     final planLabel = AppConstants.planLabels[_selectedPlan] ?? _selectedPlan;
     final cur = currency ?? 'XOF';
     final price = AppConstants.getPriceInCurrency(_selectedPlan, cur);
     final priceLabel = AppConstants.formatPrice(price, cur);
-    final providerLabel = provider == PaymentProvider.wave ? 'Wave' : (correspondent ?? 'Mobile Money');
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -478,11 +484,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             const SizedBox(height: 8),
             _confirmRow("Montant", "$priceLabel/mois"),
             const SizedBox(height: 8),
-            _confirmRow("Paiement", providerLabel),
-            if (phone != null) ...[
-              const SizedBox(height: 8),
-              _confirmRow("Téléphone", phone),
-            ],
+            _confirmRow("Paiement", "via PayDunya"),
           ],
         ),
         actions: [
@@ -506,18 +508,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     if (confirmed != true || !mounted) return;
     HapticFeedback.mediumImpact();
 
-    AnalyticsService().logStartPayment(
-      _selectedPlan,
-      provider == PaymentProvider.wave ? 'wave' : 'pawapay',
-    );
+    AnalyticsService().logStartPayment(_selectedPlan, 'paydunya');
 
     final notifier = ref.read(paymentNotifierProvider.notifier);
-    await notifier.initiatePayment(
-      plan: _selectedPlan,
-      provider: provider,
-      phone: phone,
-      correspondent: correspondent,
-    );
+    await notifier.initiatePayment(plan: _selectedPlan, currency: cur);
 
     if (!mounted) return;
 
@@ -533,10 +527,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       MaterialPageRoute(
         builder: (_) => _PaymentStatusPage(
           paymentId: state.result!.paymentId,
-          provider: provider,
           plan: _selectedPlan,
-          message: state.result?.message,
-          currency: currency ?? 'XOF',
+          checkoutUrl: state.result?.checkoutUrl,
+          currency: cur,
         ),
       ),
     );
@@ -669,12 +662,12 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
 }
 
 // ══════════════════════════════════════════════════════════════
-// Payment Method Bottom Sheet
+// Payment Method Bottom Sheet — PayDunya hosted checkout
 // ══════════════════════════════════════════════════════════════
 class _PaymentMethodSheet extends StatefulWidget {
   final String selectedPlan;
   final String? userPhone;
-  final void Function(PaymentProvider provider, {String? phone, String? correspondent, String? currency}) onPay;
+  final void Function({String? currency}) onPay;
 
   const _PaymentMethodSheet({required this.selectedPlan, required this.onPay, this.userPhone});
 
@@ -684,33 +677,17 @@ class _PaymentMethodSheet extends StatefulWidget {
 
 class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
   late PaymentCountry _selectedCountry;
-  PaymentMethod? _selectedMethod;
-  final _phoneController = TextEditingController();
-  String? _phoneError;
 
   @override
   void initState() {
     super.initState();
     _selectedCountry = AppConstants.countryFromPhone(widget.userPhone) ?? AppConstants.defaultCountry;
-    // Pre-fill with local part of stored phone number
-    if (widget.userPhone != null) {
-      final msisdn = AppConstants.formatPhoneForPawapay(widget.userPhone!, countryCode: _selectedCountry.dialCode);
-      if (msisdn.startsWith(_selectedCountry.dialCode)) {
-        _phoneController.text = msisdn.substring(_selectedCountry.dialCode.length);
-      }
-    }
   }
-
-  @override
-  void dispose() {
-    _phoneController.dispose();
-    super.dispose();
-  }
-
-  bool get _needsPhone => _selectedMethod != null && !_selectedMethod!.isWave;
 
   @override
   Widget build(BuildContext context) {
+    final currency = AppConstants.currencyForCountry(_selectedCountry.code);
+
     return Padding(
       padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(context).viewInsets.bottom + 24),
       child: Column(
@@ -721,6 +698,30 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
             child: Container(
               width: 40, height: 4,
               decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // ── PayDunya badge ──
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.gold.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.lock_rounded, color: AppColors.gold, size: 16),
+                  SizedBox(width: 8),
+                  Text(
+                    "Paiement sécurisé via PayDunya",
+                    style: TextStyle(color: AppColors.gold, fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 20),
@@ -754,65 +755,40 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
           ),
           const SizedBox(height: 16),
 
-          // ── Payment methods for selected country ──
-          const Text("Moyen de paiement", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+          // ── Available payment methods (informational) ──
+          const Text("Moyens disponibles dans votre pays", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          ..._selectedCountry.methods.map((method) => _methodTile(method)),
-
-          // ── Phone input (for mobile money methods) ──
-          if (_needsPhone) ...[
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  height: 56,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceLight,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${_selectedCountry.flag} +${_selectedCountry.dialCode}',
-                      style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
-                    ),
-                  ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _selectedCountry.methods.map((m) {
+              final color = Color(m.color);
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    style: const TextStyle(color: AppColors.textPrimary),
-                    onChanged: (_) => setState(() => _phoneError = null),
-                    decoration: InputDecoration(
-                      labelText: "Numéro de téléphone",
-                      labelStyle: const TextStyle(color: AppColors.textSecondary),
-                      hintText: 'X' * _selectedCountry.localDigits,
-                      hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.4)),
-                      errorText: _phoneError,
-                      errorStyle: const TextStyle(color: AppColors.error, fontSize: 11),
-                      filled: true,
-                      fillColor: _phoneError != null
-                          ? AppColors.error.withValues(alpha: 0.08)
-                          : AppColors.surfaceLight,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: _phoneError != null
-                            ? const BorderSide(color: AppColors.error, width: 1)
-                            : BorderSide.none,
-                      ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      m.isWave ? Icons.waves_rounded : Icons.phone_android_rounded,
+                      color: color, size: 14,
                     ),
-                  ),
+                    const SizedBox(width: 5),
+                    Text(m.name, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+                  ],
                 ),
-              ],
-            ),
-          ],
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Vous choisirez votre moyen de paiement sur la page PayDunya.",
+            style: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.7), fontSize: 11),
+          ),
 
           const SizedBox(height: 20),
 
@@ -820,99 +796,25 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: _selectedMethod == null ? null : _onConfirm,
+              onPressed: () => widget.onPay(currency: currency),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.gold,
                 foregroundColor: Colors.black,
-                disabledBackgroundColor: AppColors.surfaceLight,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
               ),
-              child: Text(
-                _selectedMethod == null ? "Sélectionnez un moyen" : "Payer avec ${_selectedMethod!.name}",
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.open_in_browser_rounded, size: 18),
+                  SizedBox(width: 8),
+                  Text("Payer avec PayDunya", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                ],
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _methodTile(PaymentMethod method) {
-    final isSelected = _selectedMethod?.id == method.id;
-    final color = Color(method.color);
-    final icon = method.icon == 'waves' ? Icons.waves_rounded : Icons.phone_android_rounded;
-
-    return GestureDetector(
-      onTap: () => setState(() => _selectedMethod = method),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.08) : AppColors.background,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? color : AppColors.surfaceLight,
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(method.name, style: TextStyle(color: isSelected ? AppColors.textPrimary : AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600)),
-                  Text(
-                    method.isWave ? 'Paiement instantané via Wave' : 'Push USSD sur votre téléphone',
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              Icon(Icons.check_circle_rounded, color: color, size: 22),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _onConfirm() {
-    final method = _selectedMethod!;
-    final currency = AppConstants.currencyForCountry(_selectedCountry.code);
-
-    if (method.isWave) {
-      widget.onPay(PaymentProvider.wave, currency: currency);
-      return;
-    }
-
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
-      setState(() => _phoneError = "Entrez votre numéro (${_selectedCountry.localDigits} chiffres)");
-      return;
-    }
-    if (!AppConstants.isValidPhone(phone, _selectedCountry)) {
-      setState(() => _phoneError = "Numéro invalide — ${_selectedCountry.localDigits} chiffres attendus (ex: ${_selectedCountry.dialCode == '225' ? '0707070707' : '0' * _selectedCountry.localDigits})");
-      return;
-    }
-    setState(() => _phoneError = null);
-    final formatted = AppConstants.formatPhoneForPawapay(phone, countryCode: _selectedCountry.dialCode);
-    widget.onPay(
-      PaymentProvider.pawapay,
-      phone: formatted,
-      correspondent: method.correspondent!,
-      currency: currency,
     );
   }
 
@@ -959,12 +861,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                     selected: isSelected,
                     selectedTileColor: AppColors.gold.withValues(alpha: 0.08),
                     onTap: () {
-                      setState(() {
-                        _selectedCountry = country;
-                        _selectedMethod = null;
-                        _phoneController.clear();
-                        _phoneError = null;
-                      });
+                      setState(() => _selectedCountry = country);
                       Navigator.pop(ctx);
                     },
                   );
@@ -983,16 +880,14 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
 // ══════════════════════════════════════════════════════════════
 class _PaymentStatusPage extends ConsumerStatefulWidget {
   final String paymentId;
-  final PaymentProvider provider;
   final String plan;
-  final String? message;
+  final String? checkoutUrl;
   final String currency;
 
   const _PaymentStatusPage({
     required this.paymentId,
-    required this.provider,
     required this.plan,
-    this.message,
+    this.checkoutUrl,
     this.currency = 'XOF',
   });
 
@@ -1003,11 +898,30 @@ class _PaymentStatusPage extends ConsumerStatefulWidget {
 class _PaymentStatusPageState extends ConsumerState<_PaymentStatusPage> {
   bool _analyticsLogged = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // Auto-open the PayDunya checkout page
+    if (widget.checkoutUrl != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openCheckout());
+    }
+  }
+
+  Future<void> _openCheckout() async {
+    final url = widget.checkoutUrl;
+    if (url == null) return;
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // If launcher fails, show the URL manually
+    }
+  }
+
   void _logOutcome(PaymentPhase phase, String? errorMessage) {
     if (_analyticsLogged) return;
     if (phase == PaymentPhase.success) {
       _analyticsLogged = true;
-      AnalyticsService().logPaymentSuccess(widget.plan, widget.provider == PaymentProvider.wave ? 'wave' : 'pawapay');
+      AnalyticsService().logPaymentSuccess(widget.plan, 'paydunya');
     } else if (phase == PaymentPhase.error) {
       _analyticsLogged = true;
       AnalyticsService().logPaymentFailure(widget.plan, errorMessage ?? 'unknown');
@@ -1052,6 +966,14 @@ class _PaymentStatusPageState extends ConsumerState<_PaymentStatusPage> {
                     "Vérification en cours...",
                     style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   ),
+                  const SizedBox(height: 16),
+                  if (widget.checkoutUrl != null)
+                    TextButton.icon(
+                      onPressed: _openCheckout,
+                      icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+                      label: const Text("Rouvrir la page PayDunya"),
+                      style: TextButton.styleFrom(foregroundColor: AppColors.gold),
+                    ),
                 ],
 
                 if (state.phase == PaymentPhase.success) ...[
@@ -1138,7 +1060,7 @@ class _PaymentStatusPageState extends ConsumerState<_PaymentStatusPage> {
       case PaymentPhase.error:
         return state.errorMessage ?? "Une erreur est survenue. Veuillez réessayer.";
       default:
-        return widget.message ?? "Un push USSD a été envoyé sur votre téléphone.\nEntrez votre code PIN pour confirmer le paiement de $priceLabel.";
+        return "Complétez votre paiement de $priceLabel sur la page PayDunya.\nRevenez ensuite sur l'application, votre abonnement sera activé automatiquement.";
     }
   }
 }

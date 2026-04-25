@@ -3,25 +3,17 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_constants.dart';
 
-enum PaymentProvider { wave, pawapay }
-
 enum PaymentStatus { pending, submitted, completed, failed }
 
 class PaymentResult {
   final String paymentId;
-  final PaymentProvider provider;
   final PaymentStatus status;
-  final String? checkoutUrl; // Wave only
-  final String? message;     // PawaPay confirmation message
-  final String? correspondent;
+  final String? checkoutUrl; // PayDunya hosted checkout URL
 
   const PaymentResult({
     required this.paymentId,
-    required this.provider,
     required this.status,
     this.checkoutUrl,
-    this.message,
-    this.correspondent,
   });
 }
 
@@ -68,33 +60,22 @@ class PaymentService {
 
   PaymentService(this._client);
 
-  /// Initiate a payment via Wave or PawaPay
+  /// Initiate a PayDunya hosted checkout payment
   Future<PaymentResult> createPayment({
     required String plan,
-    required PaymentProvider provider,
-    String? phone,
-    String? correspondent,
+    String currency = 'XOF',
   }) async {
-    // Validate plan
     if (!AppConstants.planPrices.containsKey(plan)) {
       throw Exception('Plan invalide: $plan');
     }
 
     final body = <String, dynamic>{
       'plan': plan,
-      'provider': provider == PaymentProvider.wave ? 'wave' : 'pawapay',
+      'provider': 'paydunya',
+      'currency': currency,
     };
 
-    // Phone for PawaPay (already formatted as MSISDN by the UI)
-    if (provider == PaymentProvider.pawapay) {
-      if (phone == null || phone.trim().isEmpty) {
-        throw Exception('Numéro de téléphone requis pour le paiement mobile');
-      }
-      body['phone'] = phone;
-      body['correspondent'] = correspondent;
-    }
-
-    debugPrint('[PaymentService] Creating payment: plan=$plan, provider=${body['provider']}, phone=${body['phone']}, correspondent=${body['correspondent']}');
+    debugPrint('[PaymentService] Creating PayDunya payment: plan=$plan, currency=$currency');
 
     late Map<String, dynamic> data;
     try {
@@ -122,17 +103,12 @@ class PaymentService {
       throw Exception(errorMsg);
     }
 
-    debugPrint('[PaymentService] Payment created: ${data['payment_id']}');
+    debugPrint('[PaymentService] PayDunya checkout created: ${data['payment_id']}');
 
     return PaymentResult(
       paymentId: data['payment_id'] as String,
-      provider: provider,
-      status: provider == PaymentProvider.wave
-          ? PaymentStatus.pending
-          : _parseStatus(data['status'] as String?),
+      status: PaymentStatus.pending,
       checkoutUrl: data['checkout_url'] as String?,
-      message: data['message'] as String?,
-      correspondent: data['correspondent'] as String?,
     );
   }
 
@@ -199,19 +175,5 @@ class PaymentService {
   Future<bool> isPremium() async {
     final sub = await getActiveSubscription();
     return sub?.isActive ?? false;
-  }
-
-  PaymentStatus _parseStatus(String? status) {
-    switch (status) {
-      case 'ACCEPTED':
-      case 'SUBMITTED':
-        return PaymentStatus.submitted;
-      case 'COMPLETED':
-        return PaymentStatus.completed;
-      case 'FAILED':
-        return PaymentStatus.failed;
-      default:
-        return PaymentStatus.pending;
-    }
   }
 }
