@@ -541,9 +541,10 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           plan: _selectedPlan,
           checkoutUrl: state.result?.checkoutUrl,
           currency: cur,
-          paymentType: state.result?.paymentType ?? PaymentType.ussd,
+          paymentType: state.result?.paymentType ?? PaymentType.redirect,
           paymentMethodName: state.result?.paymentMethodName,
           phone: phone,
+          ussdMessage: state.result?.ussdMessage,
         ),
       ),
     );
@@ -1024,15 +1025,17 @@ class _PaymentStatusPage extends ConsumerStatefulWidget {
   final PaymentType paymentType;
   final String? paymentMethodName;
   final String? phone;
+  final String? ussdMessage;
 
   const _PaymentStatusPage({
     required this.paymentId,
     required this.plan,
     this.checkoutUrl,
     this.currency = 'XOF',
-    this.paymentType = PaymentType.ussd,
+    this.paymentType = PaymentType.redirect,
     this.paymentMethodName,
     this.phone,
+    this.ussdMessage,
   });
 
   @override
@@ -1113,11 +1116,13 @@ class _PaymentStatusPageState extends ConsumerState<_PaymentStatusPage> {
                     style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   ),
                   const SizedBox(height: 16),
-                  if (widget.paymentType == PaymentType.wave && widget.checkoutUrl != null)
+                  if (widget.paymentType == PaymentType.redirect && widget.checkoutUrl != null)
                     TextButton.icon(
                       onPressed: _openCheckout,
-                      icon: const Icon(Icons.waves_rounded, size: 18),
-                      label: const Text("Rouvrir l'appli Wave"),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                      label: Text(
+                        "Rouvrir l'appli ${widget.paymentMethodName ?? 'paiement'}",
+                      ),
                       style: TextButton.styleFrom(foregroundColor: const Color(0xFF1BA8F0)),
                     ),
                 ],
@@ -1207,8 +1212,12 @@ class _PaymentStatusPageState extends ConsumerState<_PaymentStatusPage> {
       case PaymentPhase.error:
         return state.errorMessage ?? "Une erreur est survenue. Veuillez réessayer.";
       default:
-        if (widget.paymentType == PaymentType.wave) {
-          return "L'appli Wave a été ouverte pour confirmer votre paiement de $priceLabel.\nRevenez ici une fois le paiement effectué.";
+        if (widget.paymentType == PaymentType.redirect) {
+          return "L'appli $methodName a été ouverte pour confirmer votre paiement de $priceLabel.\nRevenez ici une fois le paiement effectué.";
+        }
+        // USSD push
+        if (widget.ussdMessage != null) {
+          return widget.ussdMessage!;
         }
         final phoneHint = widget.phone != null ? ' au ${widget.phone}' : '';
         return "Un code USSD a été envoyé$phoneHint via $methodName.\nEntrez votre code PIN pour valider le paiement de $priceLabel.";

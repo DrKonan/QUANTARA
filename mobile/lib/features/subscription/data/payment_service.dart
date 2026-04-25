@@ -5,21 +5,23 @@ import '../../../core/constants/app_constants.dart';
 
 enum PaymentStatus { pending, submitted, completed, failed }
 
-enum PaymentType { wave, ussd }
+enum PaymentType { redirect, ussd }
 
 class PaymentResult {
   final String paymentId;
   final PaymentStatus status;
-  final String? checkoutUrl;        // Wave launch URL (wave://)
-  final PaymentType paymentType;    // wave = open Wave app, ussd = await USSD push
+  final String? checkoutUrl;        // URL to open (Wave/OM deep link or checkout page)
+  final PaymentType paymentType;    // redirect = open URL, ussd = USSD push sent
   final String? paymentMethodName;  // Human-readable method name
+  final String? ussdMessage;        // Message from operator after USSD push
 
   const PaymentResult({
     required this.paymentId,
     required this.status,
     this.checkoutUrl,
-    this.paymentType = PaymentType.ussd,
+    this.paymentType = PaymentType.redirect,
     this.paymentMethodName,
+    this.ussdMessage,
   });
 }
 
@@ -77,14 +79,14 @@ class PaymentService {
       throw Exception('Plan invalide: $plan');
     }
 
-    final isWave = paymentMethod != null && paymentMethod.startsWith('wave');
     final body = <String, dynamic>{
       'plan': plan,
-      'provider': isWave ? 'wave' : 'paydunya',
+      'provider': 'paydunya', // always paydunya — Wave goes via SoftPay now
       'currency': currency,
-      if (phone != null) 'phone': phone,
-      if (paymentMethod != null) 'payment_method': paymentMethod,
+      'phone': phone,
+      'payment_method': paymentMethod,
     };
+    body.removeWhere((_, v) => v == null);
 
     debugPrint('[PaymentService] Creating payment: method=$paymentMethod, currency=$currency');
 
@@ -116,9 +118,11 @@ class PaymentService {
 
     debugPrint('[PaymentService] Payment created: ${data['payment_id']}, type=${data['payment_type']}');
 
-    final pType = (data['payment_type'] as String?) == 'wave'
-        ? PaymentType.wave
-        : PaymentType.ussd;
+    final pType = switch (data['payment_type'] as String? ?? '') {
+      'redirect' => PaymentType.redirect,
+      'ussd' => PaymentType.ussd,
+      _ => PaymentType.redirect,
+    };
 
     return PaymentResult(
       paymentId: data['payment_id'] as String,
@@ -126,6 +130,7 @@ class PaymentService {
       checkoutUrl: data['checkout_url'] as String?,
       paymentType: pType,
       paymentMethodName: data['payment_method_name'] as String?,
+      ussdMessage: data['ussd_message'] as String?,
     );
   }
 

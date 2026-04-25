@@ -1,48 +1,217 @@
 // ============================================================
 // NAKORA — Edge Function : create-payment
-// Crée un paiement Wave (direct) ou PayDunya (SoftPay USSD).
-// Appelé depuis l'app Flutter.
+// Crée un paiement PayDunya (SoftPay ou checkout page).
+// Chaque opérateur a ses propres noms de champs — doc officielle :
+// https://developers.paydunya.com/doc/FR/softpay
 // ============================================================
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse } from "../_shared/helpers.ts";
 
-// Base prices in XOF
 const PLAN_AMOUNTS: Record<string, number> = {
   starter: 1000,
   pro: 2000,
   vip: 4000,
 };
 
-// Currency multipliers relative to XOF base prices
 const CURRENCY_MULTIPLIERS: Record<string, number> = {
   XOF: 1,
-  XAF: 1,    // 1:1 parity with XOF
-  GNF: 14,   // 1000 XOF ≈ 14000 GNF
-  CDF: 3.5,  // 1000 XOF ≈ 3500 CDF
+  XAF: 1,
+  GNF: 14,
+  CDF: 3.5,
 };
 
-// PayDunya SoftPay network codes
-const SOFTPAY_NETWORK_CODES: Record<string, string> = {
-  orange_sn:  "orange-money-senegal",
-  orange_ci:  "orange-money-cote-divoire",
-  orange_ml:  "orange-money-mali",
-  orange_bf:  "orange-money-burkina",
-  orange_gn:  "orange-money-guinee",
-  orange_cm:  "orange-money-cameroun",
-  mtn_ci:     "mtn-cote-divoire",
-  mtn_cm:     "mtn-cameroun",
-  mtn_bj:     "mtn-benin",
-  mtn_gn:     "mtn-guinee",
-  mtn_cd:     "mtn-congo",
-  free_sn:    "free-money-senegal",
-  moov_bf:    "moov-money-burkina",
-  moov_ci:    "moov-money-cote-divoire",
-  moov_bj:    "moov-money-benin",
-  moov_tg:    "moov-money-togo",
-  moov_ne:    "moov-money-niger",
-  airtel_cd:  "airtel-money-congo",
-  tmoney_tg:  "tmoney-togo",
+// ── SoftPay config per operator ──────────────────────────────
+// 'resultType':
+//   'url'  → response contains a URL/deep link to open in the app
+//   'ussd' → USSD push / SMS confirmation sent to the user
+//   'otp'  → user must generate an OTP first — skip SoftPay, use checkout
+type SoftPayResultType = "url" | "ussd" | "otp";
+
+interface SoftPayConfig {
+  slug: string;
+  resultType: SoftPayResultType;
+  dialCode: string; // to extract local number from E.164
+  buildBody: (token: string, phone: string, name: string) => Record<string, string>;
+}
+
+const SOFTPAY: Record<string, SoftPayConfig> = {
+  // ── Sénégal ──
+  orange_sn: {
+    slug: "new-orange-money-senegal",
+    resultType: "url",
+    dialCode: "221",
+    buildBody: (token, phone, name) => ({
+      customer_name: name,
+      customer_email: "user@nakora.app",
+      phone_number: phone,
+      invoice_token: token,
+    }),
+  },
+  wave_sn: {
+    slug: "wave-senegal",
+    resultType: "url",
+    dialCode: "221",
+    buildBody: (token, phone, name) => ({
+      wave_senegal_fullName: name,
+      wave_senegal_email: "user@nakora.app",
+      wave_senegal_phone: phone,
+      wave_senegal_payment_token: token,
+    }),
+  },
+  free_sn: {
+    slug: "free-money-senegal",
+    resultType: "ussd",
+    dialCode: "221",
+    buildBody: (token, phone, name) => ({
+      customer_name: name,
+      customer_email: "user@nakora.app",
+      phone_number: phone,
+      payment_token: token,
+    }),
+  },
+  // ── Côte d'Ivoire ──
+  wave_ci: {
+    slug: "wave-ci",
+    resultType: "url",
+    dialCode: "225",
+    buildBody: (token, phone, name) => ({
+      wave_ci_fullName: name,
+      wave_ci_email: "user@nakora.app",
+      wave_ci_phone: phone,
+      wave_ci_payment_token: token,
+    }),
+  },
+  // orange_ci and moov_ci require OTP → checkout fallback
+  mtn_ci: {
+    slug: "mtn-ci",
+    resultType: "ussd",
+    dialCode: "225",
+    buildBody: (token, phone, name) => ({
+      mtn_ci_customer_fullname: name,
+      mtn_ci_email: "user@nakora.app",
+      mtn_ci_phone_number: phone,
+      mtn_ci_wallet_provider: "MTNCI",
+      payment_token: token,
+    }),
+  },
+  // ── Burkina Faso ──
+  moov_bf: {
+    slug: "moov-burkina",
+    resultType: "ussd",
+    dialCode: "226",
+    buildBody: (token, phone, name) => ({
+      moov_burkina_faso_fullName: name,
+      moov_burkina_faso_email: "user@nakora.app",
+      moov_burkina_faso_phone_number: phone,
+      moov_burkina_faso_payment_token: token,
+    }),
+  },
+  // orange_bf requires OTP → checkout fallback
+  // ── Mali ──
+  orange_ml: {
+    slug: "orange-money-mali",
+    resultType: "ussd",
+    dialCode: "223",
+    buildBody: (token, phone, name) => ({
+      orange_money_mali_customer_fullname: name,
+      orange_money_mali_email: "user@nakora.app",
+      orange_money_mali_phone_number: phone,
+      orange_money_mali_customer_address: "N/A",
+      payment_token: token,
+    }),
+  },
+  moov_ml: {
+    slug: "moov-mali",
+    resultType: "ussd",
+    dialCode: "223",
+    buildBody: (token, phone, name) => ({
+      moov_ml_customer_fullname: name,
+      moov_ml_email: "user@nakora.app",
+      moov_ml_phone_number: phone,
+      moov_ml_customer_address: "N/A",
+      payment_token: token,
+    }),
+  },
+  // ── Bénin ──
+  mtn_bj: {
+    slug: "mtn-benin",
+    resultType: "ussd",
+    dialCode: "229",
+    buildBody: (token, phone, name) => ({
+      mtn_benin_customer_fullname: name,
+      mtn_benin_email: "user@nakora.app",
+      mtn_benin_phone_number: phone,
+      mtn_benin_wallet_provider: "MTNBENIN",
+      payment_token: token,
+    }),
+  },
+  moov_bj: {
+    slug: "moov-benin",
+    resultType: "ussd",
+    dialCode: "229",
+    buildBody: (token, phone, name) => ({
+      moov_benin_customer_fullname: name,
+      moov_benin_email: "user@nakora.app",
+      moov_benin_phone_number: phone,
+      payment_token: token,
+    }),
+  },
+  // ── Togo ──
+  tmoney_tg: {
+    slug: "t-money-togo",
+    resultType: "ussd",
+    dialCode: "228",
+    buildBody: (token, phone, name) => ({
+      name_t_money: name,
+      email_t_money: "user@nakora.app",
+      phone_t_money: phone,
+      payment_token: token,
+    }),
+  },
+  moov_tg: {
+    slug: "moov-togo",
+    resultType: "ussd",
+    dialCode: "228",
+    buildBody: (token, phone, name) => ({
+      moov_togo_customer_fullname: name,
+      moov_togo_email: "user@nakora.app",
+      moov_togo_customer_address: "N/A",
+      moov_togo_phone_number: phone,
+      payment_token: token,
+    }),
+  },
+  // ── Cameroun ──
+  mtn_cm: {
+    slug: "mtn-cameroun",
+    resultType: "ussd",
+    dialCode: "237",
+    buildBody: (token, phone, name) => ({
+      mtn_cameroun_customer_fullname: name,
+      mtn_cameroun_email: "user@nakora.app",
+      mtn_cameroun_phone_number: phone,
+      mtn_cameroun_wallet_provider: "MTNCAMEROUN",
+      payment_token: token,
+    }),
+  },
 };
+
+const METHOD_NAMES: Record<string, string> = {
+  orange_sn: "Orange Money", orange_ci: "Orange Money",
+  orange_ml: "Orange Money", orange_bf: "Orange Money",
+  orange_cm: "Orange Money",
+  wave_sn: "Wave", wave_ci: "Wave",
+  mtn_ci: "MTN Money", mtn_cm: "MTN Money",
+  mtn_bj: "MTN Money",
+  free_sn: "Free Money",
+  moov_bf: "Moov Money", moov_ci: "Moov Money",
+  moov_bj: "Moov Money", moov_tg: "Moov Money", moov_ml: "Moov Money",
+  tmoney_tg: "T-Money",
+};
+
+function extractLocalPhone(phone: string, dialCode: string): string {
+  const clean = phone.replace(/^\+/, "");
+  return clean.startsWith(dialCode) ? clean.substring(dialCode.length) : clean;
+}
 
 function getAmountInCurrency(baseAmount: number, currency: string): number {
   const mult = CURRENCY_MULTIPLIERS[currency] ?? 1;
@@ -52,10 +221,10 @@ function getAmountInCurrency(baseAmount: number, currency: string): number {
 
 interface CreatePaymentRequest {
   plan: string;             // 'starter' | 'pro' | 'vip'
-  provider: string;         // 'paydunya' | 'wave'
+  provider: string;         // always 'paydunya' now
   currency?: string;        // 'XOF' (default) | 'XAF' | 'GNF' | 'CDF'
-  phone?: string;           // Full phone with dial code e.g. '+221XXXXXXXXX' (USSD only)
-  payment_method?: string;  // Method id e.g. 'orange_sn', 'mtn_ci', 'wave_sn'
+  phone?: string;           // Full phone in E.164 e.g. '+221XXXXXXXXX'
+  payment_method?: string;  // Method id e.g. 'orange_sn', 'wave_sn'
 }
 
 Deno.serve(async (req: Request) => {
@@ -94,13 +263,10 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Invalid JSON" }, 400);
   }
 
-  const { plan, provider, currency = "XOF", phone, payment_method } = body;
+  const { plan, currency = "XOF", phone, payment_method } = body;
 
   if (!plan || !PLAN_AMOUNTS[plan]) {
     return jsonResponse({ error: "Invalid plan. Use: starter, pro, vip" }, 400);
-  }
-  if (!provider || !["paydunya", "wave"].includes(provider)) {
-    return jsonResponse({ error: "Invalid provider. Use: paydunya or wave" }, 400);
   }
 
   const baseAmount = PLAN_AMOUNTS[plan];
@@ -108,131 +274,29 @@ Deno.serve(async (req: Request) => {
   const paymentId = crypto.randomUUID();
 
   try {
-    if (provider === "wave") {
-      return await handleWavePayment(supabase, user.id, plan, baseAmount, paymentId, payment_method);
-    } else {
-      return await handlePaydunyaSoftPay(supabase, user.id, plan, amount, paymentId, currency, phone!, payment_method!);
-    }
+    return await handlePayment(supabase, user.id, plan, amount, paymentId, currency, phone, payment_method);
   } catch (err) {
     console.error("[create-payment] Error:", err);
     return jsonResponse({ error: "Payment creation failed" }, 500);
   }
 });
 
-// ─── Wave Checkout via PayDunya ───────────────────────────────
-// Wave is integrated into PayDunya — no separate Wave API key needed.
-// We create a PayDunya invoice and return the checkout URL which
-// includes Wave as a payment option, redirecting to the Wave app.
-async function handleWavePayment(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  userId: string,
-  plan: string,
-  amount: number,
-  paymentId: string,
-  paymentMethod?: string,
-) {
-  const masterKey = Deno.env.get("PAYDUNYA_MASTER_KEY");
-  const privateKey = Deno.env.get("PAYDUNYA_PRIVATE_KEY");
-  const pdToken = Deno.env.get("PAYDUNYA_TOKEN");
-
-  if (!masterKey || !privateKey || !pdToken) {
-    console.error("[create-payment] Missing PayDunya credentials for Wave");
-    return jsonResponse({ error: "Payment not configured" }, 500);
-  }
-
-  const baseUrl = Deno.env.get("APP_BASE_URL") || "https://epiaxzyzrclebutxvbgp.supabase.co";
-  const planLabel = ({ starter: "Starter", pro: "Pro", vip: "VIP" } as Record<string, string>)[plan] ?? plan;
-
-  const invoiceResponse = await fetch("https://app.paydunya.com/api/v1/checkout-invoice/create", {
-    method: "POST",
-    headers: {
-      "PAYDUNYA-MASTER-KEY": masterKey,
-      "PAYDUNYA-PRIVATE-KEY": privateKey,
-      "PAYDUNYA-TOKEN": pdToken,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      invoice: {
-        total_amount: amount,
-        description: `Nakora ${planLabel} — 30 jours`,
-      },
-      store: {
-        name: "Nakora",
-        tagline: "Analyses sportives IA",
-      },
-      actions: {
-        cancel_url: `${baseUrl}/functions/v1/payment-redirect?status=cancel&payment_id=${paymentId}`,
-        return_url: `${baseUrl}/functions/v1/payment-redirect?status=success&payment_id=${paymentId}`,
-        callback_url: `${baseUrl}/functions/v1/webhook-payment`,
-      },
-      custom_data: {
-        payment_id: paymentId,
-        user_id: userId,
-        plan,
-      },
-    }),
-  });
-
-  if (!invoiceResponse.ok) {
-    const errText = await invoiceResponse.text();
-    console.error("[create-payment] PayDunya Wave invoice error:", errText);
-    return jsonResponse({ error: "Wave payment creation failed" }, 502);
-  }
-
-  const invoiceData = await invoiceResponse.json();
-  if (invoiceData.response_code !== "00") {
-    console.error("[create-payment] PayDunya Wave invoice error:", invoiceData);
-    return jsonResponse({ error: invoiceData.response_text ?? "PayDunya error" }, 502);
-  }
-
-  const invoiceToken: string = invoiceData.token;
-  const checkoutUrl = `https://app.paydunya.com/checkout/${invoiceToken}`;
-
-  await supabase.from("payments").insert({
-    id: paymentId,
-    user_id: userId,
-    provider: "paydunya",
-    external_id: invoiceToken,
-    plan,
-    amount,
-    currency: "XOF",
-    status: "pending",
-    payment_method: paymentMethod ?? "wave_sn",
-  });
-
-  console.log(`[create-payment] Wave via PayDunya: invoice ${invoiceToken}`);
-
-  return jsonResponse({
-    payment_id: paymentId,
-    checkout_url: checkoutUrl,
-    payment_type: "wave",
-    payment_method_name: "Wave",
-  });
-}
-
-// ─── PayDunya SoftPay (USSD push) ────────────────────────────
-async function handlePaydunyaSoftPay(
+// ─── Unified payment handler ─────────────────────────────────
+// All operators go through PayDunya:
+// - Wave SN/CI → SoftPay → pay.wave.com URL
+// - Orange SN → SoftPay new-orange-money-senegal → om_url deep link
+// - Other supported ops → SoftPay USSD push (SMS confirmation)
+// - OTP/unsupported ops → PayDunya checkout page (user picks operator)
+async function handlePayment(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   userId: string,
   plan: string,
   amount: number,
   paymentId: string,
   currency: string,
-  phone: string,
-  paymentMethod: string,
+  phone?: string,
+  paymentMethod?: string,
 ) {
-  if (!phone) {
-    return jsonResponse({ error: "Phone number required for USSD payment" }, 400);
-  }
-  if (!paymentMethod) {
-    return jsonResponse({ error: "payment_method required" }, 400);
-  }
-
-  const networkCode = SOFTPAY_NETWORK_CODES[paymentMethod];
-  if (!networkCode) {
-    return jsonResponse({ error: `Unknown payment_method: ${paymentMethod}` }, 400);
-  }
-
   const masterKey = Deno.env.get("PAYDUNYA_MASTER_KEY");
   const privateKey = Deno.env.get("PAYDUNYA_PRIVATE_KEY");
   const pdToken = Deno.env.get("PAYDUNYA_TOKEN");
@@ -245,15 +309,17 @@ async function handlePaydunyaSoftPay(
   const baseUrl = Deno.env.get("APP_BASE_URL") || "https://epiaxzyzrclebutxvbgp.supabase.co";
   const planLabel = ({ starter: "Starter", pro: "Pro", vip: "VIP" } as Record<string, string>)[plan] ?? plan;
 
+  const pdHeaders = {
+    "PAYDUNYA-MASTER-KEY": masterKey,
+    "PAYDUNYA-PRIVATE-KEY": privateKey,
+    "PAYDUNYA-TOKEN": pdToken,
+    "Content-Type": "application/json",
+  };
+
   // Step 1 — Create PayDunya invoice
   const invoiceResponse = await fetch("https://app.paydunya.com/api/v1/checkout-invoice/create", {
     method: "POST",
-    headers: {
-      "PAYDUNYA-MASTER-KEY": masterKey,
-      "PAYDUNYA-PRIVATE-KEY": privateKey,
-      "PAYDUNYA-TOKEN": pdToken,
-      "Content-Type": "application/json",
-    },
+    headers: pdHeaders,
     body: JSON.stringify({
       invoice: {
         total_amount: amount,
@@ -268,11 +334,7 @@ async function handlePaydunyaSoftPay(
         return_url: `${baseUrl}/functions/v1/payment-redirect?status=success&payment_id=${paymentId}`,
         callback_url: `${baseUrl}/functions/v1/webhook-payment`,
       },
-      custom_data: {
-        payment_id: paymentId,
-        user_id: userId,
-        plan,
-      },
+      custom_data: { payment_id: paymentId, user_id: userId, plan },
     }),
   });
 
@@ -289,48 +351,59 @@ async function handlePaydunyaSoftPay(
   }
 
   const invoiceToken: string = invoiceData.token;
+  const checkoutFallback = `https://app.paydunya.com/checkout/${invoiceToken}`;
 
-  // Step 2 — Trigger SoftPay (USSD push)
-  const softPayResponse = await fetch(`https://app.paydunya.com/api/v1/softpay/${networkCode}`, {
-    method: "POST",
-    headers: {
-      "PAYDUNYA-MASTER-KEY": masterKey,
-      "PAYDUNYA-PRIVATE-KEY": privateKey,
-      "PAYDUNYA-TOKEN": pdToken,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      invoice_token: invoiceToken,
-      phone_number: phone.replace(/^\+/, ''), // PayDunya expects no leading '+'
-    }),
-  });
+  // Step 2 — Try SoftPay if operator config exists and phone is provided
+  let checkoutUrl = checkoutFallback;
+  let paymentType: "redirect" | "ussd" = "redirect";
+  let ussdMessage: string | undefined;
 
-  if (!softPayResponse.ok) {
-    const errText = await softPayResponse.text();
-    console.error("[create-payment] PayDunya SoftPay error:", errText);
-    return jsonResponse({ error: "USSD push failed" }, 502);
+  const cfg = paymentMethod ? SOFTPAY[paymentMethod] : undefined;
+
+  if (cfg && phone) {
+    const localPhone = extractLocalPhone(phone, cfg.dialCode);
+    const body = cfg.buildBody(invoiceToken, localPhone, "Nakora User");
+
+    console.log(`[create-payment] SoftPay ${cfg.slug}: phone=${localPhone}, body keys=${Object.keys(body).join(",")}`);
+
+    const spResp = await fetch(`https://app.paydunya.com/api/v1/softpay/${cfg.slug}`, {
+      method: "POST",
+      headers: pdHeaders,
+      body: JSON.stringify(body),
+    });
+
+    const spText = await spResp.text();
+
+    if (!spResp.ok) {
+      console.warn(`[create-payment] SoftPay HTTP ${spResp.status} for ${cfg.slug}: ${spText.substring(0, 200)} — using checkout`);
+    } else {
+      try {
+        const spData = JSON.parse(spText);
+        if (spData?.success === true) {
+          if (cfg.resultType === "url") {
+            // Wave / Orange SN return a URL to open directly
+            checkoutUrl =
+              spData.other_url?.om_url ??
+              spData.other_url?.maxit_url ??
+              spData.url ??
+              checkoutFallback;
+          } else {
+            // USSD push sent — show confirmation message to user
+            paymentType = "ussd";
+            ussdMessage = spData.message;
+            checkoutUrl = checkoutFallback; // not used for USSD but keep as fallback
+          }
+          console.log(`[create-payment] SoftPay OK ${cfg.slug}: type=${cfg.resultType}, url=${checkoutUrl}`);
+        } else {
+          console.warn(`[create-payment] SoftPay error ${cfg.slug}: ${spText} — using checkout`);
+        }
+      } catch {
+        console.warn(`[create-payment] SoftPay non-JSON ${cfg.slug} — using checkout`);
+      }
+    }
+  } else if (!cfg) {
+    console.log(`[create-payment] No SoftPay config for ${paymentMethod ?? "unknown"} — checkout page`);
   }
-
-  const softPayData = await softPayResponse.json();
-  if (softPayData.response_code !== "00") {
-    console.error("[create-payment] SoftPay error:", softPayData);
-    return jsonResponse({ error: softPayData.response_text ?? "SoftPay error" }, 502);
-  }
-
-  // Format method name for display
-  const methodNames: Record<string, string> = {
-    orange_sn: "Orange Money", orange_ci: "Orange Money",
-    orange_ml: "Orange Money", orange_bf: "Orange Money",
-    orange_gn: "Orange Money", orange_cm: "Orange Money",
-    mtn_ci: "MTN Mobile Money", mtn_cm: "MTN Mobile Money",
-    mtn_bj: "MTN Mobile Money", mtn_gn: "MTN Mobile Money",
-    mtn_cd: "MTN Mobile Money",
-    free_sn: "Free Money",
-    moov_bf: "Moov Money", moov_ci: "Moov Money",
-    moov_bj: "Moov Money", moov_tg: "Moov Money", moov_ne: "Moov Money",
-    airtel_cd: "Airtel Money",
-    tmoney_tg: "T-Money",
-  };
 
   await supabase.from("payments").insert({
     id: paymentId,
@@ -341,15 +414,17 @@ async function handlePaydunyaSoftPay(
     amount,
     currency,
     status: "pending",
-    payment_method: paymentMethod,
-    phone,
+    payment_method: paymentMethod ?? "unknown",
+    phone: phone ?? null,
   });
 
-  console.log(`[create-payment] SoftPay triggered: ${networkCode} for ${phone}, invoice ${invoiceToken}`);
+  console.log(`[create-payment] Done: method=${paymentMethod}, type=${paymentType}, invoice=${invoiceToken}`);
 
   return jsonResponse({
     payment_id: paymentId,
-    payment_type: "ussd",
-    payment_method_name: methodNames[paymentMethod] ?? paymentMethod,
+    checkout_url: paymentType === "redirect" ? checkoutUrl : undefined,
+    payment_type: paymentType,
+    payment_method_name: METHOD_NAMES[paymentMethod ?? ""] ?? paymentMethod ?? "Mobile Money",
+    ussd_message: ussdMessage,
   });
 }
