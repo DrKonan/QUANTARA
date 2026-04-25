@@ -42,6 +42,12 @@ enable_confirmations = true
 enabled = true
 policy = "oneshot"
 
+[functions.payment-redirect]
+verify_jwt = false
+
+[functions.webhook-payment]
+verify_jwt = false
+
 # ----------------------------------------------------------------
 # Scheduled Jobs (Cron) — nécessite Supabase Pro ou pg_cron
 # ----------------------------------------------------------------
