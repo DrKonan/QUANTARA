@@ -341,13 +341,58 @@ async function handlePayment(
     .maybeSingle();
 
   if (existingPending?.external_id) {
-    const checkoutUrl = sandbox
-      ? `https://sandbox.paydunya.com/checkout/invoice/${existingPending.external_id}`
-      : `https://paydunya.com/checkout/invoice/${existingPending.external_id}`;
-    console.log(`[create-payment] Reusing pending payment ${existingPending.id} (invoice=${existingPending.external_id})`);
+    const existingToken = existingPending.external_id;
+    console.log(`[create-payment] Reusing pending payment ${existingPending.id} (invoice=${existingToken})`);
+
+    // Try SoftPay with the existing invoice token so Wave/OM get their deeplink URL.
+    const reuseMethod = paymentMethod ?? existingPending.payment_method as string | undefined;
+    const reusePhone  = phone ?? existingPending.phone as string | undefined;
+    const reuseCfg    = reuseMethod ? SOFTPAY[reuseMethod] : undefined;
+
+    if (reuseCfg && reusePhone) {
+      const localPhone = extractLocalPhone(reusePhone, reuseCfg.dialCode);
+      const spBody = reuseCfg.buildBody(existingToken, localPhone, "Nakora User");
+      try {
+        const spResp = await fetch(`${pdBaseUrl}/softpay/${reuseCfg.slug}`, {
+          method: "POST",
+          headers: pdHeaders,
+          body: JSON.stringify(spBody),
+        });
+        if (spResp.ok) {
+          const spData = JSON.parse(await spResp.text());
+          if (spData?.success === true) {
+            if (reuseCfg.resultType === "url") {
+              const deepLink = spData.other_url?.om_url ?? spData.other_url?.maxit_url ?? spData.url;
+              if (deepLink) {
+                console.log(`[create-payment] SoftPay reuse OK ${reuseCfg.slug}: ${deepLink}`);
+                return jsonResponse({
+                  payment_id: existingPending.id,
+                  checkout_url: deepLink,
+                  payment_type: "redirect",
+                  payment_method_name: METHOD_NAMES[reuseMethod ?? ""] ?? reuseMethod ?? "Mobile Money",
+                });
+              }
+            } else {
+              console.log(`[create-payment] SoftPay USSD reuse OK ${reuseCfg.slug}`);
+              return jsonResponse({
+                payment_id: existingPending.id,
+                payment_type: "ussd",
+                payment_method_name: METHOD_NAMES[reuseMethod ?? ""] ?? reuseMethod ?? "Mobile Money",
+                ussd_message: spData.message,
+              });
+            }
+          }
+          console.warn(`[create-payment] SoftPay reuse failed ${reuseCfg.slug} — falling back to checkout`);
+        }
+      } catch { /* network error → checkout fallback */ }
+    }
+
+    const checkoutFallback = sandbox
+      ? `https://sandbox.paydunya.com/checkout/invoice/${existingToken}`
+      : `https://paydunya.com/checkout/invoice/${existingToken}`;
     return jsonResponse({
       payment_id: existingPending.id,
-      checkout_url: checkoutUrl,
+      checkout_url: checkoutFallback,
       payment_type: "redirect",
       payment_method_name: METHOD_NAMES[paymentMethod ?? ""] ?? paymentMethod ?? "Mobile Money",
     });
