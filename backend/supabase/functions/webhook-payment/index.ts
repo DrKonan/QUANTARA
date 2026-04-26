@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
 
 // ────────────────────────────────────────────────────────────
 // PayDunya IPN
-// hash = HMAC-SHA512(key=masterKey, message=invoice.token)
+// hash = SHA-512(masterKey) — fixed per account, proves request comes from PayDunya
 // ────────────────────────────────────────────────────────────
 async function handlePaydunyaCallback(
   payload: Record<string, unknown>,
@@ -93,11 +93,11 @@ async function handlePaydunyaCallback(
     return jsonResponse({ error: "Invalid PayDunya payload" }, 400);
   }
 
-  // Verify HMAC-SHA512(key=masterKey, message=invoice.token)
-  const isValid = await verifyPaydunyaHash(invoice.token as string, hash, masterKey);
+  // Verify SHA-512(masterKey) — per PayDunya spec
+  const isValid = await verifyPaydunyaHash(hash, masterKey);
   console.log(`[webhook-payment] Hash valid: ${isValid}`);
   if (!isValid) {
-    console.warn("[webhook-payment] PayDunya invalid hash for token:", invoice.token);
+    console.warn("[webhook-payment] PayDunya invalid hash");
     return jsonResponse({ error: "Invalid signature" }, 401);
   }
 
@@ -141,18 +141,14 @@ async function handlePaydunyaCallback(
   return jsonResponse({ received: true, status: "pending" });
 }
 
-async function verifyPaydunyaHash(token: string, hash: string, masterKey: string): Promise<boolean> {
+// PayDunya spec: hash = sha512(masterKey)
+// Not HMAC — just a plain SHA-512 digest of the master key itself.
+// It's a fixed value per account, used to confirm the request origin.
+async function verifyPaydunyaHash(hash: string, masterKey: string): Promise<boolean> {
   try {
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(masterKey),
-      { name: "HMAC", hash: "SHA-512" },
-      false,
-      ["sign"],
-    );
-    const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(token));
-    const expected = Array.from(new Uint8Array(sig))
+    const data = new TextEncoder().encode(masterKey);
+    const hashBuffer = await crypto.subtle.digest("SHA-512", data);
+    const expected = Array.from(new Uint8Array(hashBuffer))
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
     console.log(`[webhook-payment] Hash expected=${expected.substring(0, 20)}... got=${hash.substring(0, 20)}...`);
