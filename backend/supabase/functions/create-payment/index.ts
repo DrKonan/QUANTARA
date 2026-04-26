@@ -308,7 +308,14 @@ async function handlePayment(
   }
 
   const baseUrl = Deno.env.get("APP_BASE_URL") || "https://epiaxzyzrclebutxvbgp.supabase.co";
+  // PAYDUNYA_SANDBOX=true → use sandbox endpoint (test keys); default = production
+  const sandbox = Deno.env.get("PAYDUNYA_SANDBOX") === "true";
+  const pdBaseUrl = sandbox
+    ? "https://app.paydunya.com/sandbox-api/v1"
+    : "https://app.paydunya.com/api/v1";
   const planLabel = ({ starter: "Starter", pro: "Pro", vip: "VIP" } as Record<string, string>)[plan] ?? plan;
+
+  console.log(`[create-payment] Mode: ${sandbox ? "SANDBOX" : "PRODUCTION"}, method=${paymentMethod}, plan=${plan}`);
 
   const pdHeaders = {
     "PAYDUNYA-MASTER-KEY":  masterKey,
@@ -318,8 +325,36 @@ async function handlePayment(
     "Content-Type": "application/json",
   };
 
+  // Step 0 — Reuse an existing recent pending payment for this user+plan
+  // This avoids PayDunya's "ce paiement a déjà été initié" deduplication error
+  // when the user retries before the previous invoice expires.
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { data: existingPending } = await supabase
+    .from("payments")
+    .select("id, external_id, payment_method, phone")
+    .eq("user_id", userId)
+    .eq("plan", plan)
+    .eq("status", "pending")
+    .gte("created_at", tenMinAgo)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingPending?.external_id) {
+    const checkoutUrl = sandbox
+      ? `https://sandbox.paydunya.com/checkout/invoice/${existingPending.external_id}`
+      : `https://paydunya.com/checkout/invoice/${existingPending.external_id}`;
+    console.log(`[create-payment] Reusing pending payment ${existingPending.id} (invoice=${existingPending.external_id})`);
+    return jsonResponse({
+      payment_id: existingPending.id,
+      checkout_url: checkoutUrl,
+      payment_type: "redirect",
+      payment_method_name: METHOD_NAMES[paymentMethod ?? ""] ?? paymentMethod ?? "Mobile Money",
+    });
+  }
+
   // Step 1 — Create PayDunya invoice
-  const invoiceResponse = await fetch("https://app.paydunya.com/api/v1/checkout-invoice/create", {
+  const invoiceResponse = await fetch(`${pdBaseUrl}/checkout-invoice/create`, {
     method: "POST",
     headers: pdHeaders,
     body: JSON.stringify({
@@ -342,7 +377,7 @@ async function handlePayment(
 
   if (!invoiceResponse.ok) {
     const errText = await invoiceResponse.text();
-    console.error("[create-payment] PayDunya invoice error:", errText);
+    console.error("[create-payment] PayDunya invoice HTTP error:", errText);
     return jsonResponse({ error: "PayDunya invoice creation failed" }, 502);
   }
 
@@ -350,8 +385,17 @@ async function handlePayment(
   console.log("[create-payment] PayDunya invoice response:", JSON.stringify(invoiceData));
 
   if (invoiceData.response_code !== "00") {
-    console.error("[create-payment] PayDunya invoice error:", invoiceData);
-    return jsonResponse({ error: invoiceData.response_text ?? "PayDunya error" }, 502);
+    console.error("[create-payment] PayDunya invoice rejected:", invoiceData);
+    // PayDunya sometimes says "already initiated" due to account-level deduplication.
+    // This shouldn't happen (we pre-checked above) but handle it gracefully.
+    const errText = (invoiceData.response_text as string) ?? "";
+    const isDedup = errText.toLowerCase().includes("déjà") || errText.toLowerCase().includes("deja");
+    if (isDedup) {
+      return jsonResponse({
+        error: "Un paiement est déjà en cours. Attendez quelques minutes ou vérifiez votre application mobile money.",
+      }, 409);
+    }
+    return jsonResponse({ error: errText || "PayDunya error" }, 502);
   }
 
   const invoiceToken: string = invoiceData.token ?? invoiceData.invoice_token;
@@ -376,7 +420,7 @@ async function handlePayment(
 
     console.log(`[create-payment] SoftPay ${cfg.slug}: phone=${localPhone}, body keys=${Object.keys(body).join(",")}`);
 
-    const spResp = await fetch(`https://app.paydunya.com/api/v1/softpay/${cfg.slug}`, {
+    const spResp = await fetch(`${pdBaseUrl}/softpay/${cfg.slug}`, {
       method: "POST",
       headers: pdHeaders,
       body: JSON.stringify(body),
