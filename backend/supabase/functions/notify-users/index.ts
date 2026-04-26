@@ -162,7 +162,7 @@ async function sendFCMNotification(
               data: data ?? {},
               android: {
                 priority: "high",
-                notification: { channel_id: "quantara_predictions" },
+                notification: { channel_id: "nakora_predictions" },
               },
               apns: {
                 payload: { aps: { sound: "default", badge: 1 } },

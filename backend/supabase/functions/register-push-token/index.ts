@@ -1,57 +1,75 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { supabaseAdmin } from "../_shared/supabase.ts";
+// ============================================================
+// NAKORA — Edge Function : register-push-token
+// Enregistre ou met à jour le token FCM/APNs d'un appareil.
+// Requires: Authorization header (user JWT)
+// ============================================================
+import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse } from "../_shared/helpers.ts";
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "authorization, content-type, apikey, x-client-info",
+      },
+    });
+  }
+
   if (req.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
-  // Vérifier l'authentification
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const token = authHeader.replace("Bearer ", "");
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return jsonResponse({ error: "Unauthorized" }, 401);
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabaseAdmin.auth.getUser(token);
+  const supabase = getSupabaseAdmin();
 
-  if (authError || !user) {
-    return jsonResponse({ error: "Non autorisé" }, 401);
+  const { data: { user }, error: authError } = await supabase.auth.getUser(
+    authHeader.replace("Bearer ", ""),
+  );
+  if (authError || !user) return jsonResponse({ error: "Unauthorized" }, 401);
+
+  let body: { token?: string; platform?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResponse({ error: "Invalid JSON" }, 400);
   }
 
-  const body = await req.json();
-  const { token: pushToken, platform } = body;
-
-  if (!pushToken || !platform) {
-    return jsonResponse({ error: "token et platform requis" }, 400);
-  }
-
+  const { token, platform } = body;
+  if (!token || !platform) return jsonResponse({ error: "token et platform requis" }, 400);
   if (!["ios", "android"].includes(platform)) {
     return jsonResponse({ error: "platform doit être ios ou android" }, 400);
   }
 
   // Désactiver les anciens tokens de ce user sur cette plateforme
-  await supabaseAdmin
+  await supabase
     .from("push_tokens")
-    .update({ is_active: false })
+    .update({ is_active: false, updated_at: new Date().toISOString() })
     .eq("user_id", user.id)
-    .eq("platform", platform);
+    .eq("platform", platform)
+    .neq("token", token);
 
-  // Upsert le nouveau token
-  const { error } = await supabaseAdmin.from("push_tokens").upsert(
+  // Upsert sur le token (globalement unique par appareil)
+  const { error } = await supabase.from("push_tokens").upsert(
     {
       user_id: user.id,
-      token: pushToken,
+      token,
       platform,
       is_active: true,
+      updated_at: new Date().toISOString(),
     },
-    { onConflict: "user_id,token" }
+    { onConflict: "token" },
   );
 
   if (error) {
+    console.error("[register-push-token] Upsert error:", error);
     return jsonResponse({ error: error.message }, 500);
   }
 
+  console.log(`[register-push-token] Token registered: user=${user.id}, platform=${platform}`);
   return jsonResponse({ success: true });
 });
