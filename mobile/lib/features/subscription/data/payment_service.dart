@@ -5,6 +5,16 @@ import '../../../core/constants/app_constants.dart';
 
 enum PaymentStatus { pending, submitted, completed, failed }
 
+PaymentStatus? parsePaymentStatus(String? s) {
+  switch (s) {
+    case 'completed': return PaymentStatus.completed;
+    case 'failed': return PaymentStatus.failed;
+    case 'submitted': return PaymentStatus.submitted;
+    case 'pending': return PaymentStatus.pending;
+    default: return null;
+  }
+}
+
 enum PaymentType { redirect, ussd }
 
 class PaymentResult {

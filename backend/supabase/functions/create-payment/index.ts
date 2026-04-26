@@ -415,7 +415,7 @@ async function handlePayment(
     console.log(`[create-payment] No SoftPay config for ${paymentMethod ?? "unknown"} — checkout page`);
   }
 
-  await supabase.from("payments").insert({
+  const { error: insertError } = await supabase.from("payments").insert({
     id: paymentId,
     user_id: userId,
     provider: "paydunya",
@@ -428,7 +428,12 @@ async function handlePayment(
     phone: phone ?? null,
   });
 
-  console.log(`[create-payment] Done: method=${paymentMethod}, type=${paymentType}, invoice=${invoiceToken}`);
+  if (insertError) {
+    console.error("[create-payment] Failed to insert payment row:", insertError);
+    return jsonResponse({ error: "Database error — payment not recorded" }, 500);
+  }
+
+  console.log(`[create-payment] Done: method=${paymentMethod}, type=${paymentType}, invoice=${invoiceToken}, payment_id=${paymentId}`);
 
   return jsonResponse({
     payment_id: paymentId,

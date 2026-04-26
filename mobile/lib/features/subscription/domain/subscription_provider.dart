@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../auth/domain/auth_provider.dart';
 import '../data/payment_service.dart';
@@ -21,10 +22,8 @@ final activeSubscriptionProvider = FutureProvider<Subscription?>((ref) async {
 
 // ── Is Premium (any paid plan: starter, pro, vip) ──
 final isPremiumProvider = Provider<bool>((ref) {
-  // Check active subscription first
   final sub = ref.watch(activeSubscriptionProvider).valueOrNull;
   if (sub?.isActive ?? false) return true;
-  // Fallback to user profile plan
   final profile = ref.watch(userProfileProvider).valueOrNull;
   return profile?.isPremium ?? false;
 });
@@ -87,7 +86,8 @@ class PaymentState {
 class PaymentNotifier extends StateNotifier<PaymentState> {
   final PaymentService _service;
   final Ref _ref;
-  Timer? _pollTimer;
+  Timer? _fallbackTimer;
+  RealtimeChannel? _realtimeChannel;
 
   PaymentNotifier(this._service, this._ref) : super(const PaymentState());
 
@@ -113,8 +113,7 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
         lastStatus: result.status,
       );
 
-      // Start polling for payment status
-      _startPolling(result.paymentId);
+      _startListening(result.paymentId);
     } catch (e) {
       state = PaymentState(
         phase: PaymentPhase.error,
@@ -123,88 +122,115 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     }
   }
 
-  void _startPolling(String paymentId) {
-    _pollTimer?.cancel();
-    int attempts = 0;
-    const maxAttempts = 60; // 5 minutes at 5s interval
+  void _startListening(String paymentId) {
+    _cleanup();
 
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
-      attempts++;
-      if (attempts > maxAttempts) {
+    // Primary: Supabase Realtime — fires instantly when the webhook updates the DB
+    final client = _ref.read(supabaseClientProvider);
+    _realtimeChannel = client
+        .channel('payment-$paymentId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'payments',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: paymentId,
+          ),
+          callback: (payload) {
+            final statusStr = payload.newRecord['status'] as String?;
+            final status = parsePaymentStatus(statusStr);
+            debugPrint('[PaymentNotifier] Realtime update: status=$statusStr');
+            if (status != null) _handleStatus(status);
+          },
+        )
+        .subscribe((status, [error]) {
+          debugPrint('[PaymentNotifier] Realtime channel status: $status error=$error');
+        });
+
+    // Fallback: poll every 15s for 5 minutes in case Realtime misses an event
+    int attempts = 0;
+    _fallbackTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+      if (state.phase != PaymentPhase.waitingConfirmation) {
         timer.cancel();
-        state = state.copyWith(
-          phase: PaymentPhase.error,
-          errorMessage: 'Le paiement a expiré. Vérifiez votre compte et réessayez.',
-        );
         return;
       }
-
-      try {
-        final status = await _service.checkPaymentStatus(paymentId);
-        state = state.copyWith(lastStatus: status);
-
-        if (status == PaymentStatus.completed) {
-          timer.cancel();
-          state = state.copyWith(phase: PaymentPhase.success);
-          // Refresh subscription state
-          _ref.invalidate(activeSubscriptionProvider);
-          _ref.invalidate(userProfileProvider);
-        } else if (status == PaymentStatus.failed) {
-          timer.cancel();
+      attempts++;
+      if (attempts > 20) {
+        timer.cancel();
+        if (state.phase == PaymentPhase.waitingConfirmation) {
+          _cleanup();
           state = state.copyWith(
             phase: PaymentPhase.error,
-            errorMessage: 'Le paiement a échoué. Veuillez réessayer.',
+            errorMessage: 'Le paiement a expiré. Vérifiez votre compte et réessayez.',
           );
         }
-      } catch (_) {
-        // Ignore polling errors, will retry
+        return;
       }
+      try {
+        final status = await _service.checkPaymentStatus(paymentId);
+        debugPrint('[PaymentNotifier] Fallback poll: $status');
+        _handleStatus(status);
+      } catch (_) {}
     });
   }
 
-  void reset() {
-    _pollTimer?.cancel();
-    state = const PaymentState();
-  }
+  // Single entry point for all status updates (Realtime, poll, deep link, app resume)
+  void _handleStatus(PaymentStatus status) {
+    if (state.phase != PaymentPhase.waitingConfirmation) return;
+    state = state.copyWith(lastStatus: status);
 
-  /// Called when the in-app browser closes OR when a deep link is received.
-  /// Does an immediate DB check instead of waiting for the next poll.
-  Future<void> forceCheckNow() async {
-    final paymentId = state.result?.paymentId;
-    if (paymentId == null) return;
-    try {
-      final status = await _service.checkPaymentStatus(paymentId);
-      state = state.copyWith(lastStatus: status);
-      if (status == PaymentStatus.completed) {
-        _pollTimer?.cancel();
-        state = state.copyWith(phase: PaymentPhase.success);
-        _ref.invalidate(activeSubscriptionProvider);
-        _ref.invalidate(userProfileProvider);
-      } else if (status == PaymentStatus.failed) {
-        _pollTimer?.cancel();
-        state = state.copyWith(
-          phase: PaymentPhase.error,
-          errorMessage: 'Le paiement a échoué. Veuillez réessayer.',
-        );
-      }
-      // If still pending, leave the polling timer running.
-    } catch (_) {
-      // Ignore — polling continues.
+    if (status == PaymentStatus.completed) {
+      _cleanup();
+      state = state.copyWith(phase: PaymentPhase.success);
+      _ref.invalidate(activeSubscriptionProvider);
+      _ref.invalidate(userProfileProvider);
+    } else if (status == PaymentStatus.failed) {
+      _cleanup();
+      state = state.copyWith(
+        phase: PaymentPhase.error,
+        errorMessage: 'Le paiement a échoué. Veuillez réessayer.',
+      );
     }
   }
 
-  /// Called when the user cancels payment from the deep link.
+  void _cleanup() {
+    _fallbackTimer?.cancel();
+    _fallbackTimer = null;
+    _realtimeChannel?.unsubscribe();
+    _realtimeChannel = null;
+  }
+
+  /// Immediate DB check — called on deep link arrival, app resume, or user tap.
+  /// Safe to call multiple times; guards against non-waiting state.
+  Future<void> forceCheckNow() async {
+    final paymentId = state.result?.paymentId;
+    if (paymentId == null || state.phase != PaymentPhase.waitingConfirmation) return;
+    try {
+      final status = await _service.checkPaymentStatus(paymentId);
+      debugPrint('[PaymentNotifier] forceCheckNow: $status');
+      _handleStatus(status);
+    } catch (_) {}
+  }
+
   void handleCancelFromDeepLink() {
-    _pollTimer?.cancel();
+    if (state.phase != PaymentPhase.waitingConfirmation) return;
+    _cleanup();
     state = state.copyWith(
       phase: PaymentPhase.error,
       errorMessage: 'Paiement annulé.',
     );
   }
 
+  void reset() {
+    _cleanup();
+    state = const PaymentState();
+  }
+
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    _cleanup();
     super.dispose();
   }
 }
@@ -250,7 +276,6 @@ class DailyViewNotifier extends StateNotifier<DailyViewState> {
     }
   }
 
-  /// Record that a match was viewed. Returns true if this was a new view.
   bool recordView(String matchId) {
     _ensureToday();
     if (state.viewedMatchIds.contains(matchId)) return false;
@@ -260,11 +285,9 @@ class DailyViewNotifier extends StateNotifier<DailyViewState> {
     return true;
   }
 
-  /// Check if user can view more matches given their plan limit.
-  /// Returns true if the match was already viewed or limit not reached.
   bool canView(String matchId, int limit) {
     _ensureToday();
-    if (limit < 0) return true; // unlimited
+    if (limit < 0) return true;
     if (state.viewedMatchIds.contains(matchId)) return true;
     return state.viewedMatchIds.length < limit;
   }
@@ -280,25 +303,22 @@ final dailyViewProvider =
   return DailyViewNotifier();
 });
 
-/// Whether the user can view a specific match (based on daily limit)
 final canViewMatchProvider = Provider.family<bool, String>((ref, matchId) {
   final profile = ref.watch(userProfileProvider).valueOrNull;
   final limit = profile?.dailyMatchLimit ?? 1;
-  if (limit < 0) return true; // unlimited
+  if (limit < 0) return true;
 
   final state = ref.watch(dailyViewProvider);
 
-  // Check date without mutating state (reset is handled separately)
   final now = DateTime.now();
   final today =
       '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-  if (state.date != today) return true; // new day → always allow, notifier resets on next recordView
+  if (state.date != today) return true;
 
   if (state.viewedMatchIds.contains(matchId)) return true;
   return state.viewedMatchIds.length < limit;
 });
 
-/// Combo limit for the user's current plan
 final comboLimitProvider = Provider<int>((ref) {
   final profile = ref.watch(userProfileProvider).valueOrNull;
   return profile?.comboLimit ?? 0;
