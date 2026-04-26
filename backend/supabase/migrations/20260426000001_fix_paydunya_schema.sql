@@ -29,6 +29,13 @@ alter table public.subscriptions
   add constraint subscriptions_provider_check
     check (provider in ('cinetpay', 'pawapay', 'wave', 'paydunya'));
 
--- Enable Realtime on payments so the mobile app gets instant confirmation
--- (requires Realtime to be enabled globally in Supabase dashboard)
-alter publication supabase_realtime add table public.payments;
+-- Enable Realtime on payments (idempotent)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'payments'
+  ) then
+    alter publication supabase_realtime add table public.payments;
+  end if;
+end $$;
