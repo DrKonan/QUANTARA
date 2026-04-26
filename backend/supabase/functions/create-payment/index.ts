@@ -327,8 +327,8 @@ async function handlePayment(
 
   // Step 0 — Reuse an existing recent pending payment for this user+plan
   // This avoids PayDunya's "ce paiement a déjà été initié" deduplication error
-  // when the user retries before the previous invoice expires.
-  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  // when the user retries before the previous invoice expires (~2h on PayDunya's side).
+  const tenMinAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   const { data: existingPending } = await supabase
     .from("payments")
     .select("id, external_id, payment_method, phone")
