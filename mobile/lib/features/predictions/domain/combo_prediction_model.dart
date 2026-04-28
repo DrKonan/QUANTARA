@@ -110,6 +110,11 @@ class ComboLeg {
       case 'btts': return '🤝';
       case 'corners': return '🚩';
       case 'cards': return '🟨';
+      case 'correct_score': return '🎯';
+      case 'half_time':
+      case 'halftime': return '⏱️';
+      case 'first_team_to_score': return '⚡';
+      case 'clean_sheet': return '🛡️';
       default: return '📈';
     }
   }
@@ -138,6 +143,24 @@ class ComboLeg {
           return '${parts[0] == "over" ? "+" : "-"}${parts[1]} Buts';
         }
         return prediction;
+      case 'halftime':
+      case 'half_time':
+        switch (prediction) {
+          case 'home_win': return 'Mi-temps : Avantage $homeTeam';
+          case 'away_win': return 'Mi-temps : Avantage $awayTeam';
+          case 'draw': return 'Mi-temps : Égalité';
+          default: return 'Mi-temps : $prediction';
+        }
+      case 'correct_score':
+        return 'Score exact : $prediction';
+      case 'first_team_to_score':
+        return prediction == 'home'
+            ? '$homeTeam marque en premier'
+            : '$awayTeam marque en premier';
+      case 'clean_sheet':
+        return prediction == 'home'
+            ? '$homeTeam garde sa cage inviolée'
+            : '$awayTeam garde sa cage inviolée';
       default:
         return prediction;
     }

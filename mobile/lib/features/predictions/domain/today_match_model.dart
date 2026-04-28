@@ -193,6 +193,11 @@ class TodayPrediction {
       case 'btts': return '🤝';
       case 'corners': return '🚩';
       case 'cards': return '🟨';
+      case 'correct_score': return '🎯';
+      case 'half_time':
+      case 'halftime': return '⏱️';
+      case 'first_team_to_score': return '⚡';
+      case 'clean_sheet': return '🛡️';
       default: return '📈';
     }
   }
@@ -205,7 +210,11 @@ class TodayPrediction {
       case 'over_under': return 'BUTS';
       case 'corners': return 'CORNERS';
       case 'cards': return 'CARTONS';
-      case 'halftime': return 'MI-TEMPS';
+      case 'halftime':
+      case 'half_time': return 'MI-TEMPS';
+      case 'correct_score': return 'SCORE EXACT';
+      case 'first_team_to_score': return '1ER BUTEUR';
+      case 'clean_sheet': return 'FEUILLE BLANCHE';
       default: return predictionType.toUpperCase();
     }
   }
@@ -254,11 +263,26 @@ class TodayPrediction {
         }
         return prediction!;
       case 'halftime':
+      case 'half_time':
         switch (prediction) {
-          case 'home_win': return 'Mi-temps: Avantage domicile';
-          case 'away_win': return 'Mi-temps: Avantage extérieur';
-          case 'draw': return 'Mi-temps: Égalité';
-          default: return prediction != null ? 'Mi-temps: $prediction' : '🔒';
+          case 'home_win': return home != null ? 'Mi-temps : Avantage $home' : 'Mi-temps : Avantage domicile';
+          case 'away_win': return away != null ? 'Mi-temps : Avantage $away' : 'Mi-temps : Avantage extérieur';
+          case 'draw': return 'Mi-temps : Égalité';
+          default: return prediction != null ? 'Mi-temps : $prediction' : '🔒';
+        }
+      case 'correct_score':
+        return prediction != null ? 'Score exact : $prediction' : '🔒';
+      case 'first_team_to_score':
+        switch (prediction) {
+          case 'home': return home != null ? '$home marque en premier' : 'Domicile marque en premier';
+          case 'away': return away != null ? '$away marque en premier' : 'Extérieur marque en premier';
+          default: return prediction ?? '🔒';
+        }
+      case 'clean_sheet':
+        switch (prediction) {
+          case 'home': return home != null ? '$home garde sa cage inviolée' : 'Feuille blanche domicile';
+          case 'away': return away != null ? '$away garde sa cage inviolée' : 'Feuille blanche extérieur';
+          default: return prediction ?? '🔒';
         }
       default:
         return prediction ?? '🔒';

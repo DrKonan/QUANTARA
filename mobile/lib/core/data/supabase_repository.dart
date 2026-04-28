@@ -502,12 +502,23 @@ class SupabaseRepository {
       case 'cards':
         return 'Cartons: $prediction';
       case 'halftime':
+      case 'half_time':
         switch (prediction) {
-          case 'home_win': return 'Mi-temps: Avantage domicile';
-          case 'away_win': return 'Mi-temps: Avantage extérieur';
-          case 'draw': return 'Mi-temps: Égalité';
-          default: return 'Mi-temps: $prediction';
+          case 'home_win': return 'Mi-temps : Avantage domicile';
+          case 'away_win': return 'Mi-temps : Avantage extérieur';
+          case 'draw': return 'Mi-temps : Égalité';
+          default: return 'Mi-temps : $prediction';
         }
+      case 'correct_score':
+        return 'Score exact : $prediction';
+      case 'first_team_to_score':
+        return prediction == 'home'
+            ? 'Domicile marque en premier'
+            : 'Extérieur marque en premier';
+      case 'clean_sheet':
+        return prediction == 'home'
+            ? 'Feuille blanche domicile'
+            : 'Feuille blanche extérieur';
       default:
         return prediction;
     }
