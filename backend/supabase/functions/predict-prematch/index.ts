@@ -185,6 +185,43 @@ function parseH2HContext(
 }
 
 // ----------------------------------------------------------------
+// V1.2 — Score de motivation depuis le classement (0.0–1.0)
+// ----------------------------------------------------------------
+function computeMotivationScore(teamId: number, standingsData: unknown): number {
+  if (!standingsData || !Array.isArray(standingsData) || standingsData.length === 0) return 0.5;
+  try {
+    const league = (standingsData[0] as {
+      league?: {
+        standings?: Array<Array<{
+          team: { id: number };
+          rank: number;
+          description?: string | null;
+          status?: string | null;
+        }>>;
+      };
+    })?.league;
+    if (!league?.standings?.[0]) return 0.5;
+    const table = league.standings[0];
+    const totalTeams = table.length;
+    const entry = table.find((e) => e.team.id === teamId);
+    if (!entry) return 0.5;
+    const rank = entry.rank;
+    const desc = ((entry.description ?? "") + " " + (entry.status ?? "")).toLowerCase();
+    // Course au titre ou montée directe
+    if (rank <= 3 || desc.includes("champion") || desc.includes("promotion")) return 0.90;
+    // Place européenne
+    if (rank <= 6 || desc.includes("europa") || desc.includes("conference")) return 0.70;
+    // Relégation directe ou play-off descente
+    if (desc.includes("relegation") || rank >= totalTeams - 2) return 0.80;
+    if (rank >= totalTeams - 5) return 0.65;
+    // Milieu de tableau sans enjeu
+    return 0.50;
+  } catch {
+    return 0.50;
+  }
+}
+
+// ----------------------------------------------------------------
 // Calcul du facteur qualité de la compo
 // Compare les titulaires de ce match aux données stats de l'API.
 // Retourne un multiplicateur pour les xG : 
@@ -336,14 +373,17 @@ Deno.serve(async (req: Request) => {
     let awayRealCorners: number | undefined;
     let homeRealCards: number | undefined;
     let awayRealCards: number | undefined;
+    let standingsData: unknown = null;
 
     try {
-      const [oddsRaw, predRaw, homeLastFixturesRaw, awayLastFixturesRaw] = await apifootballSequential([
+      const [oddsRaw, predRaw, homeLastFixturesRaw, awayLastFixturesRaw, standingsFetch] = await apifootballSequential([
         () => apifootball("/odds", { fixture: match.external_id }),
         () => apifootball("/predictions", { fixture: match.external_id }),
         () => apifootball("/fixtures", { team: match.home_team_id, last: 5, status: "FT" }),
         () => apifootball("/fixtures", { team: match.away_team_id, last: 5, status: "FT" }),
+        () => apifootball("/standings", { league: match.league_id, season: match.season }),
       ]);
+      standingsData = standingsFetch;
 
       // Parse odds
       if (Array.isArray(oddsRaw) && oddsRaw.length > 0) {
@@ -560,6 +600,12 @@ Deno.serve(async (req: Request) => {
     matchCtx.awayLineupFactor = awayLineupFactor;
     matchCtx.refereeAvgCards = refereeAvgCards;
     matchCtx.travelDistanceKm = travelDistanceKm;
+    // V1.2 — Motivation depuis le classement
+    const homeMotivationScore = computeMotivationScore(match.home_team_id, standingsData);
+    const awayMotivationScore = computeMotivationScore(match.away_team_id, standingsData);
+    matchCtx.homeMotivationScore = homeMotivationScore;
+    matchCtx.awayMotivationScore = awayMotivationScore;
+    console.log(`[predict-prematch] V1.2 — Motivation: home=${homeMotivationScore.toFixed(2)} away=${awayMotivationScore.toFixed(2)}`);
 
     // 7. Lance le moteur de scoring (V1.1 — avec odds + API predictions)
     console.log(`[predict-prematch] homeStats:`, JSON.stringify(homeStats));

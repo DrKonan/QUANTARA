@@ -36,8 +36,11 @@ export interface MatchContext {
   homeLineupFactor?: number;     // 0.5–1.2 — impact sur les xG domicile
   awayLineupFactor?: number;     // 0.5–1.2 — impact sur les xG extérieur
   leagueAvgCorners?: number;     // moyenne corners par match dans la ligue (défaut 10.5)
-  refereeAvgCards?: number;      // moyenne cartons jaunes/match pour cet arbitre
-  travelDistanceKm?: number;     // distance de déplacement équipe extérieure (km)
+  // V1.2 — Priority 2 features
+  refereeAvgCards?: number;      // Moyenne cartons totaux/match de l'arbitre (défaut 4.5)
+  travelDistanceKm?: number;     // Distance de déplacement de l'équipe visitante (km)
+  homeMotivationScore?: number;  // 0.0–1.0 : enjeu classement (titre=0.90, mi-table=0.50)
+  awayMotivationScore?: number;  // 0.0–1.0
 }
 
 // V1.1 — Données bookmakers pour calibration
@@ -101,13 +104,19 @@ export interface ScoringResult {
 }
 
 // ----------------------------------------------------------------
-// Forme récente : moyenne pondérée (match récent = plus de poids)
+// V1.2 — Forme récente : décroissance exponentielle (0.85^k)
+// Le match le plus récent a le poids 1.0, le précédent 0.85, etc.
 // ----------------------------------------------------------------
 function formScore(form: number[]): number {
   if (form.length === 0) return 0.5;
-  const weights = [5, 4, 3, 2, 1].slice(0, form.length);
-  const weightedSum = form.reduce((s, v, i) => s + v * weights[i], 0);
-  const totalWeight = weights.reduce((s, w) => s + w, 0);
+  const DECAY = 0.85;
+  let weightedSum = 0;
+  let totalWeight = 0;
+  for (let i = 0; i < form.length; i++) {
+    const w = Math.pow(DECAY, i);
+    weightedSum += form[i] * w;
+    totalWeight += w;
+  }
   return weightedSum / totalWeight;
 }
 
@@ -207,7 +216,20 @@ function apiPredictionFactor(
 }
 
 // ----------------------------------------------------------------
-// Proba résultat (1X2) via modèle de Poisson (jusqu'à 10 buts)
+// V1.2 — Correction Dixon-Coles pour les scores faibles (τ)
+// Corrige la sous/sur-représentation des scores 0-0, 1-0, 0-1, 1-1
+// Rho ≈ -0.13 : corrélation négative observée empiriquement
+// ----------------------------------------------------------------
+function dixonColesCorrection(h: number, a: number, lH: number, lA: number, rho = -0.13): number {
+  if (h === 0 && a === 0) return 1 - lH * lA * rho;
+  if (h === 0 && a === 1) return 1 + lH * rho;
+  if (h === 1 && a === 0) return 1 + lA * rho;
+  if (h === 1 && a === 1) return 1 - rho;
+  return 1.0;
+}
+
+// ----------------------------------------------------------------
+// V1.2 — Proba résultat (1X2) via Poisson + correction Dixon-Coles
 // ----------------------------------------------------------------
 export function computeResultProbs(
   homeXG: number,
@@ -216,7 +238,8 @@ export function computeResultProbs(
   let homeWin = 0, draw = 0, awayWin = 0;
   for (let h = 0; h <= 10; h++) {
     for (let a = 0; a <= 10; a++) {
-      const p = poissonProb(homeXG, h) * poissonProb(awayXG, a);
+      const tau = dixonColesCorrection(h, a, homeXG, awayXG);
+      const p = poissonProb(homeXG, h) * poissonProb(awayXG, a) * tau;
       if (h > a) homeWin += p;
       else if (h === a) draw += p;
       else awayWin += p;
@@ -273,19 +296,22 @@ export function computePrematchScores(
 
   const injuryPenalty = Math.min(ctx.keyInjuries * 0.05, 0.3);
 
-  // V1.1 — xG : utilise les vrais xG si dispo, sinon formule naïve
+  // V1.2 — xG : lineup + motivation classement + fatigue déplacement
   const homeLineupMul = ctx.homeLineupFactor ?? 1.0;
   const awayLineupMul = ctx.awayLineupFactor ?? 1.0;
+  // Motivation : course au titre/relégation boost xG dans [0.90, 1.10]
+  const homeMotivMul = ctx.homeMotivationScore != null ? 0.90 + ctx.homeMotivationScore * 0.20 : 1.0;
+  const awayMotivMul = ctx.awayMotivationScore != null ? 0.90 + ctx.awayMotivationScore * 0.20 : 1.0;
+  // Fatigue déplacement : >800km = -10%, >1500km = -15%
+  const awayTravelMul = ctx.travelDistanceKm != null
+    ? (ctx.travelDistanceKm > 1500 ? 0.85 : ctx.travelDistanceKm > 800 ? 0.90 : ctx.travelDistanceKm > 400 ? 0.95 : 1.0)
+    : 1.0;
   const homeXG = (home.realXgAvg != null && home.realXgAvg > 0)
-    ? home.realXgAvg * homeLineupMul
-    : expectedGoals(home.homeGoalsScored, away.homeGoalsConceded) * homeLineupMul;
-  // Travel fatigue : pénalité awayXG pour déplacements > 1500km (matchs européens)
-  const travelFatigue = ctx.travelDistanceKm != null && ctx.travelDistanceKm > 1500
-    ? Math.min((ctx.travelDistanceKm - 1500) / 5000, 0.08)
-    : 0;
-  const awayXG = ((away.realXgAvg != null && away.realXgAvg > 0)
-    ? away.realXgAvg * awayLineupMul
-    : expectedGoals(away.awayGoalsScored, home.homeGoalsConceded) * awayLineupMul) * (1 - travelFatigue);
+    ? home.realXgAvg * homeLineupMul * homeMotivMul
+    : expectedGoals(home.homeGoalsScored, away.homeGoalsConceded) * homeLineupMul * homeMotivMul;
+  const awayXG = (away.realXgAvg != null && away.realXgAvg > 0)
+    ? away.realXgAvg * awayLineupMul * awayMotivMul * awayTravelMul
+    : expectedGoals(away.awayGoalsScored, home.homeGoalsConceded) * awayLineupMul * awayMotivMul * awayTravelMul;
 
   // ── 1. Résultat (1X2) ──────────────────────────────────────────
   const { homeWin, draw, awayWin } = computeResultProbs(homeXG, awayXG);
@@ -480,19 +506,14 @@ export function computePrematchScores(
   }
 
   // ── 5. Corners Over/Under (ligne dynamique) ─────────────────────
-  // V1.1 — Utilise les vrais corners moyens si disponibles, sinon proxy
+  // V1.2 — Utilise les vrais corners si disponibles, sinon proxy intensité
   const leagueAvgCorners = ctx.leagueAvgCorners ?? 10.5;
-  let estimatedCorners: number;
-  if (home.realCornersAvg != null && away.realCornersAvg != null) {
-    // Vrais corners moyens des derniers matchs
-    estimatedCorners = home.realCornersAvg + away.realCornersAvg;
-  } else {
-    // Fallback : proxy basé sur l'intensité offensive
-    const leagueAvgGoals = 1.35;
-    const homeIntensity = ((home.homeGoalsScored + home.homeGoalsConceded) / 2) / leagueAvgGoals;
-    const awayIntensity = ((away.awayGoalsScored + away.awayGoalsConceded) / 2) / leagueAvgGoals;
-    estimatedCorners = leagueAvgCorners * (homeIntensity + awayIntensity) / 2;
-  }
+  const leagueAvgGoals = 1.35;
+  const homeIntensity = ((home.homeGoalsScored + home.homeGoalsConceded) / 2) / leagueAvgGoals;
+  const awayIntensity = ((away.awayGoalsScored + away.awayGoalsConceded) / 2) / leagueAvgGoals;
+  const estimatedCorners = (home.realCornersAvg != null && away.realCornersAvg != null)
+    ? home.realCornersAvg + away.realCornersAvg
+    : leagueAvgCorners * (homeIntensity + awayIntensity) / 2;
   const cornerLine = selectBestLine(estimatedCorners, [7.5, 8.5, 9.5, 10.5, 11.5, 12.5]);
 
   // Sigmoid : plus l'estimation s'éloigne de la ligne, plus la confiance est forte
@@ -536,12 +557,14 @@ export function computePrematchScores(
   }
 
   // ── 6. Cards Over/Under (ligne dynamique) ───────────────────────
-  // V1.1 — Utilise les vrais cartons moyens si disponibles
-  const homeAvgCards = home.realCardsAvg ?? home.avgYellowCards ?? 2.0;
-  const awayAvgCards = away.realCardsAvg ?? away.avgYellowCards ?? 2.0;
-  // Arbitre sévère/clément : décalage par rapport à la moyenne de 4.0 cartons/match
-  const refereeCardAdj = ctx.refereeAvgCards != null ? (ctx.refereeAvgCards - 4.0) * 0.12 : 0;
-  const estimatedCards = homeAvgCards + awayAvgCards + refereeCardAdj;
+  // V1.2 — Vrais cartons × facteur arbitre (strict = plus de cartons)
+  // 4.5 = moyenne ligue cartons totaux/match (référence de normalisation)
+  const refereeFactor = ctx.refereeAvgCards != null
+    ? Math.max(0.70, Math.min(1.50, ctx.refereeAvgCards / 4.5))
+    : 1.0;
+  const homeAvgCards = (home.realCardsAvg ?? home.avgYellowCards ?? 2.0) * refereeFactor;
+  const awayAvgCards = (away.realCardsAvg ?? away.avgYellowCards ?? 2.0) * refereeFactor;
+  const estimatedCards = homeAvgCards + awayAvgCards;
   const cardLine = selectBestLine(estimatedCards, [2.5, 3.5, 4.5, 5.5, 6.5]);
 
   // Sigmoid centrée sur la ligne
@@ -582,8 +605,111 @@ export function computePrematchScores(
     });
   }
 
+  // ── 7. Score exact (correct_score) ─────────────────────────────
+  // Matrice Poisson+DC 6×6 → top score le plus probable
+  // confidence : [0.12 → 0.70, 0.20+ → 0.95]
+  const csProbs: Array<{ score: string; prob: number }> = [];
+  for (let h = 0; h <= 5; h++) {
+    for (let a = 0; a <= 5; a++) {
+      const tau = dixonColesCorrection(h, a, homeXG, awayXG);
+      csProbs.push({ score: `${h}-${a}`, prob: poissonProb(homeXG, h) * poissonProb(awayXG, a) * tau });
+    }
+  }
+  csProbs.sort((x, y) => y.prob - x.prob);
+  const topCS = csProbs[0];
+  if (topCS && topCS.prob >= 0.12) {
+    const csConf = Math.min(0.60 + (topCS.prob - 0.12) / 0.10 * 0.25, 0.95);
+    results.push({
+      prediction: topCS.score,
+      prediction_type: "correct_score",
+      confidence: csConf,
+      score_breakdown: {
+        probability: topCS.prob,
+        second_prob: csProbs[1]?.prob ?? 0,
+        home_xg: homeXG,
+        away_xg: awayXG,
+      },
+    });
+  }
+
+  // ── 8. Mi-temps (half_time result 1X2) ─────────────────────────
+  // λ_HT ≈ λ_FT × 0.45 (proportion empirique des buts en 1re mi-temps)
+  const htHome = homeXG * 0.45;
+  const htAway = awayXG * 0.45;
+  const { homeWin: htHW, draw: htD, awayWin: htAW } = computeResultProbs(htHome, htAway);
+  const htBest = [
+    { prediction: "home_win", prob: htHW },
+    { prediction: "draw", prob: htD },
+    { prediction: "away_win", prob: htAW },
+  ].sort((x, y) => y.prob - x.prob)[0];
+  const htConf = Math.min(htBest.prob * 0.90, 0.99);
+  if (htConf >= 0.58) {
+    results.push({
+      prediction: htBest.prediction,
+      prediction_type: "half_time",
+      confidence: htConf,
+      score_breakdown: { ht_xg_home: htHome, ht_xg_away: htAway, ht_hw: htHW, ht_d: htD, ht_aw: htAW },
+    });
+  }
+
+  // ── 9. Première équipe à scorer ─────────────────────────────────
+  // P(X marque en premier) = λ_X / (λ_X + λ_Y) × P(≥1 but dans le match)
+  const totalLambda = homeXG + awayXG;
+  const pGoalInMatch = 1 - poissonProb(homeXG, 0) * poissonProb(awayXG, 0);
+  if (pGoalInMatch >= 0.60 && totalLambda > 0) {
+    const pHomeFirst = (homeXG / totalLambda) * pGoalInMatch;
+    const pAwayFirst = (awayXG / totalLambda) * pGoalInMatch;
+    // Bonus H2H : quelle équipe domine généralement les duels offensifs
+    const h2hHomeFTS = ctx.h2hTotal > 0
+      ? (ctx.h2hHomeGoalsAvg >= ctx.h2hAwayGoalsAvg ? 0.56 : 0.44) : 0.52;
+    const homeFTSConf = pHomeFirst * 0.70 + h2hHomeFTS * 0.30;
+    const awayFTSConf = pAwayFirst * 0.70 + (1 - h2hHomeFTS) * 0.30;
+    if (homeFTSConf >= 0.60 && homeFTSConf >= awayFTSConf) {
+      results.push({
+        prediction: "home",
+        prediction_type: "first_team_to_score",
+        confidence: Math.min(homeFTSConf, 0.99),
+        score_breakdown: { poisson_prob: pHomeFirst, h2h_factor: h2hHomeFTS, elo_adv: eloAdv },
+      });
+    } else if (awayFTSConf >= 0.60) {
+      results.push({
+        prediction: "away",
+        prediction_type: "first_team_to_score",
+        confidence: Math.min(awayFTSConf, 0.99),
+        score_breakdown: { poisson_prob: pAwayFirst, h2h_factor: 1 - h2hHomeFTS },
+      });
+    }
+  }
+
+  // ── 10. Feuille blanche (clean_sheet) ──────────────────────────
+  // P(feuille blanche) = P(adversaire marque 0 but) = e^(-λ_adversaire)
+  const pHomeCS = poissonProb(awayXG, 0);
+  const pAwayCS = poissonProb(homeXG, 0);
+  if (pHomeCS >= 0.32) {
+    const homeCSConf = pHomeCS * 0.65 + (home.homeGoalsConceded < 0.9 ? 0.20 : 0.10);
+    if (homeCSConf >= 0.60) {
+      results.push({
+        prediction: "home",
+        prediction_type: "clean_sheet",
+        confidence: Math.min(homeCSConf, 0.99),
+        score_breakdown: { p_clean_sheet: pHomeCS, avg_conceded: home.homeGoalsConceded, away_xg: awayXG },
+      });
+    }
+  }
+  if (pAwayCS >= 0.28) {
+    const awayCSConf = pAwayCS * 0.65 + (away.awayGoalsConceded < 1.2 ? 0.15 : 0.08);
+    if (awayCSConf >= 0.60) {
+      results.push({
+        prediction: "away",
+        prediction_type: "clean_sheet",
+        confidence: Math.min(awayCSConf, 0.99),
+        score_breakdown: { p_clean_sheet: pAwayCS, avg_conceded: away.awayGoalsConceded, home_xg: homeXG },
+      });
+    }
+  }
+
   // Debug : log tous les scores calculés
-  console.log(`[scoring-engine] homeXG=${homeXG.toFixed(2)} awayXG=${awayXG.toFixed(2)}`);
+  console.log(`[scoring-engine] V1.2 — homeXG=${homeXG.toFixed(2)} awayXG=${awayXG.toFixed(2)} | motivH=${homeMotivMul.toFixed(2)} motivA=${awayMotivMul.toFixed(2)} travelA=${awayTravelMul.toFixed(2)} referee=${refereeFactor.toFixed(2)}`);
   console.log(`[scoring-engine] homeWinComposite=${homeWinComposite.toFixed(3)} awayWinComposite=${awayWinComposite.toFixed(3)}`);
   console.log(`[scoring-engine] over_under: line=${goalLine} estimated=${totalXG.toFixed(2)}`);
   console.log(`[scoring-engine] btts=${bttsScore.toFixed(3)} noBtts=${noBttsScore.toFixed(3)}`);
@@ -593,7 +719,8 @@ export function computePrematchScores(
 
   // V1.1 — Filtre draw : seuil minimum 0.88 (52.9% winrate historique)
   const filtered = results.filter(r => {
-    if (r.prediction === "draw" && r.confidence < 0.88) return false;
+    // Le filtre anti-nul (52.9% winrate historique) ne s'applique qu'au marché résultat FT
+    if (r.prediction_type === "result" && r.prediction === "draw" && r.confidence < 0.88) return false;
     return true;
   });
 

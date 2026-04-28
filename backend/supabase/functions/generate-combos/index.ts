@@ -16,11 +16,12 @@
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse } from "../_shared/helpers.ts";
 
-// Marchés autorisés pour les combinés (robustes face aux changements de compo)
-const COMBO_MARKETS = ["btts", "over_under", "double_chance"];
-const MIN_CONFIDENCE = 0.80;
-const MIN_ODDS = 1.25;    // cote min par jambe (éviter les pari à 1.05)
-const MAX_ODDS = 3.50;    // cote max par jambe (éviter les paris trop risqués)
+// V1.2 — Marchés éligibles pour les combinés
+// result inclus (marché le plus commun) ; correct_score et first_team exclus (trop aléatoires)
+const COMBO_MARKETS = ["btts", "over_under", "double_chance", "result", "half_time", "clean_sheet"];
+const MIN_CONFIDENCE = 0.72;  // abaissé de 0.80 → couvre bien plus de prédictions
+const MIN_ODDS = 1.15;        // cote min par jambe
+const MAX_ODDS = 4.00;        // cote max par jambe (pool commun safe+bold)
 
 interface EligiblePrediction {
   id: number;
@@ -48,6 +49,12 @@ interface ComboLeg {
   bookmaker_odds: number;
 }
 
+// Cote synthétique quand le bookmaker ne fournit pas de données
+// Formule : 1 / (confiance × 0.95) — simule une marge bookmaker de 5%
+function syntheticOdds(confidence: number): number {
+  return Math.round((1 / (confidence * 0.95)) * 100) / 100;
+}
+
 // ----------------------------------------------------------------
 // Algorithme de sélection des jambes
 // Greedy : prend les meilleures prédictions en évitant les doublons
@@ -59,6 +66,7 @@ function selectLegs(
   targetMinOdds: number,
   targetMaxOdds: number,
   excludeMatchIds: Set<number>,
+  minLegs = 2,
 ): ComboLeg[] | null {
   // Trie par un score combiné : haute confiance + cote intéressante
   const scored = pool
@@ -98,23 +106,22 @@ function selectLegs(
     usedLeagues.set(p.league_id, leagueCount + 1);
   }
 
-  if (selected.length < 3) return null; // minimum 3 jambes pour un combiné
+  if (selected.length < minLegs) return null;
 
-  // Vérifie que les cotes combinées sont dans la cible
-  const combinedOdds = selected.reduce((acc, l) => acc * l.bookmaker_odds, 1);
-  if (combinedOdds < targetMinOdds || combinedOdds > targetMaxOdds) {
-    // Essaie d'ajuster en retirant/ajoutant des jambes
-    // Si trop haut : retire la jambe la moins confiante
-    while (combinedOdds > targetMaxOdds && selected.length > 3) {
-      selected.sort((a, b) => a.confidence - b.confidence);
-      selected.shift(); // retire la moins confiante
-    }
-    // Recalcule
-    const adjusted = selected.reduce((acc, l) => acc * l.bookmaker_odds, 1);
-    if (adjusted < targetMinOdds * 0.8) return null; // trop faible même après ajustement
+  // Ajuste si les cotes combinées dépassent le plafond cible
+  // Bug fix : recalcule runningOdds à chaque retrait (contrairement à l'ancienne const)
+  let runningOdds = selected.reduce((acc, l) => acc * l.bookmaker_odds, 1);
+  while (runningOdds > targetMaxOdds && selected.length > minLegs) {
+    selected.sort((a, b) => a.confidence - b.confidence);
+    selected.shift(); // retire la jambe la moins confiante
+    runningOdds = selected.reduce((acc, l) => acc * l.bookmaker_odds, 1);
   }
 
-  return selected.length >= 3 ? selected : null;
+  if (selected.length < minLegs) return null;
+  // On accepte même si on est un peu sous targetMinOdds (mieux qu'aucun combo)
+  if (runningOdds < targetMinOdds * 0.65) return null;
+
+  return selected;
 }
 
 Deno.serve(async (req: Request) => {
@@ -147,7 +154,7 @@ Deno.serve(async (req: Request) => {
       .gte("match_date", dayStart)
       .lte("match_date", dayEnd)
       .eq("status", "scheduled")
-      .not("tier", "is", null);
+      .order("match_date", { ascending: true });
 
     if (!matchesRaw || matchesRaw.length === 0) {
       console.log(`[generate-combos] No scheduled matches for ${today}`);
@@ -164,24 +171,28 @@ Deno.serve(async (req: Request) => {
       .eq("is_published", true)
       .eq("is_live", false)
       .gte("confidence", MIN_CONFIDENCE)
-      .not("bookmaker_odds", "is", null);
+      .order("confidence", { ascending: false });
 
     if (!predsRaw || predsRaw.length === 0) {
       console.log(`[generate-combos] No eligible predictions with odds for ${today}`);
       return jsonResponse({ message: "No predictions with bookmaker odds", date: today });
     }
 
-    // Filtre : marchés robustes uniquement + cotes dans la plage acceptable
+    // Filtre : marchés éligibles + cotes dans la plage
+    // Si bookmaker_odds est null → cote synthétique basée sur la confiance
     const pool: EligiblePrediction[] = [];
-    for (const p of predsRaw as Array<{ id: number; match_id: number; prediction_type: string; prediction: string; confidence: number; bookmaker_odds: number }>) {
+    for (const p of predsRaw as Array<{ id: number; match_id: number; prediction_type: string; prediction: string; confidence: number; bookmaker_odds: number | null }>) {
       if (!COMBO_MARKETS.includes(p.prediction_type)) continue;
-      if (p.bookmaker_odds < MIN_ODDS || p.bookmaker_odds > MAX_ODDS) continue;
+
+      const odds = p.bookmaker_odds ?? syntheticOdds(p.confidence);
+      if (odds < MIN_ODDS || odds > MAX_ODDS) continue;
 
       const match = matchMap.get(p.match_id);
       if (!match) continue;
 
       pool.push({
         ...p,
+        bookmaker_odds: odds,
         home_team: match.home_team,
         away_team: match.away_team,
         league: match.league,
@@ -207,8 +218,8 @@ Deno.serve(async (req: Request) => {
       min_plan: string;
     }> = [];
 
-    // ── COMBO 1 : "SÛR" — 3-4 jambes, cote entre 2.5 et 7.0 ────
-    const safeLegs = selectLegs(pool, 4, 2.5, 7.0, new Set());
+    // ── COMBO 1 : "SÛR" — 2-4 jambes, cote cible 1.6–8.0 ──────
+    const safeLegs = selectLegs(pool, 4, 1.6, 8.0, new Set(), 2);
     if (safeLegs) {
       const combinedOdds = safeLegs.reduce((acc, l) => acc * l.bookmaker_odds, 1);
       const combinedConf = safeLegs.reduce((acc, l) => acc * l.confidence, 1);
@@ -228,24 +239,26 @@ Deno.serve(async (req: Request) => {
     // Exclut les matchs déjà utilisés dans le combo sûr
     const safeMatchIds = new Set(safeLegs?.map(l => l.match_id) ?? []);
     
-    // Pour le combo audacieux, élargit le pool : confiance >= 0.78
+    // Pour le combo audacieux, élargit le pool : confiance >= 0.70
     const { data: widePreds } = await supabase
       .from("predictions")
       .select("id, match_id, prediction_type, prediction, confidence, bookmaker_odds")
       .in("match_id", matchIds)
       .eq("is_published", true)
       .eq("is_live", false)
-      .gte("confidence", 0.78)
-      .not("bookmaker_odds", "is", null);
+      .gte("confidence", 0.70)
+      .order("confidence", { ascending: false });
 
     const widePool: EligiblePrediction[] = [];
-    for (const p of (widePreds ?? []) as Array<{ id: number; match_id: number; prediction_type: string; prediction: string; confidence: number; bookmaker_odds: number }>) {
+    for (const p of (widePreds ?? []) as Array<{ id: number; match_id: number; prediction_type: string; prediction: string; confidence: number; bookmaker_odds: number | null }>) {
       if (!COMBO_MARKETS.includes(p.prediction_type)) continue;
-      if (p.bookmaker_odds < MIN_ODDS || p.bookmaker_odds > MAX_ODDS) continue;
+      const odds = p.bookmaker_odds ?? syntheticOdds(p.confidence);
+      if (odds < MIN_ODDS || odds > MAX_ODDS) continue;
       const match = matchMap.get(p.match_id);
       if (!match) continue;
       widePool.push({
         ...p,
+        bookmaker_odds: odds,
         home_team: match.home_team,
         away_team: match.away_team,
         league: match.league,
@@ -254,7 +267,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const boldLegs = selectLegs(widePool, 6, 6.0, 25.0, safeMatchIds);
+    const boldLegs = selectLegs(widePool, 6, 4.0, 30.0, safeMatchIds, 3);
     if (boldLegs) {
       const combinedOdds = boldLegs.reduce((acc, l) => acc * l.bookmaker_odds, 1);
       const combinedConf = boldLegs.reduce((acc, l) => acc * l.confidence, 1);

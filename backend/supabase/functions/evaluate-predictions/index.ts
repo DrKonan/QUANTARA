@@ -137,6 +137,21 @@ function evaluatePrediction(
       if (direction === "under") return totalCards < line;
       return null;
     }
+    case "correct_score": {
+      const csParts = prediction.split("-");
+      if (csParts.length !== 2) return null;
+      const predHome = parseInt(csParts[0], 10);
+      const predAway = parseInt(csParts[1], 10);
+      return homeGoals === predHome && awayGoals === predAway;
+    }
+    case "half_time": {
+      const htHome = result.score.halftime.home ?? 0;
+      const htAway = result.score.halftime.away ?? 0;
+      if (prediction === "home_win") return htHome > htAway;
+      if (prediction === "away_win") return htAway > htHome;
+      if (prediction === "draw") return htHome === htAway;
+      return null;
+    }
     case "first_team_to_score": {
       if (!events || events.length === 0) return null;
       const homeTeamId = result.teams.home.id;
@@ -151,6 +166,10 @@ function evaluatePrediction(
         : first.team.id;
       if (prediction === "home") return scoringTeamId === homeTeamId;
       if (prediction === "away") return scoringTeamId !== homeTeamId;
+    }
+    case "clean_sheet": {
+      if (prediction === "home") return awayGoals === 0;
+      if (prediction === "away") return homeGoals === 0;
       return null;
     }
     default:

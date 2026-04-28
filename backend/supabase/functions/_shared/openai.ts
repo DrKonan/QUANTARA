@@ -36,9 +36,30 @@ export async function generateAnalysis(input: AnalysisInput): Promise<string | n
     `et base-toi uniquement sur les données fournies. Pas de jargon complexe. ` +
     `Langue : ${lang}.`;
 
+  // Traduction lisible des types de marché pour le prompt GPT
+  const marketLabels: Record<string, string> = {
+    result: "Résultat 1X2",
+    double_chance: "Double chance",
+    over_under: "Plus/Moins de buts",
+    btts: "Les deux équipes marquent",
+    corners: "Nombre de corners",
+    cards: "Nombre de cartons",
+    correct_score: "Score exact",
+    half_time: "Mi-temps résultat",
+    first_team_to_score: "Première équipe à marquer",
+    clean_sheet: "Feuille blanche",
+  };
+  const predLabels: Record<string, string> = {
+    home_win: "victoire domicile", away_win: "victoire extérieur", draw: "match nul",
+    "1X": "domicile ou nul", X2: "extérieur ou nul", "12": "domicile ou extérieur",
+    yes: "oui", no: "non", home: "équipe domicile", away: "équipe extérieur",
+  };
+  const marketLabel = marketLabels[input.predictionType] ?? input.predictionType;
+  const predLabel = predLabels[input.prediction] ?? input.prediction;
+
   const userPrompt =
     `Match : ${input.homeTeam} vs ${input.awayTeam} (${input.league})\n` +
-    `Événement : ${input.prediction} (type: ${input.predictionType})\n` +
+    `Marché : ${marketLabel} → ${predLabel}\n` +
     `Confiance : ${(input.confidence * 100).toFixed(1)}%\n` +
     `Indicateurs clés : ${topIndicators}`;
 
