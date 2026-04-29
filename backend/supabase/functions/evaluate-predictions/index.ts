@@ -10,6 +10,13 @@ import { apifootball } from "../_shared/api-football.ts";
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse } from "../_shared/helpers.ts";
 
+interface ApiFixtureEvent {
+  time: { elapsed: number; extra: number | null };
+  team: { id: number; name: string };
+  type: string;    // "Goal", "Card", etc.
+  detail: string;  // "Normal Goal", "Own Goal", "Penalty", etc.
+}
+
 interface ApiFixtureResult {
   fixture: { id: number; status: { short: string } };
   goals: { home: number | null; away: number | null };
@@ -58,6 +65,7 @@ function evaluatePrediction(
   predType: string,
   prediction: string,
   result: ApiFixtureResult,
+  events?: ApiFixtureEvent[],
 ): boolean | null {
   const homeGoals = result.goals.home ?? 0;
   const awayGoals = result.goals.away ?? 0;
@@ -127,6 +135,22 @@ function evaluatePrediction(
       const line = parseFloat(match[2]);
       if (direction === "over") return totalCards > line;
       if (direction === "under") return totalCards < line;
+      return null;
+    }
+    case "first_team_to_score": {
+      if (!events || events.length === 0) return null;
+      const homeTeamId = result.teams.home.id;
+      const goalEvents = events
+        .filter(e => e.type === "Goal")
+        .sort((a, b) => a.time.elapsed - b.time.elapsed);
+      if (goalEvents.length === 0) return null; // 0-0
+      const first = goalEvents[0];
+      // Own Goal : team dans l'event = équipe du joueur (qui concède) → l'autre équipe bénéficie
+      const scoringTeamId = first.detail === "Own Goal"
+        ? (first.team.id === homeTeamId ? result.teams.away.id : homeTeamId)
+        : first.team.id;
+      if (prediction === "home") return scoringTeamId === homeTeamId;
+      if (prediction === "away") return scoringTeamId !== homeTeamId;
       return null;
     }
     default:
@@ -205,10 +229,22 @@ Deno.serve(async (_req: Request) => {
 
       if (!predictions || predictions.length === 0) continue;
 
+      // Fetch events si nécessaire pour first_team_to_score (1 appel API par match)
+      let events: ApiFixtureEvent[] | undefined;
+      const needsEvents = predictions.some(p => p.prediction_type === "first_team_to_score");
+      if (needsEvents) {
+        try {
+          const eventsData = await apifootball("/fixtures/events", { fixture: match.external_id });
+          events = eventsData as ApiFixtureEvent[];
+        } catch (e) {
+          console.warn(`[evaluate-predictions] Could not fetch events for fixture ${match.external_id}:`, e);
+        }
+      }
+
       const updates: Array<{ id: number; is_correct: boolean }> = [];
 
       for (const pred of predictions) {
-        const isCorrect = evaluatePrediction(pred.prediction_type, pred.prediction, result);
+        const isCorrect = evaluatePrediction(pred.prediction_type, pred.prediction, result, events);
         if (isCorrect !== null) {
           updates.push({ id: pred.id, is_correct: isCorrect });
         }

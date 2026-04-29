@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/notifications/presentation/screens/notification_center_screen.dart';
+import '../router/app_router.dart';
 
 /// Top-level handler for background/terminated messages (isolate séparé).
 /// Appelé par FCM quand l'app est fermée ou en arrière-plan.
@@ -123,7 +126,10 @@ class NotificationService {
 
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
-      _handleNotificationTap(initialMessage);
+      // L'app était fermée — le widget tree n'est pas encore prêt, on diffère la navigation.
+      SchedulerBinding.instance.addPostFrameCallback(
+        (_) => _routeFromMessage(initialMessage),
+      );
     }
 
     await registerToken();
@@ -368,6 +374,26 @@ class NotificationService {
 
   void _handleNotificationTap(RemoteMessage message) {
     debugPrint('[Nakora] Notification tapped: ${message.data}');
+    _routeFromMessage(message);
+  }
+
+  void _routeFromMessage(RemoteMessage message) {
+    final context = rootNavigatorKey.currentContext;
+    if (context == null) return;
+
+    final type = message.data['type'] as String?;
+    switch (type) {
+      case 'new_predictions':
+      case 'live_prediction':
+      case 'combo':
+        GoRouter.of(context).go('/home');
+        break;
+      case 'prediction_results':
+        GoRouter.of(context).go('/history');
+        break;
+      default:
+        GoRouter.of(context).go('/home');
+    }
   }
 
   /// Register FCM token with Supabase backend.

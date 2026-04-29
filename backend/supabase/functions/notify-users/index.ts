@@ -246,12 +246,20 @@ Deno.serve(async (req: Request) => {
     }
 
     if (payload.type === "combo_available") {
-      // Notifie uniquement les PRO/VIP
+      // Notifie uniquement les PRO/VIP — 2 requêtes explicites (plus fiable que le join embedded)
+      const { data: paidUsers } = await supabase
+        .from("users")
+        .select("id")
+        .in("plan", ["pro", "vip"]);
+
+      const paidUserIds = (paidUsers ?? []).map((u: { id: string }) => u.id);
+      if (paidUserIds.length === 0) return jsonResponse({ success: true, sent: 0 });
+
       const { data: tokens } = await supabase
         .from("push_tokens")
-        .select("token, users!inner(plan)")
+        .select("token")
         .eq("is_active", true)
-        .in("users.plan", ["pro", "vip"]);
+        .in("user_id", paidUserIds);
 
       const tokenList = (tokens ?? []).map((t: { token: string }) => t.token);
 

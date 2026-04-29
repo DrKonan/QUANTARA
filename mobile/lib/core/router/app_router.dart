@@ -22,14 +22,14 @@ import '../../features/subscription/presentation/screens/subscription_screen.dar
 import '../../features/notifications/presentation/screens/notification_center_screen.dart';
 import '../../shared/widgets/main_shell.dart';
 
-final _rootNavigatorKey = GlobalKey<NavigatorState>();
+final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
   final onboardingAsync = ref.watch(onboardingDoneProvider);
   final isAuthenticated = ref.watch(isAuthenticatedProvider);
 
   return GoRouter(
-    navigatorKey: _rootNavigatorKey,
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/',
     observers: [FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance)],
     redirect: (context, state) {

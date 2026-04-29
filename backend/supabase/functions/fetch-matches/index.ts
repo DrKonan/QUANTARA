@@ -20,6 +20,7 @@ interface ApiFixture {
     id: number;
     status: { short: string };
     date: string;
+    venue?: { id?: number; name?: string; city?: string };
   };
   league: {
     id: number;
@@ -236,6 +237,63 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // 7. Auto-populate team_cities pour les équipes domicile inconnues
+    // Chaque fixture expose fixture.venue.city (ville du stade = ville de l'équipe domicile).
+    // On geocode via Nominatim (OpenStreetMap, gratuit, sans clé) et on stocke lat/lng.
+    let teamCitiesAdded = 0;
+    try {
+      // Collecte les paires uniques { home_team_id, home_team_name, city }
+      const teamCityMap = new Map<number, { name: string; city: string }>();
+      for (const f of filtered) {
+        const city = f.fixture.venue?.city;
+        if (city && f.teams.home.id) {
+          teamCityMap.set(f.teams.home.id, { name: f.teams.home.name, city });
+        }
+      }
+
+      if (teamCityMap.size > 0) {
+        // Exclut les équipes déjà connues
+        const { data: existing } = await supabase
+          .from("team_cities")
+          .select("team_id")
+          .in("team_id", [...teamCityMap.keys()]);
+        const existingIds = new Set((existing ?? []).map((r: { team_id: number }) => r.team_id));
+        const toGeocode = [...teamCityMap.entries()]
+          .filter(([id]) => !existingIds.has(id))
+          .slice(0, 8); // max 8 geocodages par run pour rester rapide
+
+        for (const [teamId, { name, city }] of toGeocode) {
+          try {
+            const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1`;
+            const resp = await fetch(url, {
+              headers: {
+                "User-Agent": "Nakora/1.0 (nakora.app)",
+                "Accept-Language": "en",
+              },
+            });
+            if (!resp.ok) continue;
+            const geo = await resp.json() as Array<{ lat: string; lon: string }>;
+            if (!geo || geo.length === 0) continue;
+            await supabase.from("team_cities").upsert({
+              team_id: teamId,
+              team_name: name,
+              city,
+              latitude: parseFloat(geo[0].lat),
+              longitude: parseFloat(geo[0].lon),
+            }, { onConflict: "team_id" });
+            teamCitiesAdded++;
+            // Respecte le rate limit Nominatim : 1 req/s
+            await new Promise((r) => setTimeout(r, 1100));
+          } catch { /* skip team silently */ }
+        }
+        if (teamCitiesAdded > 0) {
+          console.log(`[fetch-matches] team_cities: added ${teamCitiesAdded} new teams`);
+        }
+      }
+    } catch (err) {
+      console.warn("[fetch-matches] team_cities auto-population failed (non-blocking):", err);
+    }
+
     return jsonResponse({
       success: true,
       mode,
@@ -247,6 +305,7 @@ Deno.serve(async (req: Request) => {
       upserted: rows.length,
       newMatches: newExternalIds.length,
       predictionsTriggered: predictTriggered,
+      teamCitiesAdded,
     });
   } catch (err) {
     console.error("[fetch-matches] Error:", err);

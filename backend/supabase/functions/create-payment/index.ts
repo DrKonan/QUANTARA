@@ -8,7 +8,7 @@ import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse } from "../_shared/helpers.ts";
 
 const PLAN_AMOUNTS: Record<string, number> = {
-  starter: 200, // TEST — remettre à 1000 avant production
+  starter: 1000,
   pro: 2000,
   vip: 4000,
 };

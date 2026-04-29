@@ -229,6 +229,18 @@ interface ApiSquadPlayer {
 }
 
 // ----------------------------------------------------------------
+// Haversine : distance en km entre deux coordonnées GPS
+// ----------------------------------------------------------------
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ----------------------------------------------------------------
 // Handler principal
 // ----------------------------------------------------------------
 Deno.serve(async (req: Request) => {
@@ -481,10 +493,73 @@ Deno.serve(async (req: Request) => {
     homeStats.realCardsAvg = homeRealCards;
     awayStats.realCardsAvg = awayRealCards;
 
+    // 3d. Moyenne cartons de l'arbitre (2 appels séquentiels)
+    let refereeAvgCards: number | undefined;
+    try {
+      const fixtureDetailsRaw = await apifootball("/fixtures", { id: match.external_id });
+      const refereeName = Array.isArray(fixtureDetailsRaw) && fixtureDetailsRaw.length > 0
+        ? (fixtureDetailsRaw[0] as { fixture: { referee?: string | null } }).fixture.referee
+        : null;
+      if (refereeName) {
+        const refFixturesRaw = await apifootball("/fixtures", {
+          referee: refereeName,
+          season: match.season,
+          last: 5,
+        });
+        if (Array.isArray(refFixturesRaw) && refFixturesRaw.length > 0) {
+          const refIds = (refFixturesRaw as Array<{ fixture: { id: number } }>).map(f => f.fixture.id);
+          let totalCards = 0, countMatches = 0;
+          for (const fid of refIds) {
+            try {
+              const statsRaw = await apifootball("/fixtures/statistics", { fixture: fid });
+              if (!Array.isArray(statsRaw)) continue;
+              for (const ts of statsRaw as Array<{ statistics: Array<{ type: string; value: string | number | null }> }>) {
+                for (const s of ts.statistics) {
+                  if (s.type === "Yellow Cards" && s.value != null) {
+                    totalCards += typeof s.value === "number" ? s.value : parseInt(String(s.value)) || 0;
+                  }
+                }
+              }
+              countMatches++;
+            } catch { /* skip fixture */ }
+          }
+          if (countMatches > 0) {
+            refereeAvgCards = totalCards / countMatches;
+            console.log(`[predict-prematch] Referee "${refereeName}": avg ${refereeAvgCards.toFixed(1)} yellow cards/match`);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[predict-prematch] Referee stats failed (non-blocking):", err);
+    }
+
+    // 3e. Distance de déplacement (lookup table team_cities + Haversine)
+    let travelDistanceKm: number | undefined;
+    try {
+      const { data: teamCities } = await supabase
+        .from("team_cities")
+        .select("team_id, latitude, longitude")
+        .in("team_id", [match.home_team_id, match.away_team_id]);
+      if (teamCities && teamCities.length === 2) {
+        const homeCity = (teamCities as Array<{ team_id: number; latitude: number; longitude: number }>)
+          .find(c => c.team_id === match.home_team_id);
+        const awayCity = (teamCities as Array<{ team_id: number; latitude: number; longitude: number }>)
+          .find(c => c.team_id === match.away_team_id);
+        if (homeCity && awayCity) {
+          travelDistanceKm = haversineKm(homeCity.latitude, homeCity.longitude, awayCity.latitude, awayCity.longitude);
+          console.log(`[predict-prematch] Travel distance: ${travelDistanceKm.toFixed(0)}km`);
+        }
+      }
+    } catch (err) {
+      console.warn("[predict-prematch] Travel distance failed (non-blocking):", err);
+    }
+
     const matchCtx = parseH2HContext(h2hFixtures, match.home_team_id, false, keyInjuries);
     // Injecte les facteurs de compo dans le contexte
     matchCtx.homeLineupFactor = homeLineupFactor;
     matchCtx.awayLineupFactor = awayLineupFactor;
+    matchCtx.refereeAvgCards = refereeAvgCards;
+    matchCtx.travelDistanceKm = travelDistanceKm;
 
     // 7. Lance le moteur de scoring (V1.1 — avec odds + API predictions)
     console.log(`[predict-prematch] homeStats:`, JSON.stringify(homeStats));

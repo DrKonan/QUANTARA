@@ -36,6 +36,8 @@ export interface MatchContext {
   homeLineupFactor?: number;     // 0.5–1.2 — impact sur les xG domicile
   awayLineupFactor?: number;     // 0.5–1.2 — impact sur les xG extérieur
   leagueAvgCorners?: number;     // moyenne corners par match dans la ligue (défaut 10.5)
+  refereeAvgCards?: number;      // moyenne cartons jaunes/match pour cet arbitre
+  travelDistanceKm?: number;     // distance de déplacement équipe extérieure (km)
 }
 
 // V1.1 — Données bookmakers pour calibration
@@ -277,9 +279,13 @@ export function computePrematchScores(
   const homeXG = (home.realXgAvg != null && home.realXgAvg > 0)
     ? home.realXgAvg * homeLineupMul
     : expectedGoals(home.homeGoalsScored, away.homeGoalsConceded) * homeLineupMul;
-  const awayXG = (away.realXgAvg != null && away.realXgAvg > 0)
+  // Travel fatigue : pénalité awayXG pour déplacements > 1500km (matchs européens)
+  const travelFatigue = ctx.travelDistanceKm != null && ctx.travelDistanceKm > 1500
+    ? Math.min((ctx.travelDistanceKm - 1500) / 5000, 0.08)
+    : 0;
+  const awayXG = ((away.realXgAvg != null && away.realXgAvg > 0)
     ? away.realXgAvg * awayLineupMul
-    : expectedGoals(away.awayGoalsScored, home.homeGoalsConceded) * awayLineupMul;
+    : expectedGoals(away.awayGoalsScored, home.homeGoalsConceded) * awayLineupMul) * (1 - travelFatigue);
 
   // ── 1. Résultat (1X2) ──────────────────────────────────────────
   const { homeWin, draw, awayWin } = computeResultProbs(homeXG, awayXG);
@@ -533,7 +539,9 @@ export function computePrematchScores(
   // V1.1 — Utilise les vrais cartons moyens si disponibles
   const homeAvgCards = home.realCardsAvg ?? home.avgYellowCards ?? 2.0;
   const awayAvgCards = away.realCardsAvg ?? away.avgYellowCards ?? 2.0;
-  const estimatedCards = homeAvgCards + awayAvgCards;
+  // Arbitre sévère/clément : décalage par rapport à la moyenne de 4.0 cartons/match
+  const refereeCardAdj = ctx.refereeAvgCards != null ? (ctx.refereeAvgCards - 4.0) * 0.12 : 0;
+  const estimatedCards = homeAvgCards + awayAvgCards + refereeCardAdj;
   const cardLine = selectBestLine(estimatedCards, [2.5, 3.5, 4.5, 5.5, 6.5]);
 
   // Sigmoid centrée sur la ligne
