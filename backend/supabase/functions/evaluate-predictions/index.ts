@@ -177,6 +177,50 @@ function evaluatePrediction(
   }
 }
 
+// ----------------------------------------------------------------
+// Fetch le premier buteur via /fixtures/events
+// Gère les buts contre son camp (le but est crédité à l'équipe adverse)
+// ----------------------------------------------------------------
+async function fetchFirstScorerSide(
+  fixtureId: number,
+  homeTeamId: number,
+  awayTeamId: number,
+): Promise<"home" | "away" | null> {
+  try {
+    const eventsRaw = await apifootball("/fixtures/events", { fixture: fixtureId });
+    if (!Array.isArray(eventsRaw) || eventsRaw.length === 0) return null;
+
+    const goals = (eventsRaw as Array<{
+      team: { id: number };
+      time: { elapsed: number; extra: number | null };
+      type: string;
+      detail: string;
+    }>)
+      .filter((e) => e.type === "Goal")
+      .sort((a, b) => (a.time.elapsed + (a.time.extra ?? 0)) - (b.time.elapsed + (b.time.extra ?? 0)));
+
+    if (goals.length === 0) return null;
+
+    const first = goals[0];
+    const scoringTeamId = first.team.id;
+    const isOwnGoal = first.detail === "Own Goal";
+
+    // But contre son camp → but crédité à l'équipe adverse
+    if (isOwnGoal) {
+      if (scoringTeamId === homeTeamId) return "away";
+      if (scoringTeamId === awayTeamId) return "home";
+      return null;
+    }
+
+    if (scoringTeamId === homeTeamId) return "home";
+    if (scoringTeamId === awayTeamId) return "away";
+    return null;
+  } catch (e) {
+    console.warn(`[evaluate-predictions] Events fetch failed for fixture ${fixtureId}:`, e);
+    return null;
+  }
+}
+
 Deno.serve(async (_req: Request) => {
   try {
     const supabase = getSupabaseAdmin();
@@ -261,6 +305,23 @@ Deno.serve(async (_req: Request) => {
       }
 
       const updates: Array<{ id: number; is_correct: boolean }> = [];
+
+      // Résout le premier buteur une seule fois par match si nécessaire
+      let firstScorerSide: "home" | "away" | null | undefined = undefined;
+      const homeGoals = result.goals.home ?? 0;
+      const awayGoals = result.goals.away ?? 0;
+      const needsEvents = predictions.some(
+        (p: { prediction_type: string }) => p.prediction_type === "first_team_to_score",
+      ) && homeGoals > 0 && awayGoals > 0;
+
+      if (needsEvents) {
+        firstScorerSide = await fetchFirstScorerSide(
+          result.fixture.id,
+          result.teams.home.id,
+          result.teams.away.id,
+        );
+        console.log(`[evaluate-predictions] First scorer side: ${firstScorerSide} (fixture=${result.fixture.id})`);
+      }
 
       for (const pred of predictions) {
         const isCorrect = evaluatePrediction(pred.prediction_type, pred.prediction, result, events);
