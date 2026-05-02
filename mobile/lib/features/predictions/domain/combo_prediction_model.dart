@@ -1,9 +1,14 @@
 /// Model for daily combo predictions (accumulators).
 /// "Safe" combos (3-4 legs, ~3-6 odds) → PRO + VIP
 /// "Bold" combos (4-6 legs, ~6-15 odds) → VIP only
+///
+/// Each day has up to 2 slots:
+/// • 'day'     → matches before 22:00 UTC
+/// • 'evening' → matches from 22:00 UTC
 class ComboPrediction {
   final int id;
   final String comboType; // 'safe' | 'bold'
+  final String comboSlot; // 'day' | 'evening'
   final double? combinedOdds;
   final double? combinedConfidence;
   final int legCount;
@@ -16,6 +21,7 @@ class ComboPrediction {
   const ComboPrediction({
     required this.id,
     required this.comboType,
+    this.comboSlot = 'day',
     this.combinedOdds,
     this.combinedConfidence,
     required this.legCount,
@@ -28,6 +34,8 @@ class ComboPrediction {
 
   bool get isSafe => comboType == 'safe';
   bool get isBold => comboType == 'bold';
+  bool get isDay => comboSlot == 'day';
+  bool get isEvening => comboSlot == 'evening';
   bool get isActive => status == 'active';
   bool get isWon => status == 'won';
   bool get isLost => status == 'lost';
@@ -35,6 +43,11 @@ class ComboPrediction {
 
   String get typeLabel => isSafe ? 'Combiné Sûr' : 'Combiné Audacieux';
   String get typeEmoji => isSafe ? '🛡️' : '🔥';
+
+  String get slotLabel => isEvening ? 'Du Soir' : 'Du Jour';
+  String get slotEmoji => isEvening ? '🌙' : '☀️';
+  String get fullLabel => '$typeLabel $slotLabel';
+
   int get confidencePercent => ((combinedConfidence ?? 0) * 100).round();
 
   String get oddsLabel {
@@ -63,6 +76,7 @@ class ComboPrediction {
     return ComboPrediction(
       id: json['id'] as int,
       comboType: json['combo_type'] as String,
+      comboSlot: json['combo_slot'] as String? ?? 'day',
       combinedOdds: (json['combined_odds'] as num?)?.toDouble(),
       combinedConfidence: (json['combined_confidence'] as num?)?.toDouble(),
       legCount: json['leg_count'] as int? ?? legs?.length ?? 0,

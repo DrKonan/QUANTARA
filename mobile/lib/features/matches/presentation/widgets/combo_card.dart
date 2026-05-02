@@ -92,12 +92,30 @@ class ComboCard extends StatelessWidget {
                     fontSize: 14,
                   ),
                 ),
-                Text(
-                  '${combo.legCount} sélections',
-                  style: TextStyle(
-                    color: Colors.white.withAlpha(150),
-                    fontSize: 11,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      combo.slotEmoji,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      combo.slotLabel,
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(170),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '· ${combo.legCount} sélections',
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(120),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

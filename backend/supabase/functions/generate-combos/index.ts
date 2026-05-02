@@ -1,17 +1,21 @@
 // ============================================================
 // NAKORA — Edge Function : generate-combos
 //
-// Génère 1 à 2 combinés du jour à partir des TOP PICKS prematch.
-// 
+// Génère les combinés pour UN créneau horaire (slot) :
+//   • 'day'     → matchs AVANT 22h UTC  (lancé à 4h UTC)
+//   • 'evening' → matchs À PARTIR DE 22h UTC (lancé à 21h UTC)
+//
+// Chaque slot produit jusqu'à 2 combos : 'safe' (PRO+VIP) et 'bold' (VIP)
+//
 // STRATÉGIE :
-// — Sélectionne des prédictions à confiance ≥ 0.80 avec cotes bookmaker
+// — Sélectionne des prédictions à confiance ≥ 0.72 avec cotes bookmaker
 // — Marchés robustes uniquement : btts, over_under, double_chance
 //   (peu sensibles aux changements de compo)
 // — Max 1 jambe par match, diversité de ligues favorisée
 // — "Sûr" (3-4 jambes, cote ~3-6) → PRO + VIP
 // — "Audacieux" (4-6 jambes, cote ~6-15) → VIP uniquement
 //
-// Cron : 4h et 21h UTC (après predict-prematch à 3h et 20h)
+// Cron : 4h UTC → slot=day | 21h UTC → slot=evening
 // ============================================================
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse } from "../_shared/helpers.ts";
@@ -128,37 +132,64 @@ Deno.serve(async (req: Request) => {
   try {
     const supabase = getSupabaseAdmin();
 
-    // Journée sportive (06:00 UTC → 05:59 UTC+1)
+    // ── Détermine le slot (day | evening) ──────────────────────────
+    // Priorité : body JSON > auto-détection par heure UTC
+    let slot: "day" | "evening" = "day";
+    try {
+      const body = await req.json() as { slot?: string };
+      if (body.slot === "evening") slot = "evening";
+      else if (body.slot === "day") slot = "day";
+      else {
+        // Auto-détection : si heure >= 12 UTC on suppose le créneau du soir
+        slot = new Date().getUTCHours() >= 12 ? "evening" : "day";
+      }
+    } catch {
+      slot = new Date().getUTCHours() >= 12 ? "evening" : "day";
+    }
+    console.log(`[generate-combos] slot=${slot}`);
+
+    // ── Fenêtre horaire du slot ─────────────────────────────────────
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
-    const dayStart = `${today}T06:00:00+00:00`;
+
+    // day     : matchs entre 06:00 et 21:59 UTC
+    // evening : matchs entre 22:00 UTC et 05:59 UTC lendemain
     const nextDay = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const slotStart = slot === "day"
+      ? `${today}T06:00:00+00:00`
+      : `${today}T22:00:00+00:00`;
+    const slotEnd = slot === "day"
+      ? `${today}T21:59:59+00:00`
+      : `${nextDay}T05:59:59+00:00`;
+
+    // Journée sportive complète (pour la journée du jour)
+    const dayStart = `${today}T06:00:00+00:00`;
     const dayEnd = `${nextDay}T05:59:59+00:00`;
 
-    // Vérifie qu'on n'a pas déjà généré de combos aujourd'hui
+    // Vérifie qu'on n'a pas déjà généré des combos pour ce slot aujourd'hui
     const { data: existingCombos } = await supabase
       .from("combo_predictions")
       .select("id")
-      .eq("combo_date", today);
+      .eq("combo_date", today)
+      .eq("combo_slot", slot);
 
     if (existingCombos && existingCombos.length > 0) {
-      console.log(`[generate-combos] Combos already exist for ${today}, skipping`);
-      return jsonResponse({ message: "Combos already generated", date: today });
+      console.log(`[generate-combos] Combos already exist for ${today} slot=${slot}, skipping`);
+      return jsonResponse({ message: "Combos already generated", date: today, slot });
     }
 
-    // Récupère toutes les prédictions éligibles du jour
-    // Joindre avec matches pour avoir les infos équipes/ligue
+    // Récupère les matchs du créneau horaire (slot)
     const { data: matchesRaw } = await supabase
       .from("matches")
       .select("id, home_team, away_team, league, league_id, match_date, status")
-      .gte("match_date", dayStart)
-      .lte("match_date", dayEnd)
+      .gte("match_date", slotStart)
+      .lte("match_date", slotEnd)
       .eq("status", "scheduled")
       .order("match_date", { ascending: true });
 
     if (!matchesRaw || matchesRaw.length === 0) {
-      console.log(`[generate-combos] No scheduled matches for ${today}`);
-      return jsonResponse({ message: "No matches today", date: today });
+      console.log(`[generate-combos] No scheduled matches for ${today} slot=${slot}`);
+      return jsonResponse({ message: "No matches for this slot", date: today, slot });
     }
 
     const matchIds = matchesRaw.map((m: { id: number }) => m.id);
@@ -201,15 +232,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    console.log(`[generate-combos] Pool: ${pool.length} eligible predictions from ${matchesRaw.length} matches`);
+    console.log(`[generate-combos] Pool: ${pool.length} eligible predictions from ${matchesRaw.length} matches (slot=${slot})`);
 
     if (pool.length < 3) {
       console.log(`[generate-combos] Not enough eligible predictions (need ≥3)`);
-      return jsonResponse({ message: "Not enough eligible predictions for combos", pool_size: pool.length });
+      return jsonResponse({ message: "Not enough eligible predictions for combos", pool_size: pool.length, slot });
     }
 
     const combosToInsert: Array<{
       combo_date: string;
+      combo_slot: string;
       combo_type: string;
       combined_odds: number;
       combined_confidence: number;
@@ -225,6 +257,7 @@ Deno.serve(async (req: Request) => {
       const combinedConf = safeLegs.reduce((acc, l) => acc * l.confidence, 1);
       combosToInsert.push({
         combo_date: today,
+        combo_slot: slot,
         combo_type: "safe",
         combined_odds: Math.round(combinedOdds * 100) / 100,
         combined_confidence: Math.round(combinedConf * 1000) / 1000,
@@ -273,6 +306,7 @@ Deno.serve(async (req: Request) => {
       const combinedConf = boldLegs.reduce((acc, l) => acc * l.confidence, 1);
       combosToInsert.push({
         combo_date: today,
+        combo_slot: slot,
         combo_type: "bold",
         combined_odds: Math.round(combinedOdds * 100) / 100,
         combined_confidence: Math.round(combinedConf * 1000) / 1000,
@@ -285,8 +319,8 @@ Deno.serve(async (req: Request) => {
 
     // Insère les combinés
     if (combosToInsert.length === 0) {
-      console.log(`[generate-combos] Could not build any valid combo for ${today}`);
-      return jsonResponse({ message: "Not enough diverse predictions for combos", date: today });
+      console.log(`[generate-combos] Could not build any valid combo for ${today} slot=${slot}`);
+      return jsonResponse({ message: "Not enough diverse predictions for combos", date: today, slot });
     }
 
     const { error: insertError } = await supabase
@@ -295,13 +329,14 @@ Deno.serve(async (req: Request) => {
 
     if (insertError) throw insertError;
 
-    console.log(`[generate-combos] Generated ${combosToInsert.length} combo(s) for ${today}`);
+    console.log(`[generate-combos] Generated ${combosToInsert.length} combo(s) for ${today} slot=${slot}`);
 
     // Notifie les utilisateurs PRO/VIP via notify-users
     try {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       const safeCombo = combosToInsert.find(c => c.combo_type === "safe");
+      const slotLabel = slot === "evening" ? "du soir" : "du jour";
 
       await fetch(`${supabaseUrl}/functions/v1/notify-users`, {
         method: "POST",
@@ -314,6 +349,7 @@ Deno.serve(async (req: Request) => {
           combo_count: combosToInsert.length,
           safe_legs: safeCombo?.leg_count,
           safe_odds: safeCombo?.combined_odds,
+          slot_label: slotLabel,
         }),
       });
       console.log(`[generate-combos] Notification sent via notify-users`);
@@ -324,6 +360,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({
       success: true,
       date: today,
+      slot,
       combos: combosToInsert.map(c => ({
         type: c.combo_type,
         legs: c.leg_count,

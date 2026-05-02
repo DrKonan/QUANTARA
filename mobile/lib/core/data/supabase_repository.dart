@@ -118,7 +118,7 @@ class SupabaseRepository {
           '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
       final data = await _client
           .from('combo_predictions')
-          .select('id, combo_type, combined_odds, combined_confidence, leg_count, legs, status, min_plan, created_at')
+          .select('id, combo_type, combo_slot, combined_odds, combined_confidence, leg_count, legs, status, min_plan, created_at')
           .eq('combo_date', targetDate)
           .order('combo_type', ascending: true);
       final combos = (data as List)
