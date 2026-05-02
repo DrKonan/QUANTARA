@@ -51,6 +51,9 @@ class HomeScreen extends ConsumerWidget {
                   child: StatsCard(),
                 ),
               ),
+              // ── Combos — mise en avant juste après les stats ──
+              if (combosAsync.hasValue && combosAsync.value!.isNotEmpty)
+                _buildCombosSection(context, combosAsync.value!, userProfile),
               // Matches — silent refresh: always show data if available
               if (matchesAsync.hasValue) ...[
                 Builder(builder: (context) {
@@ -91,9 +94,6 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
               ],
-              // Combos section — silent refresh
-              if (combosAsync.hasValue && combosAsync.value!.isNotEmpty)
-                _buildCombosSection(context, combosAsync.value!, userProfile),
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
             ],
           ),
@@ -328,143 +328,118 @@ class HomeScreen extends ConsumerWidget {
     final isPro = profile?.isPro ?? false;
     final isVip = profile?.isVip ?? false;
 
-    // Split into safe/bold
+    // Flat list: safe combos first, then bold
     final safeCombos = combos.where((c) => c.isSafe).toList();
     final boldCombos = combos.where((c) => c.isBold).toList();
 
-    // Apply combo limits: PRO sees 1 total, VIP sees 3 total
-    // PRO: 1 safe combo only (no bold)
-    // VIP: up to 3 (safe + bold)
     int safeVisible = safeCombos.length;
     int boldVisible = boldCombos.length;
 
     if (hasComboAccess && comboLimit > 0) {
       if (isPro && !isVip) {
-        // Pro: 1 combo total, safe only
         safeVisible = safeVisible.clamp(0, 1);
         boldVisible = 0;
       } else if (isVip) {
-        // VIP: 3 total, distribute between safe & bold
         safeVisible = safeVisible.clamp(0, comboLimit);
-        final remaining = comboLimit - safeVisible;
-        boldVisible = boldVisible.clamp(0, remaining);
+        boldVisible = boldVisible.clamp(0, comboLimit - safeVisible);
       }
     }
+
+    // Merge into a single ordered list with lock status pre-computed
+    final allCards = [
+      for (int i = 0; i < safeCombos.length; i++)
+        (combo: safeCombos[i], isLocked: !hasComboAccess || i >= safeVisible || safeCombos[i].isLocked),
+      for (int i = 0; i < boldCombos.length; i++)
+        (combo: boldCombos[i], isLocked: !isVip || i >= boldVisible || boldCombos[i].isLocked),
+    ];
 
     return SliverMainAxisGroup(
       slivers: [
         SliverToBoxAdapter(
-          child: _sectionHeader("🎰 COMBINÉS DU JOUR", "${combos.length}", const Color(0xFFD4AF37)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Row(
+              children: [
+                const Text(
+                  "🎰 COMBINÉS DU JOUR",
+                  style: TextStyle(
+                    color: Color(0xFFD4AF37),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD4AF37).withAlpha(25),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${allCards.length}',
+                    style: const TextStyle(
+                      color: Color(0xFFD4AF37),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        if (safeCombos.isNotEmpty) ...[
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Row(
-                children: [
-                  Text(
-                    "🛡️ Combinés Sûrs · ${safeCombos.length}",
-                    style: TextStyle(
-                      color: const Color(0xFF00C896).withAlpha(200),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (hasComboAccess && comboLimit > 0) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: 220,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: allCards.length + (!hasComboAccess ? 1 : 0),
+              itemBuilder: (_, i) {
+                // Last item: upgrade teaser if no access
+                if (!hasComboAccess && i == allCards.length) {
+                  return GestureDetector(
+                    onTap: () => context.go('/subscription'),
+                    child: Container(
+                      width: 180,
+                      margin: const EdgeInsets.only(right: 12),
                       decoration: BoxDecoration(
-                        color: AppColors.gold.withAlpha(20),
-                        borderRadius: BorderRadius.circular(6),
+                        color: const Color(0xFF1A1A2E),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.gold.withAlpha(60)),
                       ),
-                      child: Text(
-                        '$safeVisible visible${safeVisible > 1 ? 's' : ''}',
-                        style: const TextStyle(color: AppColors.gold, fontSize: 9, fontWeight: FontWeight.w600),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.lock_rounded, color: AppColors.gold.withAlpha(180), size: 28),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Débloquez\nles combinés',
+                            style: TextStyle(color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.w700),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Pro ou VIP',
+                            style: TextStyle(color: AppColors.textSecondary.withAlpha(180), fontSize: 11),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 210,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: safeCombos.length,
-                itemBuilder: (_, i) {
-                  final isWithinLimit = i < safeVisible && hasComboAccess;
-                  return ComboCard(
-                    combo: safeCombos[i],
-                    isLocked: !isWithinLimit || safeCombos[i].isLocked,
-                    onUpgradeTap: () => context.go('/subscription'),
                   );
-                },
-              ),
+                }
+                final item = allCards[i];
+                return ComboCard(
+                  combo: item.combo,
+                  isLocked: item.isLocked,
+                  onUpgradeTap: () => context.go('/subscription'),
+                );
+              },
             ),
           ),
-        ],
-        if (boldCombos.isNotEmpty) ...[
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Row(
-                children: [
-                  Text(
-                    "🔥 Combinés Audacieux · ${boldCombos.length}",
-                    style: TextStyle(
-                      color: const Color(0xFFFF6B35).withAlpha(200),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (!isVip) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.gold.withAlpha(20),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        'VIP',
-                        style: TextStyle(color: AppColors.gold, fontSize: 9, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 210,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: boldCombos.length,
-                itemBuilder: (_, i) {
-                  final isWithinLimit = i < boldVisible && isVip;
-                  return ComboCard(
-                    combo: boldCombos[i],
-                    isLocked: !isWithinLimit || boldCombos[i].isLocked,
-                    onUpgradeTap: () => context.go('/subscription'),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-        if (!hasComboAccess)
-          SliverToBoxAdapter(
-            child: UpgradeBanner(
-              requiredPlan: 'pro',
-              text: 'Débloquez les combinés avec Pro ou VIP',
-            ),
-          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 8)),
       ],
     );
   }
