@@ -30,6 +30,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedCountry = AppConstants.countryFromLocale();
     _checkBiometric();
   }
 

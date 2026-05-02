@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 abstract class AppConstants {
   static const appName = 'Nakora';
   static const trialDurationDays = 3;
@@ -239,6 +241,23 @@ abstract class AppConstants {
   ];
 
   static PaymentCountry get defaultCountry => supportedCountries.first;
+
+  /// Detect country from device locale (e.g., "fr_SN" → Sénégal).
+  /// Falls back to [defaultCountry] if no match found.
+  static PaymentCountry countryFromLocale() {
+    try {
+      final locale = Platform.localeName; // e.g. "fr_SN", "en-CI"
+      final parts = locale.split(RegExp(r'[_\-]'));
+      if (parts.length >= 2) {
+        final code = parts.last.toUpperCase();
+        return supportedCountries.firstWhere(
+          (c) => c.code == code,
+          orElse: () => defaultCountry,
+        );
+      }
+    } catch (_) {}
+    return defaultCountry;
+  }
 }
 
 /// A supported country with its available payment methods

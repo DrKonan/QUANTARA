@@ -31,7 +31,7 @@ class _PaymentMethodSheetState extends State<PaymentMethodSheet> {
   void initState() {
     super.initState();
     _selectedCountry =
-        AppConstants.countryFromPhone(widget.userPhone) ?? AppConstants.defaultCountry;
+        AppConstants.countryFromPhone(widget.userPhone) ?? AppConstants.countryFromLocale();
     if (widget.userPhone != null) {
       final dc = _selectedCountry.dialCode;
       final raw = widget.userPhone!.replaceAll(RegExp(r'[\s\-\(\)]'), '');
@@ -73,10 +73,11 @@ class _PaymentMethodSheetState extends State<PaymentMethodSheet> {
     return Padding(
       padding: EdgeInsets.fromLTRB(
           24, 16, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Center(
             child: Container(
               width: 40,
@@ -245,6 +246,8 @@ class _PaymentMethodSheetState extends State<PaymentMethodSheet> {
                   child: TextFormField(
                     controller: _phoneCtrl,
                     keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
                     style: const TextStyle(
                         color: AppColors.textPrimary, fontSize: 15),
                     decoration: InputDecoration(
@@ -345,6 +348,7 @@ class _PaymentMethodSheetState extends State<PaymentMethodSheet> {
             ),
           ),
         ],
+        ),
       ),
     );
   }

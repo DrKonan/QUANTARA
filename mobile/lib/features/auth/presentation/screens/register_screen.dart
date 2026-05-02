@@ -27,6 +27,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String? _previousContact;
 
   @override
+  void initState() {
+    super.initState();
+    _selectedCountry = AppConstants.countryFromLocale();
+  }
+
+  @override
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
