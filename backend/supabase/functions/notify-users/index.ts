@@ -165,7 +165,8 @@ async function sendFCMNotification(
                 notification: { channel_id: "nakora_predictions" },
               },
               apns: {
-                payload: { aps: { sound: "default", badge: 1 } },
+                headers: { "apns-priority": "10" },
+                payload: { aps: { sound: "default", badge: 1, "content-available": 1 } },
               },
             },
           }),
