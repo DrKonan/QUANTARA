@@ -306,23 +306,6 @@ Deno.serve(async (_req: Request) => {
 
       const updates: Array<{ id: number; is_correct: boolean }> = [];
 
-      // Résout le premier buteur une seule fois par match si nécessaire
-      let firstScorerSide: "home" | "away" | null | undefined = undefined;
-      const homeGoals = result.goals.home ?? 0;
-      const awayGoals = result.goals.away ?? 0;
-      const needsEvents = predictions.some(
-        (p: { prediction_type: string }) => p.prediction_type === "first_team_to_score",
-      ) && homeGoals > 0 && awayGoals > 0;
-
-      if (needsEvents) {
-        firstScorerSide = await fetchFirstScorerSide(
-          result.fixture.id,
-          result.teams.home.id,
-          result.teams.away.id,
-        );
-        console.log(`[evaluate-predictions] First scorer side: ${firstScorerSide} (fixture=${result.fixture.id})`);
-      }
-
       for (const pred of predictions) {
         const isCorrect = evaluatePrediction(pred.prediction_type, pred.prediction, result, events);
         if (isCorrect !== null) {
