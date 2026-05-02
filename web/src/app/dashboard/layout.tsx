@@ -80,9 +80,10 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [, startSidebarTransition] = useTransition();
 
   useEffect(() => {
-    setSidebarOpen(false);
+    startSidebarTransition(() => setSidebarOpen(false));
   }, [pathname]);
 
   const isActive = (href: string) =>

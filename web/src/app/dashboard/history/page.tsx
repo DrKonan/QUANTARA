@@ -1,6 +1,6 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { LocalTime } from "@/components/local-time";
-import { History, CheckCircle2, XCircle, Clock, Filter } from "lucide-react";
+import { History, CheckCircle2, XCircle, Clock } from "lucide-react";
 
 export const revalidate = 60;
 
