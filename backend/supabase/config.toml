@@ -48,6 +48,9 @@ verify_jwt = false
 [functions.webhook-payment]
 verify_jwt = false
 
+[functions.notify-users]
+verify_jwt = false
+
 # ----------------------------------------------------------------
 # Scheduled Jobs (Cron) — nécessite Supabase Pro ou pg_cron
 # ----------------------------------------------------------------
