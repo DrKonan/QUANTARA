@@ -18,11 +18,18 @@ import '../../../notifications/presentation/screens/notification_center_screen.d
 import '../../../profile/domain/user_profile_model.dart';
 import '../widgets/stats_card.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _combosExpanded = true;
+
+  @override
+  Widget build(BuildContext context) {
     final matchesAsync = ref.watch(activeMatchesProvider);
     final allMatchesAsync = ref.watch(todayEligibleMatchesProvider);
     final combosAsync = ref.watch(todayCombosProvider);
@@ -355,9 +362,10 @@ class HomeScreen extends ConsumerWidget {
 
     return SliverMainAxisGroup(
       slivers: [
+        // ── Header row with collapse toggle ──
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
             child: Row(
               children: [
                 const Text(
@@ -385,61 +393,80 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => setState(() => _combosExpanded = !_combosExpanded),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: AnimatedRotation(
+                      turns: _combosExpanded ? 0 : -0.5,
+                      duration: const Duration(milliseconds: 250),
+                      child: Icon(
+                        Icons.keyboard_arrow_up_rounded,
+                        color: const Color(0xFFD4AF37).withAlpha(180),
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ),
-        SliverToBoxAdapter(
-          child: SizedBox(
-            height: 240,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: allCards.length + (!hasComboAccess ? 1 : 0),
-              itemBuilder: (_, i) {
-                // Last item: upgrade teaser if no access
-                if (!hasComboAccess && i == allCards.length) {
-                  return GestureDetector(
-                    onTap: () => context.go('/subscription'),
-                    child: Container(
-                      width: 180,
-                      margin: const EdgeInsets.only(right: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A1A2E),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.gold.withAlpha(60)),
+        // ── Cards row — hidden when collapsed ──
+        if (_combosExpanded)
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 240,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: allCards.length + (!hasComboAccess ? 1 : 0),
+                itemBuilder: (_, i) {
+                  // Last item: upgrade teaser if no access
+                  if (!hasComboAccess && i == allCards.length) {
+                    return GestureDetector(
+                      onTap: () => context.push('/subscription'),
+                      child: Container(
+                        width: 180,
+                        margin: const EdgeInsets.only(right: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A2E),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.gold.withAlpha(60)),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.lock_rounded, color: AppColors.gold.withAlpha(180), size: 28),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'Débloquez\nles combinés',
+                              style: TextStyle(color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.w700),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Pro ou VIP',
+                              style: TextStyle(color: AppColors.textSecondary.withAlpha(180), fontSize: 11),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.lock_rounded, color: AppColors.gold.withAlpha(180), size: 28),
-                          const SizedBox(height: 10),
-                          const Text(
-                            'Débloquez\nles combinés',
-                            style: TextStyle(color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.w700),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Pro ou VIP',
-                            style: TextStyle(color: AppColors.textSecondary.withAlpha(180), fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
+                    );
+                  }
+                  final item = allCards[i];
+                  return ComboCard(
+                    combo: item.combo,
+                    isLocked: item.isLocked,
+                    onUpgradeTap: () => context.push('/subscription'),
                   );
-                }
-                final item = allCards[i];
-                return ComboCard(
-                  combo: item.combo,
-                  isLocked: item.isLocked,
-                  onUpgradeTap: () => context.go('/subscription'),
-                );
-              },
+                },
+              ),
             ),
           ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 8)),
+        SliverToBoxAdapter(child: SizedBox(height: _combosExpanded ? 8 : 4)),
       ],
     );
   }
