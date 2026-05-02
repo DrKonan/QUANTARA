@@ -58,7 +58,8 @@ class SupabaseRepository {
     if (!useEdgeFunction) {
       debugPrint('[Nakora] Skipping Edge Function (no auth), using DB fallback');
       final matches = await _fetchTodayMatchesFallback(date);
-      return DailyResponse(matches: matches, combos: const []);
+      final combos = await _fetchTodayCombos(date);
+      return DailyResponse(matches: matches, combos: combos);
     }
 
     try {
@@ -97,12 +98,37 @@ class SupabaseRepository {
       // Fallback: query DB directly if Edge Function unavailable
       try {
         final matches = await _fetchTodayMatchesFallback(date);
-        debugPrint('[Nakora] Fallback succeeded: ${matches.length} matches');
-        return DailyResponse(matches: matches, combos: const []);
+        final combos = await _fetchTodayCombos(date);
+        debugPrint('[Nakora] Fallback succeeded: ${matches.length} matches, ${combos.length} combos');
+        return DailyResponse(matches: matches, combos: combos);
       } catch (e2) {
         debugPrint('[Nakora] Fallback also failed: $e2');
         rethrow;
       }
+    }
+  }
+
+  /// Fetches today's combos directly from DB (used in fallback path).
+  /// Returns combos with is_locked=false and full data; the UI enforces
+  /// access control based on the user's local profile.
+  Future<List<ComboPrediction>> _fetchTodayCombos(String? date) async {
+    try {
+      final now = DateTime.now().toUtc();
+      final targetDate = date ??
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final data = await _client
+          .from('combo_predictions')
+          .select('id, combo_type, combined_odds, combined_confidence, leg_count, legs, status, min_plan, created_at')
+          .eq('combo_date', targetDate)
+          .order('combo_type', ascending: true);
+      final combos = (data as List)
+          .map((c) => ComboPrediction.fromJson(c as Map<String, dynamic>))
+          .toList();
+      debugPrint('[Nakora] Fallback loaded ${combos.length} combos for $targetDate');
+      return combos;
+    } catch (e) {
+      debugPrint('[Nakora] Failed to fetch combos in fallback: $e');
+      return const [];
     }
   }
 

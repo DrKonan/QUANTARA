@@ -37,8 +37,7 @@ class HomeScreen extends ConsumerWidget {
           onRefresh: () async {
             HapticFeedback.mediumImpact();
             await Future.wait([
-              ref.refresh(todayEligibleMatchesProvider.future),
-              ref.refresh(todayCombosProvider.future),
+              ref.refresh(dailyResponseProvider.future),
               ref.refresh(monthlyStatsProvider.future),
               ref.refresh(userProfileProvider.future),
             ]);

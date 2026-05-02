@@ -35,6 +35,7 @@ class UserProfile {
 
   /// Max combos visible per day
   int get comboLimit {
+    if (isTrialActive) return 1; // Trial = same access as Pro
     switch (plan) {
       case 'pro': return 1;
       case 'vip': return 3;

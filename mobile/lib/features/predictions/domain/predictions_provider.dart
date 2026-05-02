@@ -51,7 +51,8 @@ Duration _computePollingInterval(List<TodayMatch> matches) {
 // ── Daily response (matches + combos from Edge Function) ──
 // Single API call, split into matches and combos for downstream consumers.
 
-final _dailyResponseProvider = FutureProvider<DailyResponse>((ref) async {
+// Public so that screens can trigger a real network refresh directly.
+final dailyResponseProvider = FutureProvider<DailyResponse>((ref) async {
   final repo = ref.watch(supabaseRepoProvider);
   final user = Supabase.instance.client.auth.currentUser;
   final result = await repo.fetchTodayEligibleMatches(useEdgeFunction: user != null);
@@ -100,14 +101,14 @@ final _dailyResponseProvider = FutureProvider<DailyResponse>((ref) async {
 // ── Today eligible matches (derived from daily response) ──
 
 final todayEligibleMatchesProvider = FutureProvider<List<TodayMatch>>((ref) async {
-  final daily = await ref.watch(_dailyResponseProvider.future);
+  final daily = await ref.watch(dailyResponseProvider.future);
   return daily.matches;
 });
 
 // ── Today combos (derived from daily response) ──
 
 final todayCombosProvider = FutureProvider<List<ComboPrediction>>((ref) async {
-  final daily = await ref.watch(_dailyResponseProvider.future);
+  final daily = await ref.watch(dailyResponseProvider.future);
   return daily.combos;
 });
 
