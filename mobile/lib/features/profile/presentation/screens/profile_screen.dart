@@ -215,7 +215,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     final email = authUser?.email ?? "";
                     final phone = profile?.phone;
                     final isPremium = profile?.isPremium ?? false;
+                    final isVip = profile?.isVip ?? false;
                     final hasAccess = profile?.hasAccess ?? false;
+                    final planLabel = profile?.planLabel ?? 'Gratuit';
+                    final canUpgrade = isPremium && !isVip; // Starter or Pro can upgrade
 
                     return Column(
                       children: [
@@ -303,7 +306,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               const SizedBox(width: 6),
                               Text(
                                 isPremium
-                                    ? "Premium"
+                                    ? planLabel
                                     : hasAccess
                                         ? "Essai gratuit"
                                         : "Gratuit",
@@ -328,8 +331,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
                         const SizedBox(height: 32),
 
-                        // Upgrade banner
-                        if (!isPremium)
+                        // Upgrade banner — shown for free/trial AND for Starter/Pro (can still upgrade)
+                        if (!isPremium || canUpgrade)
                           GestureDetector(
                             onTap: () => context.push('/subscription'),
                             child: Container(
@@ -357,22 +360,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     child: const Icon(Icons.rocket_launch_rounded, color: AppColors.gold, size: 20),
                                   ),
                                   const SizedBox(width: 14),
-                                  const Expanded(
+                                  Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          "Passer à Premium",
-                                          style: TextStyle(
+                                          canUpgrade
+                                              ? (profile!.isStarter
+                                                  ? "Passer à Pro ou VIP"
+                                                  : "Passer à VIP")
+                                              : "Passer à Premium",
+                                          style: const TextStyle(
                                             color: AppColors.gold,
                                             fontSize: 15,
                                             fontWeight: FontWeight.w700,
                                           ),
                                         ),
-                                        SizedBox(height: 2),
+                                        const SizedBox(height: 2),
                                         Text(
-                                          "Accédez à toutes les analyses",
-                                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                          canUpgrade
+                                              ? (profile!.isStarter
+                                                  ? "Pronos LIVE, combinés IA et plus de matchs"
+                                                  : "Matchs illimités, 3 combinés/jour, tous sports")
+                                              : "Accédez à toutes les analyses",
+                                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                                         ),
                                       ],
                                     ),
