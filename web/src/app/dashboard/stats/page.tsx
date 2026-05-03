@@ -15,12 +15,17 @@ interface PredictionStat {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  result: "Résultat",
-  over_under: "Buts (O/U)",
-  btts: "Les 2 marquent",
-  double_chance: "Double chance",
-  corners: "Corners",
-  cards: "Cartons",
+  result:              "Résultat",
+  over_under:          "Buts (O/U)",
+  btts:                "Les 2 marquent",
+  double_chance:       "Double chance",
+  corners:             "Corners",
+  cards:               "Cartons",
+  half_time:           "Mi-temps",
+  halftime:            "Mi-temps",
+  correct_score:       "Score exact",
+  first_team_to_score: "1er buteur",
+  clean_sheet:         "Feuille blanche",
 };
 
 export default async function StatsPage() {

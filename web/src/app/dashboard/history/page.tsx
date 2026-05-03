@@ -5,15 +5,20 @@ import { History, CheckCircle2, XCircle, Clock } from "lucide-react";
 export const revalidate = 60;
 
 const TYPE_LABELS: Record<string, string> = {
-  result: "Résultat",
-  over_under: "Buts",
-  btts: "Les 2 marquent",
-  home_win: "Victoire dom.",
-  away_win: "Victoire ext.",
-  draw: "Match nul",
-  double_chance: "Double chance",
-  corners: "Corners",
-  cards: "Cartons",
+  result:              "Résultat",
+  over_under:          "Buts",
+  btts:                "Les 2 marquent",
+  home_win:            "Victoire dom.",
+  away_win:            "Victoire ext.",
+  draw:                "Match nul",
+  double_chance:       "Double chance",
+  corners:             "Corners",
+  cards:               "Cartons",
+  half_time:           "Mi-temps",
+  halftime:            "Mi-temps",
+  correct_score:       "Score exact",
+  first_team_to_score: "1er buteur",
+  clean_sheet:         "Feuille blanche",
 };
 
 interface HistoryPrediction {

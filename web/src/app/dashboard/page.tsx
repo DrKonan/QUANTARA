@@ -85,7 +85,7 @@ async function getDashboardStats() {
       .select("league_id, country, category"),
     supabase
       .from("combo_predictions")
-      .select("id, combo_type, result")
+      .select("id, combo_type, status")
       .eq("combo_date", new Date().toISOString().slice(0, 10)),
   ]);
 
@@ -119,7 +119,7 @@ async function getDashboardStats() {
     globalStats: globalStats ?? { total: 0, correct: 0, win_rate: 0 },
     recentPredictions: (recentPredictions ?? []) as unknown as RecentPrediction[],
     todayMatches: enrichedMatches,
-    todayCombos: (todayCombos ?? []) as Array<{ id: number; combo_type: string; result: string | null }>,
+    todayCombos: (todayCombos ?? []) as Array<{ id: number; combo_type: string; status: string | null }>,
   };
 }
 
@@ -194,7 +194,7 @@ export default async function DashboardPage() {
         <StatCard
           title="Combinés du jour"
           value={stats.todayCombos.length.toString()}
-          subtitle={stats.todayCombos.filter(c => c.result === "won").length > 0 ? `${stats.todayCombos.filter(c => c.result === "won").length} gagné(s)` : "en cours"}
+          subtitle={stats.todayCombos.filter(c => c.status === "won").length > 0 ? `${stats.todayCombos.filter(c => c.status === "won").length} gagné(s)` : "en cours"}
           icon={<Layers size={18} />}
           color="gold"
         />

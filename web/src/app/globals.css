@@ -3,13 +3,16 @@
 :root {
   --gold: #D4AF37;
   --gold-dim: #B8961F;
-  --bg-primary: #0B0B14;
-  --bg-card: #12121E;
-  --bg-card-hover: #181830;
-  --border: rgba(255,255,255,0.07);
-  --border-gold: rgba(212,175,55,0.25);
-  --text-muted: #6B6B80;
-  --text-secondary: #9B9BB0;
+  --gold-light: #F0D060;
+  --bg-primary: #08080F;
+  --bg-sidebar: #0C0C18;
+  --bg-card: #0F0F1C;
+  --bg-surface: #13131F;
+  --border: rgba(255,255,255,0.06);
+  --border-gold: rgba(212,175,55,0.30);
+  --border-subtle: rgba(255,255,255,0.04);
+  --text-muted: #5E5E75;
+  --text-secondary: #8E8EA8;
   --green: #34D399;
   --red: #F87171;
   --blue: #60A5FA;
@@ -28,24 +31,32 @@ body {
   color: #ededed;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* ─── Scrollbar ───────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 
-/* Glass card */
+/* ─── Glass card ─────────────────────────────────────── */
 .glass-card {
-  background: linear-gradient(135deg, rgba(18,18,30,0.95), rgba(18,18,30,0.7));
-  backdrop-filter: blur(12px);
+  background: linear-gradient(145deg, rgba(15,15,28,0.97) 0%, rgba(13,13,24,0.80) 100%);
+  backdrop-filter: blur(16px);
   border: 1px solid var(--border);
   border-radius: 16px;
+  transition: border-color 0.2s ease;
 }
 .glass-card:hover {
   border-color: var(--border-gold);
 }
 
-/* Gold gradient text */
+/* Surface card — slightly lighter, for nested elements */
+.surface-card {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+}
+
+/* ─── Gold gradient text ──────────────────────────────── */
 .text-gold-gradient {
   background: linear-gradient(135deg, #D4AF37 0%, #F5E6A3 50%, #D4AF37 100%);
   -webkit-background-clip: text;
@@ -53,29 +64,39 @@ body {
   background-clip: text;
 }
 
-/* Glow effects */
-.glow-gold { box-shadow: 0 0 20px rgba(212,175,55,0.15), 0 0 40px rgba(212,175,55,0.05); }
-.glow-green { box-shadow: 0 0 20px rgba(52,211,153,0.15); }
-.glow-red { box-shadow: 0 0 20px rgba(248,113,113,0.15); }
-
-/* Confidence bar animation */
-@keyframes bar-fill {
-  from { width: 0%; }
+/* ─── Section divider ─────────────────────────────────── */
+.divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.08), transparent);
 }
-.bar-fill { animation: bar-fill 0.8s ease-out; }
 
-/* Pulse live indicator */
+/* ─── Glow effects ───────────────────────────────────── */
+.glow-gold { box-shadow: 0 0 24px rgba(212,175,55,0.12), 0 0 48px rgba(212,175,55,0.04); }
+.glow-green { box-shadow: 0 0 24px rgba(52,211,153,0.12); }
+.glow-red   { box-shadow: 0 0 24px rgba(248,113,113,0.12); }
+
+/* ─── Progress bar ───────────────────────────────────── */
+@keyframes bar-fill { from { width: 0%; } }
+.bar-fill { animation: bar-fill 0.9s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* ─── Live pulse ─────────────────────────────────────── */
 @keyframes live-pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50%       { opacity: 0.35; }
 }
 .live-pulse { animation: live-pulse 1.5s ease-in-out infinite; }
 
-/* Subtle card entrance */
+/* ─── Card entrance ──────────────────────────────────── */
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.animate-fade-up {
-  animation: fade-up 0.4s ease-out both;
+.animate-fade-up { animation: fade-up 0.35s ease-out both; }
+
+/* ─── Confidence bar gradient ────────────────────────── */
+.confidence-bar-fill {
+  background: linear-gradient(90deg, #60A5FA, #34D399, #D4AF37);
+  background-size: 200% 100%;
+  background-position: right center;
+  transition: background-position 0.5s ease;
 }
