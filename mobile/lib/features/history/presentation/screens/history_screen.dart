@@ -406,15 +406,17 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   }
 
   String _formatDateLabel(DateTime date) {
+    // Convertir en heure locale avant d'extraire jour/mois/année
+    final local = date.toLocal();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final target = DateTime(date.year, date.month, date.day);
+    final target = DateTime(local.year, local.month, local.day);
     final diff = today.difference(target).inDays;
 
     if (diff == 0) return "Aujourd'hui";
     if (diff == 1) return "Hier";
-    if (diff < 7) return DateFormat('EEEE', 'fr_FR').format(date);
-    return DateFormat('d MMM yyyy', 'fr_FR').format(date);
+    if (diff < 7) return DateFormat('EEEE', 'fr_FR').format(local);
+    return DateFormat('d MMM yyyy', 'fr_FR').format(local);
   }
 
   Widget _buildDateHeader(String label, int won, int total) {

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-class PaymentMethodSheet extends StatefulWidget {
+class PaymentMethodSheet extends ConsumerStatefulWidget {
   final String selectedPlan;
   final String? userPhone;
   final void Function({String? currency, String? phone, String? paymentMethod}) onPay;
@@ -10,40 +12,29 @@ class PaymentMethodSheet extends StatefulWidget {
   const PaymentMethodSheet({
     super.key,
     required this.selectedPlan,
-    required this.onPay,
     this.userPhone,
+    required this.onPay,
   });
 
   @override
-  State<PaymentMethodSheet> createState() => _PaymentMethodSheetState();
+  ConsumerState<PaymentMethodSheet> createState() => _PaymentMethodSheetState();
 }
 
-class _PaymentMethodSheetState extends State<PaymentMethodSheet> {
-  late PaymentCountry _selectedCountry;
+class _PaymentMethodSheetState extends ConsumerState<PaymentMethodSheet> {
+  late PaymentCountry _country;
   PaymentMethod? _selectedMethod;
-  final _phoneCtrl = TextEditingController();
+  late TextEditingController _phoneCtrl;
   bool _phoneValid = false;
-
-  bool get _isWave => _selectedMethod?.isWave ?? false;
-  bool get _canPay => _selectedMethod != null && _phoneValid;
 
   @override
   void initState() {
     super.initState();
-    _selectedCountry =
-        AppConstants.countryFromPhone(widget.userPhone) ?? AppConstants.countryFromLocale();
-    if (widget.userPhone != null) {
-      final dc = _selectedCountry.dialCode;
-      final raw = widget.userPhone!.replaceAll(RegExp(r'[\s\-\(\)]'), '');
-      final stripped = raw.startsWith('+$dc')
-          ? raw.substring(dc.length + 1)
-          : raw.startsWith(dc)
-              ? raw.substring(dc.length)
-              : raw;
-      _phoneCtrl.text = stripped;
-      _validatePhone();
-    }
-    _phoneCtrl.addListener(_validatePhone);
+    _country = _detectCountry();
+    _selectedMethod = _country.methods.isNotEmpty ? _country.methods.first : null;
+    final initialPhone = _stripCountryCode(widget.userPhone ?? '', _country.dialCode);
+    _phoneCtrl = TextEditingController(text: initialPhone);
+    _phoneValid = initialPhone.length >= 7;
+    _phoneCtrl.addListener(_onPhoneChange);
   }
 
   @override
@@ -52,373 +43,307 @@ class _PaymentMethodSheetState extends State<PaymentMethodSheet> {
     super.dispose();
   }
 
-  void _validatePhone() {
-    final clean = _phoneCtrl.text.trim().replaceAll(RegExp(r'[\s\-]'), '');
-    setState(() => _phoneValid = clean.length >= 8);
+  PaymentCountry _detectCountry() {
+    final phone = widget.userPhone ?? '';
+    if (phone.isNotEmpty) {
+      final clean = phone.replaceAll('+', '').replaceAll(' ', '');
+      for (final c in AppConstants.supportedCountries) {
+        if (clean.startsWith(c.dialCode)) return c;
+      }
+    }
+    return AppConstants.countryFromLocale();
   }
 
-  void _onCountryChanged(PaymentCountry c) {
+  String _stripCountryCode(String phone, String dialCode) {
+    final clean = phone.replaceAll('+', '').replaceAll(' ', '');
+    if (clean.startsWith(dialCode)) return clean.substring(dialCode.length);
+    return clean;
+  }
+
+  String get _e164Phone {
+    final local = _phoneCtrl.text.trim().replaceAll(' ', '');
+    return '+${_country.dialCode}$local';
+  }
+
+  String get _currency {
+    const xafCountries = {'CM', 'GA', 'CG', 'CD', 'CF', 'GQ', 'TD'};
+    return xafCountries.contains(_country.code) ? 'XAF' : 'XOF';
+  }
+
+  void _onPhoneChange() {
     setState(() {
-      _selectedCountry = c;
-      _selectedMethod = null;
-      _phoneCtrl.clear();
-      _phoneValid = false;
+      _phoneValid = _phoneCtrl.text.trim().length >= 7;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final currency = AppConstants.currencyForCountry(_selectedCountry.code);
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          24, 16, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return Container(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Handle bar
           Center(
             child: Container(
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                  color: AppColors.surfaceLight,
-                  borderRadius: BorderRadius.circular(2)),
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            "Paiement",
-            style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            "Choisissez votre moyen de paiement mobile",
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Country selector ──
-          const Text("Votre pays",
-              style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: _showCountryPicker,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.surfaceLight),
-              ),
-              child: Row(
-                children: [
-                  Text(_selectedCountry.flag,
-                      style: const TextStyle(fontSize: 22)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '${_selectedCountry.name}  (+${_selectedCountry.dialCode})',
-                      style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  const Icon(Icons.keyboard_arrow_down_rounded,
-                      color: AppColors.textSecondary, size: 22),
-                ],
+                color: AppColors.textSecondary.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           const SizedBox(height: 16),
 
-          // ── Method selector ──
-          const Text("Moyen de paiement",
-              style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          ..._selectedCountry.methods.map((m) {
-            final isSelected = _selectedMethod?.id == m.id;
-            final color = Color(m.color);
-            return GestureDetector(
-              onTap: () => setState(() => _selectedMethod = m),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                margin: const EdgeInsets.only(bottom: 8),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? color.withValues(alpha: 0.12)
-                      : AppColors.background,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isSelected ? color : AppColors.surfaceLight,
-                    width: isSelected ? 1.5 : 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8)),
-                      child: Icon(
-                        m.isWave
-                            ? Icons.waves_rounded
-                            : Icons.phone_android_rounded,
-                        color: color,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(m.name,
-                              style: TextStyle(
-                                  color: isSelected
-                                      ? color
-                                      : AppColors.textPrimary,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600)),
-                          Text(
-                            m.isWave
-                                ? "Paiement via l'appli Wave"
-                                : "Push USSD sur votre téléphone",
-                            style: const TextStyle(
-                                color: AppColors.textSecondary, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (isSelected)
-                      Icon(Icons.check_circle_rounded, color: color, size: 20),
-                  ],
-                ),
-              ),
-            );
-          }),
-
-          // ── Phone input ──
-          if (_selectedMethod != null) ...[
-            const SizedBox(height: 8),
-            const Text("Numéro de téléphone",
-                style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.surfaceLight),
-                  ),
-                  child: Text(
-                    '+${_selectedCountry.dialCode}',
-                    style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextFormField(
-                    controller: _phoneCtrl,
-                    keyboardType: TextInputType.phone,
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-                    style: const TextStyle(
-                        color: AppColors.textPrimary, fontSize: 15),
-                    decoration: InputDecoration(
-                      hintText: 'X' * _selectedCountry.localDigits,
-                      hintStyle: TextStyle(
-                          color: AppColors.textSecondary.withValues(alpha: 0.4)),
-                      prefixIcon: const Icon(Icons.phone_outlined,
-                          color: AppColors.textSecondary, size: 20),
-                      filled: true,
-                      fillColor: AppColors.background,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 13),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide:
-                              const BorderSide(color: AppColors.surfaceLight)),
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide:
-                              const BorderSide(color: AppColors.surfaceLight)),
-                      focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.gold)),
-                    ),
-                  ),
-                ),
-              ],
+          // Title
+          const Text(
+            'Moyen de paiement',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(
-                  _isWave
-                      ? Icons.open_in_new_rounded
-                      : Icons.phone_callback_outlined,
-                  size: 13,
-                  color: AppColors.textSecondary,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    _isWave
-                        ? "Votre numéro Wave sera utilisé pour générer le lien de paiement."
-                        : "Un code USSD sera envoyé sur votre téléphone ${_selectedCountry.flag}.",
-                    style: TextStyle(
-                        color: AppColors.textSecondary.withValues(alpha: 0.8),
-                        fontSize: 11),
-                  ),
-                ),
-              ],
-            ),
-          ],
-
+          ),
           const SizedBox(height: 20),
 
-          // ── Pay button ──
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _canPay
-                  ? () {
-                      final phone =
-                          '+${_selectedCountry.dialCode}${_phoneCtrl.text.trim().replaceAll(RegExp(r'[\s\-]'), '')}';
-                      widget.onPay(
-                        currency: currency,
-                        phone: phone,
-                        paymentMethod: _selectedMethod!.id,
-                      );
-                    }
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.gold,
-                disabledBackgroundColor: AppColors.surfaceLight,
-                foregroundColor: Colors.black,
-                disabledForegroundColor: AppColors.textSecondary,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
+          // Country selector
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: _pickCountry,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.textSecondary.withOpacity(0.15)),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    _isWave ? Icons.waves_rounded : Icons.smartphone_rounded,
-                    size: 18,
+                  Text(_country.flag, style: const TextStyle(fontSize: 22)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _country.name,
+                      style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _selectedMethod != null
-                        ? "Payer avec ${_selectedMethod!.name}"
-                        : "Choisissez un moyen de paiement",
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
+                  const Icon(Icons.keyboard_arrow_down, color: AppColors.textSecondary, size: 20),
                 ],
               ),
             ),
           ),
+          const SizedBox(height: 12),
+
+          // Methods
+          if (_country.methods.isNotEmpty) ...[
+            const Text(
+              'Opérateur',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _country.methods.map((m) => _MethodChip(
+                method: m,
+                selected: _selectedMethod?.id == m.id,
+                onTap: () => setState(() => _selectedMethod = m),
+              )).toList(),
+            ),
+            const SizedBox(height: 14),
+          ],
+
+          // Phone field
+          const Text(
+            'Numéro de téléphone',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.textSecondary.withOpacity(0.15)),
+                ),
+                child: Text(
+                  '+${_country.dialCode}',
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                  decoration: InputDecoration(
+                    hintText: 'Numéro local',
+                    hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.5), fontSize: 14),
+                    filled: true,
+                    fillColor: AppColors.background,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.15)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.15)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.gold, width: 1.5),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Pay button
+          ElevatedButton(
+            onPressed: (_selectedMethod != null && _phoneValid) ? _submit : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+              disabledBackgroundColor: AppColors.gold.withOpacity(0.3),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(
+              _selectedMethod != null
+                  ? 'Payer avec ${_selectedMethod!.name}'
+                  : 'Sélectionnez un opérateur',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            ),
+          ),
         ],
-        ),
       ),
     );
   }
 
-  void _showCountryPicker() {
-    showModalBottomSheet(
+  void _submit() {
+    if (_selectedMethod == null) return;
+    HapticFeedback.mediumImpact();
+    widget.onPay(
+      currency: _currency,
+      phone: _e164Phone,
+      paymentMethod: _selectedMethod!.id,
+    );
+  }
+
+  Future<void> _pickCountry() async {
+    final picked = await showModalBottomSheet<PaymentCountry>(
       context: context,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      isScrollControlled: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        maxChildSize: 0.85,
-        minChildSize: 0.4,
-        expand: false,
-        builder: (ctx, scrollController) => Column(
+      builder: (ctx) => _CountryPickerSheet(countries: AppConstants.supportedCountries),
+    );
+    if (picked != null) {
+      setState(() {
+        _country = picked;
+        _selectedMethod = picked.methods.isNotEmpty ? picked.methods.first : null;
+        _phoneCtrl.text = _stripCountryCode(widget.userPhone ?? '', picked.dialCode);
+      });
+    }
+  }
+}
+
+// ── Method chip ──────────────────────────────────────────────
+class _MethodChip extends StatelessWidget {
+  final PaymentMethod method;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _MethodChip({required this.method, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? Color(method.color).withOpacity(0.15) : AppColors.background,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? Color(method.color) : AppColors.textSecondary.withOpacity(0.15),
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 8),
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                    color: AppColors.surfaceLight,
-                    borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text("Choisir votre pays",
-                style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: AppConstants.supportedCountries.length,
-                itemBuilder: (ctx, i) {
-                  final country = AppConstants.supportedCountries[i];
-                  final isSelected = country.code == _selectedCountry.code;
-                  return ListTile(
-                    leading: Text(country.flag,
-                        style: const TextStyle(fontSize: 24)),
-                    title: Text(country.name,
-                        style: const TextStyle(
-                            color: AppColors.textPrimary, fontSize: 14)),
-                    subtitle: Text(
-                      country.methods.map((m) => m.name).join(' · '),
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 11),
-                    ),
-                    trailing: Text('+${country.dialCode}',
-                        style: const TextStyle(
-                            color: AppColors.textSecondary, fontSize: 13)),
-                    selected: isSelected,
-                    selectedTileColor: AppColors.gold.withValues(alpha: 0.08),
-                    onTap: () {
-                      _onCountryChanged(country);
-                      Navigator.pop(ctx);
-                    },
-                  );
-                },
+            if (selected) ...[
+              Icon(Icons.check_circle, color: Color(method.color), size: 14),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              method.name,
+              style: TextStyle(
+                color: selected ? Color(method.color) : AppColors.textSecondary,
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Country picker ──────────────────────────────────────────
+class _CountryPickerSheet extends StatelessWidget {
+  final List<PaymentCountry> countries;
+  const _CountryPickerSheet({required this.countries});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const SizedBox(height: 16),
+        const Text(
+          'Choisir un pays',
+          style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: ListView.builder(
+            itemCount: countries.length,
+            itemBuilder: (ctx, i) {
+              final c = countries[i];
+              return ListTile(
+                leading: Text(c.flag, style: const TextStyle(fontSize: 26)),
+                title: Text(c.name, style: const TextStyle(color: AppColors.textPrimary)),
+                subtitle: Text('+${c.dialCode}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                onTap: () => Navigator.pop(ctx, c),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

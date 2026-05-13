@@ -141,7 +141,7 @@ class UpgradePromptSheet extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                context.go('/subscription');
+                context.push('/subscription');
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.gold,
@@ -231,7 +231,7 @@ class UpgradeBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap ?? () => context.go('/subscription'),
+      onTap: onTap ?? () => context.push('/subscription'),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -313,7 +313,7 @@ class MatchLimitBanner extends StatelessWidget {
           ),
           if (remaining <= 0)
             GestureDetector(
-              onTap: () => context.go('/subscription'),
+              onTap: () => context.push('/subscription'),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(

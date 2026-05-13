@@ -1,14 +1,12 @@
 import 'dart:async';
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:app_links/app_links.dart';
-
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/constants/app_constants.dart';
-import '../../../../core/services/analytics_service.dart';
-import '../../data/payment_service.dart';
 import '../../domain/subscription_provider.dart';
+import '../../data/payment_service.dart';
 
 class PaymentStatusScreen extends ConsumerStatefulWidget {
   final String plan;
@@ -23,287 +21,391 @@ class PaymentStatusScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<PaymentStatusScreen> createState() =>
-      _PaymentStatusScreenState();
+  ConsumerState<PaymentStatusScreen> createState() => _PaymentStatusScreenState();
 }
 
 class _PaymentStatusScreenState extends ConsumerState<PaymentStatusScreen>
     with WidgetsBindingObserver {
-  StreamSubscription<Uri>? _deepLinkSub;
-  bool _manualCheckLoading = false;
+  bool _deepLinkOpened = false;
+  StreamSubscription<Uri>? _linkSub;
+  final TextEditingController _otpCtrl = TextEditingController();
+  bool _otpSubmitting = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Listen to deep links while screen is visible
-    _deepLinkSub = AppLinks().uriLinkStream.listen(_handleDeepLink);
+    // Listen for incoming nakora://payment deep links
+    final appLinks = AppLinks();
+    _linkSub = appLinks.uriLinkStream.listen(_onDeepLink);
 
-    // Handle the case where the app was opened cold via a deep link
-    AppLinks().getInitialLink().then((uri) {
-      if (uri != null && mounted) _handleDeepLink(uri);
-    });
-
-    // Open checkout URL on first render
-    final checkoutUrl = ref.read(paymentNotifierProvider).result?.checkoutUrl;
-    if (checkoutUrl != null) {
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _openCheckout(checkoutUrl));
-    }
+    // Auto-open the checkout URL on first render (for deeplink/redirect types)
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOpenUrl());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _deepLinkSub?.cancel();
+    _linkSub?.cancel();
+    _otpCtrl.dispose();
     super.dispose();
   }
 
-  // Called when the user switches back to the app from their mobile money app
+  // App returns from foreground → trigger immediate status check
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      ref.read(paymentNotifierProvider.notifier).forceCheckNow();
+  void didChangeAppLifecycleState(AppLifecycleState appState) {
+    if (appState == AppLifecycleState.resumed) {
+      final phase = ref.read(paymentNotifierProvider).phase;
+      if (phase == PaymentPhase.waitingConfirmation) {
+        ref.read(paymentNotifierProvider.notifier).forceCheckNow();
+      }
     }
   }
 
-  void _handleDeepLink(Uri uri) {
-    if (uri.scheme != 'nakora' || uri.host != 'payment') return;
-    final status = uri.queryParameters['status'] ?? 'error';
-    final notifier = ref.read(paymentNotifierProvider.notifier);
-    if (status == 'success') {
-      notifier.forceCheckNow();
-    } else {
-      notifier.handleCancelFromDeepLink();
+  void _onDeepLink(Uri uri) {
+    if (uri.scheme == 'nakora' && uri.host == 'payment') {
+      final status    = uri.queryParameters['status'] ?? '';
+      final paymentId = uri.queryParameters['payment_id'] ?? '';
+      ref.read(paymentNotifierProvider.notifier).handleDeepLinkReturn(status, paymentId);
     }
   }
 
-  Future<void> _openCheckout(String url) async {
+  void _maybeOpenUrl() {
+    if (_deepLinkOpened) return;
+    final result = ref.read(paymentNotifierProvider).result;
+    if (result == null) return;
+    if (result.paymentType == PaymentType.deeplink ||
+        result.paymentType == PaymentType.redirect) {
+      final url = result.checkoutUrl;
+      if (url != null && url.isNotEmpty) {
+        _deepLinkOpened = true;
+        _openUrl(url);
+      }
+    }
+  }
+
+  Future<void> _openUrl(String url) async {
     try {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.inAppBrowserView);
-      // Browser closed — check immediately instead of waiting for next poll
-      if (mounted) ref.read(paymentNotifierProvider.notifier).forceCheckNow();
-    } catch (_) {}
-  }
-
-  Future<void> _manualCheck() async {
-    setState(() => _manualCheckLoading = true);
-    await ref.read(paymentNotifierProvider.notifier).forceCheckNow();
-    if (mounted) setState(() => _manualCheckLoading = false);
+      final uri = Uri.parse(url);
+      final canOpen = await canLaunchUrl(uri);
+      if (canOpen) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
+    } catch (e) {
+      debugPrint('[PaymentStatus] Cannot open URL: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(paymentNotifierProvider);
 
-    // Analytics via listener — never from build()
-    ref.listen<PaymentState>(paymentNotifierProvider, (previous, next) {
-      if (previous?.phase == next.phase) return;
-      if (next.phase == PaymentPhase.success) {
-        AnalyticsService().logPaymentSuccess(widget.plan, 'paydunya');
-      } else if (next.phase == PaymentPhase.error) {
-        AnalyticsService()
-            .logPaymentFailure(widget.plan, next.errorMessage ?? 'unknown');
-      }
-    });
-
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
+    return PopScope(
+      canPop: state.phase == PaymentPhase.success || state.phase == PaymentPhase.error || state.phase == PaymentPhase.otpRequired,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && state.phase == PaymentPhase.waitingConfirmation) {
+          _confirmCancel(context);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.close, color: AppColors.textSecondary),
+            onPressed: () async {
+              if (state.phase == PaymentPhase.waitingConfirmation) {
+                final cancel = await _confirmCancel(context);
+                if (cancel == true && mounted) {
+                  ref.read(paymentNotifierProvider.notifier).handleCancel();
+                  Navigator.of(context).pop();
+                }
+              } else {
+                ref.read(paymentNotifierProvider.notifier).reset();
+                Navigator.of(context).pop();
+              }
+            },
+          ),
+          title: const Text('Paiement', style: TextStyle(color: AppColors.textPrimary, fontSize: 16)),
+          centerTitle: true,
+        ),
+        body: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildStatusIcon(state.phase),
-                const SizedBox(height: 24),
-                Text(
-                  _statusTitle(state.phase),
-                  style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _statusMessage(state),
-                  style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                      height: 1.5),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-
-                if (state.phase == PaymentPhase.waitingConfirmation) ...[
-                  const SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 3, color: AppColors.gold),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    "Vérification en cours...",
-                    style: TextStyle(
-                        color: AppColors.textSecondary, fontSize: 12),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Reopen checkout app (redirect flow only)
-                  if (state.result?.paymentType == PaymentType.redirect &&
-                      state.result?.checkoutUrl != null)
-                    TextButton.icon(
-                      onPressed: () =>
-                          _openCheckout(state.result!.checkoutUrl!),
-                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                      label: Text(
-                          "Rouvrir l'appli ${state.result?.paymentMethodName ?? 'paiement'}"),
-                      style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF1BA8F0)),
-                    ),
-
-                  const SizedBox(height: 8),
-
-                  // Manual check button — lets user trigger a DB check themselves
-                  TextButton.icon(
-                    onPressed: _manualCheckLoading ? null : _manualCheck,
-                    icon: _manualCheckLoading
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: AppColors.textSecondary),
-                          )
-                        : const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text("J'ai déjà payé — Vérifier maintenant"),
-                    style: TextButton.styleFrom(
-                        foregroundColor: AppColors.textSecondary),
-                  ),
-                ],
-
-                if (state.phase == PaymentPhase.success) ...[
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        ref.read(paymentNotifierProvider.notifier).reset();
-                        Navigator.of(context)
-                            .popUntil((route) => route.isFirst);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.emerald,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text("C'est parti ! 🚀",
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                ],
-
-                if (state.phase == PaymentPhase.error) ...[
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        ref.read(paymentNotifierProvider.notifier).reset();
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.surfaceLight,
-                        foregroundColor: AppColors.textPrimary,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text("Réessayer",
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                ],
-              ],
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+            child: switch (state.phase) {
+              PaymentPhase.creating => _buildCreating(),
+              PaymentPhase.waitingConfirmation => _buildWaiting(state),
+              PaymentPhase.otpRequired => _buildOtpInput(state),
+              PaymentPhase.success => _buildSuccess(),
+              PaymentPhase.error => _buildError(state),
+              _ => const SizedBox.shrink(),
+            },
           ),
         ),
       ),
     );
   }
 
-  Widget _buildStatusIcon(PaymentPhase phase) {
-    switch (phase) {
-      case PaymentPhase.success:
-        return Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-              color: AppColors.emerald.withValues(alpha: 0.15),
-              shape: BoxShape.circle),
-          child: const Icon(Icons.check_circle_rounded,
-              color: AppColors.emerald, size: 48),
-        );
-      case PaymentPhase.error:
-        return Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.15),
-              shape: BoxShape.circle),
-          child: const Icon(Icons.error_rounded,
-              color: AppColors.error, size: 48),
-        );
-      default:
-        return Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-              color: AppColors.gold.withValues(alpha: 0.12),
-              shape: BoxShape.circle),
-          child: const Icon(Icons.hourglass_top_rounded,
-              color: AppColors.gold, size: 44),
-        );
-    }
+  Widget _buildCreating() {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(color: AppColors.gold),
+          SizedBox(height: 20),
+          Text('Initialisation du paiement\u2026',
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 16)),
+        ],
+      ),
+    );
   }
 
-  String _statusTitle(PaymentPhase phase) {
-    switch (phase) {
-      case PaymentPhase.success:
-        return "Paiement confirmé ! 🎉";
-      case PaymentPhase.error:
-        return "Paiement échoué";
-      default:
-        return "En attente de confirmation";
-    }
+  Widget _buildWaiting(PaymentState state) {
+    final result = state.result;
+    final isUssd = result?.paymentType == PaymentType.ussd;
+    final methodName = result?.paymentMethodName ?? 'Mobile Money';
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isUssd) ...[
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.gold.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.phone_in_talk, color: AppColors.gold, size: 40),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Vérifiez votre téléphone',
+              style: const TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Une demande de paiement a été envoyée sur votre numéro ${widget.phone ?? ""}.\nEntrez votre code PIN $methodName pour valider.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+            ),
+          ] else ...[
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.gold.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const CircularProgressIndicator(color: AppColors.gold, strokeWidth: 3),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Paiement en cours\u2026',
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Completez le paiement dans l\'application ouverte,\npuis revenez ici.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+            ),
+          ],
+          const SizedBox(height: 32),
+          if (result?.checkoutUrl != null)
+            TextButton.icon(
+              onPressed: () => _openUrl(result!.checkoutUrl!),
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Rouvrir l\'application de paiement'),
+              style: TextButton.styleFrom(foregroundColor: AppColors.gold),
+            ),
+          const SizedBox(height: 8),
+          const Text(
+            'Vérification automatique en cours\u2026',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          const SizedBox(width: 120, child: LinearProgressIndicator(color: AppColors.gold, backgroundColor: Colors.transparent)),
+        ],
+      ),
+    );
   }
 
-  String _statusMessage(PaymentState state) {
-    final planLabel = AppConstants.planLabels[widget.plan] ?? widget.plan;
-    final priceLabel = AppConstants.formatPrice(
-        AppConstants.getPriceInCurrency(widget.plan, widget.currency),
-        widget.currency);
-    final methodName = state.result?.paymentMethodName ?? 'votre opérateur';
+  Widget _buildOtpInput(PaymentState state) {
+    final instructions = state.result?.otpInstructions ?? 'Composez le code USSD pour obtenir votre OTP.';
 
-    switch (state.phase) {
-      case PaymentPhase.success:
-        return "Votre abonnement $planLabel est maintenant actif ! 🎉\nProfitez de toutes vos fonctionnalités exclusives.";
-      case PaymentPhase.error:
-        return state.errorMessage ??
-            "Une erreur est survenue. Veuillez réessayer.";
-      default:
-        if (state.result?.paymentType == PaymentType.redirect) {
-          return "L'appli $methodName a été ouverte pour confirmer votre paiement de $priceLabel.\nRevenez ici une fois le paiement effectué.";
-        }
-        if (state.result?.ussdMessage != null) {
-          return state.result!.ussdMessage!;
-        }
-        final phoneHint = widget.phone != null ? ' au ${widget.phone}' : '';
-        return "Un code USSD a été envoyé$phoneHint via $methodName.\nEntrez votre code PIN pour valider le paiement de $priceLabel.";
-    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 20),
+        const Icon(Icons.lock_outline, color: AppColors.gold, size: 48),
+        const SizedBox(height: 16),
+        const Text(
+          'Code de paiement requis',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          instructions,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+        ),
+        const SizedBox(height: 28),
+        TextField(
+          controller: _otpCtrl,
+          keyboardType: TextInputType.number,
+          maxLength: 8,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: 6),
+          decoration: InputDecoration(
+            counterText: '',
+            hintText: '------',
+            hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.3), letterSpacing: 6),
+            filled: true,
+            fillColor: AppColors.surface,
+            contentPadding: const EdgeInsets.symmetric(vertical: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.2)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.2)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.gold, width: 1.5),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        ElevatedButton(
+          onPressed: _otpSubmitting ? null : _submitOtp,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.gold,
+            foregroundColor: Colors.black,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: _otpSubmitting
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+              : const Text('Valider le code', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSuccess() {
+    final planLabel = {'starter': 'Starter', 'pro': 'Pro', 'vip': 'VIP'}[widget.plan] ?? widget.plan;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 72),
+          const SizedBox(height: 20),
+          const Text(
+            'Paiement confirmé !',
+            style: TextStyle(color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Votre abonnement $planLabel est maintenant actif.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 15, height: 1.5),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton(
+            onPressed: () {
+              HapticFeedback.mediumImpact();
+              Navigator.of(context).pop();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Continuer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError(PaymentState state) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline, color: Colors.redAccent, size: 72),
+          const SizedBox(height: 20),
+          const Text(
+            'Paiement échoué',
+            style: TextStyle(color: AppColors.textPrimary, fontSize: 22, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            state.errorMessage ?? 'Une erreur est survenue. Veuillez réessayer.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, height: 1.5),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton(
+            onPressed: () {
+              ref.read(paymentNotifierProvider.notifier).reset();
+              Navigator.of(context).pop();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.gold,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Réessayer', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitOtp() async {
+    final otp = _otpCtrl.text.trim();
+    if (otp.isEmpty) return;
+    setState(() => _otpSubmitting = true);
+    await ref.read(paymentNotifierProvider.notifier).submitOtp(otp);
+    if (mounted) setState(() => _otpSubmitting = false);
+    // Auto-open URL if now in waiting state with a checkout URL
+    _maybeOpenUrl();
+  }
+
+  Future<bool?> _confirmCancel(BuildContext context) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Annuler le paiement ?', style: TextStyle(color: AppColors.textPrimary)),
+        content: const Text(
+          'Votre paiement est en cours. Êtes-vous sûr de vouloir annuler ?',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Continuer le paiement', style: TextStyle(color: AppColors.gold)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Annuler', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
   }
 }

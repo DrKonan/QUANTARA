@@ -61,22 +61,32 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Invalid token" }, 401);
     }
 
-    // --- Paramètre optionnel : date (par défaut aujourd'hui) ---
+    // --- Paramètre de date et fuseau horaire ---
+    // tz_offset = décalage UTC en minutes (ex: 120 pour UTC+2, -300 pour UTC-5)
+    // date      = date locale YYYY-MM-DD (si fournie, tz_offset doit aussi l'être)
     const url = new URL(req.url);
     const dateParam = url.searchParams.get("date");
+    const tzOffsetMinutes = parseInt(url.searchParams.get("tz_offset") ?? "0", 10) || 0;
 
     const now = new Date();
-    const targetDate = dateParam ?? now.toISOString().slice(0, 10); // YYYY-MM-DD
 
-    // Journée sportive : de 06:00 UTC aujourd'hui à 05:59 UTC demain.
-    // Cela garantit que les matchs d'Amérique du Sud en soirée locale
-    // (qui sont le lendemain en UTC, ex: 00:30, 02:00 UTC) restent
-    // affichés avec la bonne journée.
-    const dayStart = `${targetDate}T06:00:00+00:00`;
-    // Lendemain
-    const nextDay = new Date(new Date(targetDate + "T00:00:00Z").getTime() + 24 * 60 * 60 * 1000)
-      .toISOString().slice(0, 10);
-    const dayEnd = `${nextDay}T05:59:59+00:00`;
+    // Calcule la date locale de l'utilisateur si non fournie
+    let localDate: string;
+    if (dateParam) {
+      localDate = dateParam;
+    } else {
+      // Décale "now" par le fuseau de l'utilisateur pour obtenir son heure locale
+      const localNow = new Date(now.getTime() + tzOffsetMinutes * 60 * 1000);
+      localDate = localNow.toISOString().slice(0, 10); // YYYY-MM-DD locale
+    }
+
+    // Fenêtre UTC = 00:00:00 local → 23:59:59 local de la date localDate
+    // localMidnight UTC = localDate T00:00:00Z − tzOffset
+    const localMidnightUTC = new Date(localDate + "T00:00:00Z");
+    const utcStart = new Date(localMidnightUTC.getTime() - tzOffsetMinutes * 60 * 1000);
+    const utcEnd   = new Date(localMidnightUTC.getTime() + 24 * 60 * 60 * 1000 - tzOffsetMinutes * 60 * 1000);
+    const dayStart = utcStart.toISOString();
+    const dayEnd   = utcEnd.toISOString();
 
     // --- Récupère TOUS les matchs du jour (y compris terminés) ---
     // On les regroupe ensuite par statut pour le client
@@ -241,7 +251,7 @@ Deno.serve(async (req: Request) => {
     const { data: combosRaw } = await supabase
       .from("combo_predictions")
       .select("id, combo_type, combo_slot, combined_odds, combined_confidence, leg_count, legs, status, min_plan, created_at")
-      .eq("combo_date", targetDate)
+      .eq("combo_date", localDate)
       .order("combo_type", { ascending: true });
 
     if (combosRaw && combosRaw.length > 0) {
@@ -268,7 +278,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return jsonResponse({
-      date: targetDate,
+      date: localDate,
       count: result.length,
       summary: {
         finished: finished.length,

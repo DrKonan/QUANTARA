@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -18,9 +19,18 @@ class SubscriptionScreen extends ConsumerStatefulWidget {
   ConsumerState<SubscriptionScreen> createState() => _SubscriptionScreenState();
 }
 
+enum _SubMode { none, upgrade, renewal }
+
 class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   String _selectedPlan = AppConstants.planPro;
-  bool _forceShowUpgrade = false;
+  _SubMode _subMode = _SubMode.none;
+
+  // Plan hierarchy: 0=starter, 1=pro, 2=vip
+  static const _planRank = {
+    AppConstants.planStarter: 0,
+    AppConstants.planPro: 1,
+    AppConstants.planVip: 2,
+  };
 
   @override
   void initState() {
@@ -28,8 +38,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     AnalyticsService().logViewSubscription();
   }
 
-  List<_Plan> _plans(String currency) {
-    return [
+  List<_Plan> _plans(String currency, {String? currentPlan}) {
+    final allPlans = [
       _Plan(
         id: AppConstants.planStarter,
         label: "Starter",
@@ -63,6 +73,26 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
         badge: "Complet",
       ),
     ];
+
+    if (currentPlan != null && _subMode != _SubMode.none) {
+      final currentRank = _planRank[currentPlan] ?? -1;
+      if (_subMode == _SubMode.upgrade) {
+        // Upgrade: only plans strictly above current
+        return allPlans.where((p) => (_planRank[p.id] ?? 0) > currentRank).toList();
+      } else {
+        // Renewal: current plan + plans above
+        return allPlans.where((p) => (_planRank[p.id] ?? 0) >= currentRank).toList();
+      }
+    }
+    return allPlans;
+  }
+
+  /// Ensure the selected plan is valid given available plans.
+  void _ensureValidSelection(List<_Plan> plans) {
+    if (plans.isEmpty) return;
+    if (!plans.any((p) => p.id == _selectedPlan)) {
+      _selectedPlan = plans.first.id;
+    }
   }
 
   @override
@@ -72,11 +102,14 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     final currency = ref.watch(userCurrencyProvider);
 
     final sub = activeSub.valueOrNull;
-    if (sub != null && sub.isActive && !_forceShowUpgrade) {
+    if (sub != null && sub.isActive && _subMode == _SubMode.none) {
       return _buildActiveSubscription(sub);
     }
 
-    final plans = _plans(currency);
+    final plans = _plans(currency, currentPlan: sub?.isActive == true ? sub!.plan : null);
+    _ensureValidSelection(plans);
+
+    final isUpgrade = sub != null && sub.isActive && _subMode == _SubMode.upgrade;
 
     return Scaffold(
       body: SafeArea(
@@ -89,7 +122,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                 child: Column(
                   children: [
                     const SizedBox(height: 16),
-                    _buildHero(currency),
+                    _buildHero(currency, isUpgrade: isUpgrade, isRenewal: _subMode == _SubMode.renewal, currentPlan: sub?.plan),
                     const SizedBox(height: 28),
 
                     _buildFeature(Icons.analytics_rounded, "Analyses complètes",
@@ -197,12 +230,25 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   }
 
   Widget _buildAppBar() {
+    final bool canGoBack = _subMode != _SubMode.none;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              if (canGoBack) {
+                // In upgrade/renewal mode → go back to active subscription view
+                setState(() => _subMode = _SubMode.none);
+              } else {
+                // Top level → exit the screen
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/home');
+                }
+              }
+            },
             icon: const Icon(Icons.arrow_back_rounded,
                 color: AppColors.textPrimary),
           ),
@@ -233,10 +279,24 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     );
   }
 
-  Widget _buildHero(String currency) {
+  Widget _buildHero(String currency, {bool isUpgrade = false, bool isRenewal = false, String? currentPlan}) {
     final starterPrice = AppConstants.formatPrice(
         AppConstants.getPriceInCurrency(AppConstants.planStarter, currency),
         currency);
+
+    final String title;
+    final String subtitle;
+    if (isUpgrade) {
+      title = currentPlan == AppConstants.planStarter ? "Passez à Pro ou VIP" : "Passez à VIP";
+      subtitle = "Choisissez la formule qui vous convient";
+    } else if (isRenewal) {
+      title = "Renouveler votre abonnement";
+      subtitle = "Renouvelez ou montez en gamme";
+    } else {
+      title = "Passez à Premium";
+      subtitle = "Des pronos IA fiables\nà partir de $starterPrice/mois";
+    }
+
     return Column(
       children: [
         Container(
@@ -250,20 +310,21 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             ),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: const Icon(Icons.rocket_launch_rounded,
-              color: Colors.white, size: 36),
+          child: Icon(
+            (isUpgrade || isRenewal) ? Icons.upgrade_rounded : Icons.rocket_launch_rounded,
+            color: Colors.white, size: 36),
         ),
         const SizedBox(height: 20),
-        const Text(
-          "Passez à Premium",
-          style: TextStyle(
+        Text(
+          title,
+          style: const TextStyle(
               color: AppColors.textPrimary,
               fontSize: 24,
               fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
         Text(
-          "Des pronos IA fiables\nà partir de $starterPrice/mois",
+          subtitle,
           textAlign: TextAlign.center,
           style: const TextStyle(
               color: AppColors.textSecondary, fontSize: 14, height: 1.5),
@@ -369,9 +430,14 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                     ),
                     if (plan != AppConstants.planVip) ...[
                       const SizedBox(height: 20),
+                      // Upgrade button
                       GestureDetector(
-                        onTap: () =>
-                            setState(() => _forceShowUpgrade = true),
+                        onTap: () => setState(() {
+                          _subMode = _SubMode.upgrade;
+                          _selectedPlan = plan == AppConstants.planStarter
+                              ? AppConstants.planPro
+                              : AppConstants.planVip;
+                        }),
                         child: Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(14),
@@ -419,6 +485,53 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                         ),
                       ),
                     ],
+                    // Renewal button (always visible when active sub exists)
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        _subMode = _SubMode.renewal;
+                        _selectedPlan = plan;
+                      }),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: AppColors.textSecondary.withValues(alpha: 0.12)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Text("🔄", style: TextStyle(fontSize: 20)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Renouveler mon abonnement',
+                                    style: TextStyle(
+                                        color: AppColors.textPrimary,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  const Text(
+                                    'Prolongez votre accès de 30 jours',
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.arrow_forward_ios_rounded,
+                                color: AppColors.textSecondary, size: 14),
+                          ],
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 32),
                   ],
                 ),

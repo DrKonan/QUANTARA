@@ -55,6 +55,11 @@ class SupabaseRepository {
   // ── Today Matches + Combos (Edge Function) ──
 
   Future<DailyResponse> fetchTodayEligibleMatches({String? date, bool useEdgeFunction = true}) async {
+    // Calcule la date locale de l'utilisateur (YYYY-MM-DD) et son décalage UTC en minutes
+    final now = DateTime.now();
+    final localDate = date ?? '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final tzOffsetMinutes = now.timeZoneOffset.inMinutes; // ex: 120 pour UTC+2
+
     if (!useEdgeFunction) {
       debugPrint('[Nakora] Skipping Edge Function (no auth), using DB fallback');
       final matches = await _fetchTodayMatchesFallback(date);
@@ -65,7 +70,10 @@ class SupabaseRepository {
     try {
       final response = await _client.functions.invoke(
         'get-today-matches',
-        queryParameters: date != null ? {'date': date} : {},
+        queryParameters: {
+          'date': localDate,
+          'tz_offset': tzOffsetMinutes.toString(),
+        },
       );
 
       if (response.status != 200) {
@@ -113,18 +121,18 @@ class SupabaseRepository {
   /// access control based on the user's local profile.
   Future<List<ComboPrediction>> _fetchTodayCombos(String? date) async {
     try {
-      final now = DateTime.now().toUtc();
-      final targetDate = date ??
+      final now = DateTime.now(); // heure locale
+      final localDate = date ??
           '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
       final data = await _client
           .from('combo_predictions')
           .select('id, combo_type, combo_slot, combined_odds, combined_confidence, leg_count, legs, status, min_plan, created_at')
-          .eq('combo_date', targetDate)
+          .eq('combo_date', localDate)
           .order('combo_type', ascending: true);
       final combos = (data as List)
           .map((c) => ComboPrediction.fromJson(c as Map<String, dynamic>))
           .toList();
-      debugPrint('[Nakora] Fallback loaded ${combos.length} combos for $targetDate');
+      debugPrint('[Nakora] Fallback loaded ${combos.length} combos for $localDate');
       return combos;
     } catch (e) {
       debugPrint('[Nakora] Failed to fetch combos in fallback: $e');
@@ -133,10 +141,16 @@ class SupabaseRepository {
   }
 
   Future<List<TodayMatch>> _fetchTodayMatchesFallback(String? date) async {
-    final now = DateTime.now().toUtc();
-    final targetDate = date ?? '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final dayStart = '${targetDate}T00:00:00+00:00';
-    final dayEnd = '${targetDate}T23:59:59+00:00';
+    final now = DateTime.now(); // heure locale de l'utilisateur
+    // Date locale YYYY-MM-DD
+    final localDateStr = date ??
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    // Fenêtre UTC = 00:00:00 local → 23:59:59 local
+    final parts = localDateStr.split('-');
+    final localDayStart = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]), 0, 0, 0);
+    final localDayEnd   = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]), 23, 59, 59);
+    final dayStart = localDayStart.toUtc().toIso8601String();
+    final dayEnd   = localDayEnd.toUtc().toIso8601String();
 
     final metaMap = await _getLeagueMetaMap();
 

@@ -1,29 +1,47 @@
-import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../core/constants/app_constants.dart';
 
-enum PaymentStatus { pending, submitted, completed, failed }
+enum PaymentType { redirect, deeplink, ussd, otpRequired, inProgress, completed }
+enum PaymentStatus { pending, submitted, completed, failed, cancelled }
 
-PaymentStatus? parsePaymentStatus(String? s) {
-  switch (s) {
-    case 'completed': return PaymentStatus.completed;
-    case 'failed': return PaymentStatus.failed;
-    case 'submitted': return PaymentStatus.submitted;
-    case 'pending': return PaymentStatus.pending;
-    default: return null;
+class Subscription {
+  final String id;
+  final String plan;
+  final DateTime expiresAt;
+  final bool isActive;
+
+  const Subscription({
+    required this.id,
+    required this.plan,
+    required this.expiresAt,
+    required this.isActive,
+  });
+
+  factory Subscription.fromJson(Map<String, dynamic> json) {
+    final expiry = DateTime.parse(json['end_date'] as String? ?? json['expires_at'] as String);
+    return Subscription(
+      id: json['id'].toString(),
+      plan: json['plan'] as String,
+      expiresAt: expiry,
+      isActive: expiry.isAfter(DateTime.now()),
+    );
+  }
+
+  DateTime get endDate => expiresAt;
+
+  int get remainingDays {
+    final diff = expiresAt.difference(DateTime.now()).inDays;
+    return diff < 0 ? 0 : diff;
   }
 }
-
-enum PaymentType { redirect, ussd }
 
 class PaymentResult {
   final String paymentId;
   final PaymentStatus status;
-  final String? checkoutUrl;        // URL to open (Wave/OM deep link or checkout page)
-  final PaymentType paymentType;    // redirect = open URL, ussd = USSD push sent
-  final String? paymentMethodName;  // Human-readable method name
-  final String? ussdMessage;        // Message from operator after USSD push
+  final String? checkoutUrl;
+  final PaymentType paymentType;
+  final String? paymentMethodName;
+  final String? ussdMessage;
+  final String? otpInstructions;
 
   const PaymentResult({
     required this.paymentId,
@@ -32,180 +50,97 @@ class PaymentResult {
     this.paymentType = PaymentType.redirect,
     this.paymentMethodName,
     this.ussdMessage,
+    this.otpInstructions,
   });
-}
-
-class Subscription {
-  final String id;
-  final String plan;
-  final String status;
-  final DateTime startDate;
-  final DateTime endDate;
-  final String? provider;
-  final int? amount;
-
-  const Subscription({
-    required this.id,
-    required this.plan,
-    required this.status,
-    required this.startDate,
-    required this.endDate,
-    this.provider,
-    this.amount,
-  });
-
-  bool get isActive => status == 'active' && endDate.isAfter(DateTime.now());
-
-  int get remainingDays => endDate.difference(DateTime.now()).inDays;
-
-  String get planLabel => AppConstants.planLabels[plan] ?? plan;
-
-  factory Subscription.fromJson(Map<String, dynamic> json) {
-    return Subscription(
-      id: json['id'].toString(),
-      plan: json['plan'] as String,
-      status: json['status'] as String,
-      startDate: DateTime.parse(json['start_date'] as String),
-      endDate: DateTime.parse(json['end_date'] as String),
-      provider: json['provider'] as String?,
-      amount: json['amount'] as int?,
-    );
-  }
 }
 
 class PaymentService {
   final SupabaseClient _client;
-
   PaymentService(this._client);
 
-  /// Initiate a direct payment — Wave (app deep link) or USSD push for other operators
   Future<PaymentResult> createPayment({
     required String plan,
+    required String phone,
+    required String paymentMethod,
     String currency = 'XOF',
-    String? phone,          // Required for USSD operators
-    String? paymentMethod,  // e.g. 'wave_sn', 'orange_ci', 'mtn_ci'
+    String? otp,
   }) async {
-    if (!AppConstants.planPrices.containsKey(plan)) {
-      throw Exception('Plan invalide: $plan');
-    }
-
     final body = <String, dynamic>{
       'plan': plan,
-      'provider': 'paydunya', // always paydunya — Wave goes via SoftPay now
-      'currency': currency,
       'phone': phone,
       'payment_method': paymentMethod,
+      'currency': currency,
+      if (otp != null) 'otp': otp,
     };
-    body.removeWhere((_, v) => v == null);
 
-    debugPrint('[PaymentService] Creating payment: method=$paymentMethod, currency=$currency');
+    final response = await _client.functions.invoke(
+      'create-payment',
+      body: body,
+    );
 
-    late Map<String, dynamic> data;
-    try {
-      final response = await _client.functions.invoke(
-        'create-payment',
-        body: body,
-      );
-      data = response.data is String
-          ? jsonDecode(response.data as String) as Map<String, dynamic>
-          : response.data as Map<String, dynamic>;
-    } on FunctionException catch (e) {
-      debugPrint('[PaymentService] FunctionException status=${e.status} details=${e.details}');
-      String errorMsg = 'Erreur lors du paiement (${e.status})';
-      final details = e.details;
-      if (details is Map<String, dynamic>) {
-        errorMsg = (details['error'] as String?) ?? errorMsg;
-      } else if (details is String && details.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(details) as Map<String, dynamic>;
-          errorMsg = (decoded['error'] as String?) ?? errorMsg;
-        } catch (_) {
-          errorMsg = details;
-        }
-      }
-      throw Exception(errorMsg);
+    final data = response.data as Map<String, dynamic>?;
+    if (data == null) throw Exception('Réponse invalide du serveur');
+
+    // Check for error in response data (FunctionsException may not always throw for 4xx)
+    if (data.containsKey('error')) {
+      throw Exception(data['error'] as String);
     }
 
-    debugPrint('[PaymentService] Payment created: ${data['payment_id']}, type=${data['payment_type']}, url=${data['checkout_url']}');
-
-    final pType = switch (data['payment_type'] as String? ?? '') {
-      'redirect' => PaymentType.redirect,
-      'ussd' => PaymentType.ussd,
-      _ => PaymentType.redirect,
-    };
-
+    final type = data['payment_type'] as String? ?? 'redirect';
     return PaymentResult(
-      paymentId: data['payment_id'] as String,
+      paymentId: data['payment_id'] as String? ?? '',
       status: PaymentStatus.pending,
       checkoutUrl: data['checkout_url'] as String?,
-      paymentType: pType,
+      paymentType: _parseType(type),
       paymentMethodName: data['payment_method_name'] as String?,
       ussdMessage: data['ussd_message'] as String?,
+      otpInstructions: data['otp_instructions'] as String?,
     );
   }
 
-  /// Check payment status by polling the payments table
+  PaymentType _parseType(String type) => switch (type) {
+    'deeplink'     => PaymentType.deeplink,
+    'ussd'         => PaymentType.ussd,
+    'otp_required' => PaymentType.otpRequired,
+    'in_progress'  => PaymentType.inProgress,
+    'completed'    => PaymentType.completed,
+    _              => PaymentType.redirect,
+  };
+
   Future<PaymentStatus> checkPaymentStatus(String paymentId) async {
     final data = await _client
         .from('payments')
         .select('status')
         .eq('id', paymentId)
         .maybeSingle();
-
     if (data == null) return PaymentStatus.pending;
-
-    final status = data['status'] as String;
-    debugPrint('[PaymentService] Poll status for $paymentId: $status');
-
-    switch (status) {
-      case 'completed':
-        return PaymentStatus.completed;
-      case 'failed':
-        return PaymentStatus.failed;
-      case 'submitted':
-        return PaymentStatus.submitted;
-      default:
-        return PaymentStatus.pending;
-    }
+    return _parseStatus(data['status'] as String? ?? 'pending');
   }
 
-  /// Get user's active subscription
+  PaymentStatus _parseStatus(String s) => switch (s) {
+    'completed' => PaymentStatus.completed,
+    'failed'    => PaymentStatus.failed,
+    'cancelled' => PaymentStatus.cancelled,
+    'submitted' => PaymentStatus.submitted,
+    _           => PaymentStatus.pending,
+  };
+
   Future<Subscription?> getActiveSubscription() async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) return null;
-
-    final data = await _client
-        .from('subscriptions')
-        .select()
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .gte('end_date', DateTime.now().toUtc().toIso8601String())
-        .order('end_date', ascending: false)
-        .limit(1)
-        .maybeSingle();
-
-    if (data == null) return null;
-    return Subscription.fromJson(data);
-  }
-
-  /// Get payment history for the current user
-  Future<List<Map<String, dynamic>>> getPaymentHistory() async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) return [];
-
-    final data = await _client
-        .from('payments')
-        .select('id, plan, amount, provider, status, created_at, completed_at')
-        .eq('user_id', userId)
-        .order('created_at', ascending: false)
-        .limit(20);
-
-    return List<Map<String, dynamic>>.from(data);
-  }
-
-  /// Check if user has premium access
-  Future<bool> isPremium() async {
-    final sub = await getActiveSubscription();
-    return sub?.isActive ?? false;
+    try {
+      final userId = _client.auth.currentUser?.id;
+      if (userId == null) return null;
+      final data = await _client
+          .from('subscriptions')
+          .select('id, plan, end_date')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .order('end_date', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (data == null) return null;
+      return Subscription.fromJson(data);
+    } catch (_) {
+      return null;
+    }
   }
 }

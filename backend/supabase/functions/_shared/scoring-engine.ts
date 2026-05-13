@@ -506,7 +506,7 @@ export function computePrematchScores(
   }
 
   // ── 5. Corners Over/Under (ligne dynamique) ─────────────────────
-  // V1.2 — Utilise les vrais corners si disponibles, sinon proxy intensité
+  // V1.3 — Utilise les vrais corners si disponibles, sinon proxy intensité
   const leagueAvgCorners = ctx.leagueAvgCorners ?? 10.5;
   const leagueAvgGoals = 1.35;
   const homeIntensity = ((home.homeGoalsScored + home.homeGoalsConceded) / 2) / leagueAvgGoals;
@@ -516,13 +516,15 @@ export function computePrematchScores(
     : leagueAvgCorners * (homeIntensity + awayIntensity) / 2;
   const cornerLine = selectBestLine(estimatedCorners, [7.5, 8.5, 9.5, 10.5, 11.5, 12.5]);
 
-  // Sigmoid : plus l'estimation s'éloigne de la ligne, plus la confiance est forte
-  const overCornersRaw = 1 / (1 + Math.exp(-(estimatedCorners - cornerLine) / 1.5));
+  // Sigmoid avec temperature=3.0 (vs 1.5 avant) : courbe aplatie, confidences réalistes.
+  // Avec temp=3.0 : écart de +3 au-dessus de la ligne → 73% (vs 99% avant)
+  // Avec temp=3.0 : écart de +1.5 → 62% (vs 84% avant)
+  const overCornersRaw = 1 / (1 + Math.exp(-(estimatedCorners - cornerLine) / 3.0));
   const underCornersRaw = 1 - overCornersRaw;
 
   // Bonus H2H : matchs intenses entre ces équipes = plus de corners probable
   const h2hGoalsTotal = ctx.h2hTotal > 0 ? ctx.h2hHomeGoalsAvg + ctx.h2hAwayGoalsAvg : 2.5;
-  const h2hIntensityBonus = h2hGoalsTotal > 2.5 ? 0.05 : -0.03;
+  const h2hIntensityBonus = h2hGoalsTotal > 2.5 ? 0.04 : -0.02;
 
   const overCornersScore = overCornersRaw + h2hIntensityBonus;
   const underCornersScore = underCornersRaw - h2hIntensityBonus;
@@ -531,7 +533,7 @@ export function computePrematchScores(
     results.push({
       prediction: `over_${cornerLine}`,
       prediction_type: "corners",
-      confidence: Math.min(overCornersScore, 0.99),
+      confidence: Math.min(overCornersScore, 0.95),
       score_breakdown: {
         estimated_corners: estimatedCorners,
         line: cornerLine,
@@ -545,7 +547,7 @@ export function computePrematchScores(
     results.push({
       prediction: `under_${cornerLine}`,
       prediction_type: "corners",
-      confidence: Math.min(underCornersScore, 0.99),
+      confidence: Math.min(underCornersScore, 0.95),
       score_breakdown: {
         estimated_corners: estimatedCorners,
         line: cornerLine,
@@ -557,7 +559,7 @@ export function computePrematchScores(
   }
 
   // ── 6. Cards Over/Under (ligne dynamique) ───────────────────────
-  // V1.2 — Vrais cartons × facteur arbitre (strict = plus de cartons)
+  // V1.3 — Vrais cartons × facteur arbitre (strict = plus de cartons)
   // 4.5 = moyenne ligue cartons totaux/match (référence de normalisation)
   const refereeFactor = ctx.refereeAvgCards != null
     ? Math.max(0.70, Math.min(1.50, ctx.refereeAvgCards / 4.5))
@@ -567,12 +569,14 @@ export function computePrematchScores(
   const estimatedCards = homeAvgCards + awayAvgCards;
   const cardLine = selectBestLine(estimatedCards, [2.5, 3.5, 4.5, 5.5, 6.5]);
 
-  // Sigmoid centrée sur la ligne
-  const overCardsRaw = 1 / (1 + Math.exp(-(estimatedCards - cardLine) / 1.0));
+  // Sigmoid avec temperature=2.0 (vs 1.0 avant) : courbe aplatie.
+  // Avec temp=2.0 : écart de +1 au-dessus de la ligne → 62% (vs 73% avant)
+  // Evite les confidences extrêmes (0.92+) pour les cartons
+  const overCardsRaw = 1 / (1 + Math.exp(-(estimatedCards - cardLine) / 2.0));
   const underCardsRaw = 1 - overCardsRaw;
 
   // Bonus enjeu : matchs à enjeu = plus de tension = plus de cartons
-  const stakesCardBonus = ctx.isHighStakes ? 0.05 : 0;
+  const stakesCardBonus = ctx.isHighStakes ? 0.04 : 0;
 
   const overCardsScore = overCardsRaw + stakesCardBonus;
   const underCardsScore = underCardsRaw - stakesCardBonus;
@@ -581,7 +585,7 @@ export function computePrematchScores(
     results.push({
       prediction: `over_${cardLine}`,
       prediction_type: "cards",
-      confidence: Math.min(overCardsScore, 0.99),
+      confidence: Math.min(overCardsScore, 0.92),
       score_breakdown: {
         estimated_cards: estimatedCards,
         line: cardLine,
@@ -595,7 +599,7 @@ export function computePrematchScores(
     results.push({
       prediction: `under_${cardLine}`,
       prediction_type: "cards",
-      confidence: Math.min(underCardsScore, 0.99),
+      confidence: Math.min(underCardsScore, 0.92),
       score_breakdown: {
         estimated_cards: estimatedCards,
         line: cardLine,
@@ -734,6 +738,9 @@ export function computePrematchScores(
 // Sélectionne les 1-2 meilleurs pronos par match (top picks)
 // V1.1 : confiance minimum relevée à 0.75 (de 0.62)
 // ----------------------------------------------------------------
+// Types exclus des top picks (pas de vraies cotes bookmakers, calibration incertaine)
+const TOP_PICK_EXCLUDED_TYPES = new Set(["corners", "cards", "correct_score", "first_team_to_score"]);
+
 export function selectTopPicks<T extends { confidence: number; prediction_type: string; is_top_pick?: boolean }>(
   results: T[],
   maxPicks = 2,
@@ -748,10 +755,11 @@ export function selectTopPicks<T extends { confidence: number; prediction_type: 
   let picked = 0;
   const pickedTypes = new Set<string>();
 
+  // Priorité 1 : marchés avec vraies cotes bookmakers
   for (const c of sorted) {
     if (picked >= maxPicks) break;
     if (c.confidence < minConfidence) break;
-    // Un seul pick par type de marché (pas home_win ET away_win)
+    if (TOP_PICK_EXCLUDED_TYPES.has(c.prediction_type)) continue;
     if (pickedTypes.has(c.prediction_type)) continue;
 
     c.is_top_pick = true;
@@ -759,9 +767,10 @@ export function selectTopPicks<T extends { confidence: number; prediction_type: 
     picked++;
   }
 
-  // Fallback : si aucun pick, prend le meilleur si >= 0.55
-  if (picked === 0 && sorted.length > 0 && sorted[0].confidence >= 0.55) {
-    sorted[0].is_top_pick = true;
+  // Fallback : si aucun pick, prend le meilleur marché principal >= 0.55
+  if (picked === 0 && sorted.length > 0) {
+    const best = sorted.find(c => !TOP_PICK_EXCLUDED_TYPES.has(c.prediction_type) && c.confidence >= 0.55);
+    if (best) best.is_top_pick = true;
   }
 
   return results;

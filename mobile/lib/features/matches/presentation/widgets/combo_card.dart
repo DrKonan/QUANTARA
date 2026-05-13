@@ -47,15 +47,17 @@ class ComboCard extends StatelessWidget {
           children: [
             // Header
             _buildHeader(accentColor),
-            // Legs list
-            if (!isLocked && combo.legs != null)
-              ...combo.legs!.take(4).map((leg) => _buildLegRow(leg, accentColor)),
-            if (!isLocked && combo.legs != null && combo.legs!.length > 4)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                child: Text(
-                  '+${combo.legs!.length - 4} autre(s)',
-                  style: TextStyle(color: Colors.white.withAlpha(120), fontSize: 11),
+            // Legs list — scrollable verticalement pour afficher toutes les jambes
+            if (!isLocked && combo.legs != null && combo.legs!.isNotEmpty)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 210),
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: Column(
+                    children: combo.legs!
+                        .map((leg) => _buildLegRow(leg, accentColor))
+                        .toList(),
+                  ),
                 ),
               ),
             // Locked overlay

@@ -24,6 +24,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _usePhone = true;
   bool _canBiometric = false;
   String _bioLabel = '';
+  String _bioDisplay = ''; // masked identifier shown on the button
   bool _bioLoading = false;
   PaymentCountry _selectedCountry = AppConstants.defaultCountry;
 
@@ -41,7 +42,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final hasCreds = await bio.hasStoredCredentials;
     if (supported && enabled && hasCreds) {
       final label = await bio.biometricLabel;
-      if (mounted) setState(() { _canBiometric = true; _bioLabel = label; });
+      final display = await bio.storedDisplay;
+      if (mounted) {
+        setState(() {
+          _canBiometric = true;
+          _bioLabel = label;
+          _bioDisplay = display ?? '';
+        });
+      }
     }
   }
 
@@ -336,7 +344,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 prefixIcon: Icons.lock_outline,
                 isPassword: true,
                 textInputAction: TextInputAction.done,
-                onFieldSubmitted: (_) => _login,
+                onFieldSubmitted: (_) => _login(),
                 validator: (v) {
                   if (v == null || v.isEmpty) return "Mot de passe requis";
                   return null;
@@ -383,18 +391,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                height: 52,
-                child: OutlinedButton.icon(
+                height: 56,
+                child: OutlinedButton(
                   onPressed: (isLoading || _bioLoading) ? null : _loginWithBiometric,
-                  icon: _bioLoading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.gold))
-                      : const Icon(Icons.fingerprint, size: 22),
-                  label: Text(_bioLabel, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.gold,
                     side: const BorderSide(color: AppColors.gold, width: 1.2),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
+                  child: _bioLoading
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.gold))
+                      : Row(
+                          children: [
+                            const Icon(Icons.fingerprint, size: 22),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(_bioLabel, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                                  if (_bioDisplay.isNotEmpty)
+                                    Text(
+                                      _bioDisplay,
+                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w400, color: AppColors.textSecondary),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
               ),
             ],

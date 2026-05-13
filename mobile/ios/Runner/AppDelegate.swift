@@ -29,4 +29,10 @@ import FirebaseMessaging
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
   }
+
+  // Forward custom URL schemes (nakora://) to app_links plugin
+  override func application(_ app: UIApplication, open url: URL,
+                             options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+    return super.application(app, open: url, options: options)
+  }
 }

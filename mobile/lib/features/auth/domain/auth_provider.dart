@@ -103,11 +103,12 @@ class AuthService {
           email: hasRealEmail ? email : null,
           grantTrial: trialAllowed,
         );
-        NotificationService().registerToken();
+        NotificationService().registerToken().catchError((e) {
+          debugPrint('[auth] registerToken error: $e');
+        });
         AnalyticsService().logSignUp(hasRealEmail ? 'email' : 'phone');
         AnalyticsService().setUserId(loginResponse.user?.id);
         if (trialAllowed) AnalyticsService().logTrialStart();
-        _saveBiometricCredentials(authEmail, password);
         // Register device trial
         await DeviceFingerprintService().registerTrial(
           userId: loginResponse.user!.id,
@@ -155,11 +156,12 @@ class AuthService {
       }
     }
 
-    NotificationService().registerToken();
+    NotificationService().registerToken().catchError((e) {
+      debugPrint('[auth] registerToken error: $e');
+    });
     AnalyticsService().logSignUp(hasRealEmail ? 'email' : 'phone');
     AnalyticsService().setUserId(response.user?.id);
     if (trialAllowed) AnalyticsService().logTrialStart();
-    _saveBiometricCredentials(authEmail, password);
 
     // Register device trial
     if (response.user != null) {
@@ -242,37 +244,94 @@ class AuthService {
     String? email,
     required String password,
   }) async {
-    final authEmail = email?.isNotEmpty == true
-        ? email!
-        : phoneToAuthEmail(phone ?? '');
+    String authEmail;
+
+    if (email?.isNotEmpty == true) {
+      authEmail = email!;
+    } else {
+      // Résout l'email auth réel pour ce numéro via l'edge function.
+      // Nécessaire quand l'utilisateur s'est inscrit avec un vrai email :
+      // dans ce cas l'identifiant Supabase auth est l'email, pas le dérivé phone.
+      authEmail = await _resolveAuthEmailForPhone(phone ?? '');
+    }
 
     final response = await _client.auth.signInWithPassword(
       email: authEmail,
       password: password,
     );
 
-    NotificationService().registerToken();
+    NotificationService().registerToken().catchError((e) {
+      debugPrint('[auth] registerToken error: $e');
+    });
     AnalyticsService().logLogin(email?.isNotEmpty == true ? 'email' : 'phone');
     AnalyticsService().setUserId(response.user?.id);
 
-    // Save credentials for biometric re-login
-    _saveBiometricCredentials(authEmail, password);
+    // Update biometric credentials only if this exact account is already saved.
+    // Never silently overwrite a different account's credentials.
+    final displayId = phone ?? email ?? authEmail;
+    _saveBiometricCredentialsIfSameAccount(authEmail, password, displayId);
 
     return response;
   }
 
-  /// Silently save credentials for biometric login only if user has enabled it.
-  void _saveBiometricCredentials(String authEmail, String password) {
+  /// Résout l'email auth Supabase pour un numéro de téléphone.
+  /// Appelle l'edge function lookup-phone-auth (service role).
+  Future<String> _resolveAuthEmailForPhone(String phone) async {
+    try {
+      final result = await _client.functions.invoke(
+        'lookup-phone-auth',
+        method: HttpMethod.post,
+        body: {'phone': phone},
+      );
+      final data = result.data as Map<String, dynamic>?;
+      final resolved = data?['auth_email'] as String?;
+      if (resolved != null && resolved.isNotEmpty) {
+        debugPrint('[Nakora] Phone auth resolved: $resolved');
+        return resolved;
+      }
+    } catch (e) {
+      debugPrint('[Nakora] lookup-phone-auth failed: $e');
+    }
+    // Fallback : email dérivé du téléphone
+    return phoneToAuthEmail(phone);
+  }
+
+  /// Update biometric credentials only if biometric is enabled AND the stored
+  /// account matches the one just logged in. Never overwrites a different account.
+  void _saveBiometricCredentialsIfSameAccount(String authEmail, String password, String displayId) {
     BiometricService().isDeviceSupported.then((supported) async {
       if (!supported) return;
       final enabled = await BiometricService().isEnabled;
-      if (enabled) {
+      if (!enabled) return;
+      final stored = await BiometricService().storedAuthEmail;
+      // Only refresh if it's the same account (or no account stored yet).
+      if (stored == null || stored == authEmail) {
         await BiometricService().saveCredentials(
           authEmail: authEmail,
           password: password,
+          display: _maskIdentifier(displayId),
         );
       }
     });
+  }
+
+  /// Masks a phone or email for display: "+225 07 XX XX 56" or "us••@gmail.com".
+  String _maskIdentifier(String id) {
+    if (id.startsWith('+') || RegExp(r'^\d').hasMatch(id)) {
+      // Phone number — keep country code + last 2 digits, mask the rest
+      final clean = id.replaceAll(' ', '');
+      if (clean.length <= 6) return clean;
+      return '${clean.substring(0, clean.length - 6)}••••${clean.substring(clean.length - 2)}';
+    }
+    // Email — show first 2 chars + domain
+    final parts = id.split('@');
+    if (parts.length == 2) {
+      final local = parts[0];
+      final domain = parts[1];
+      final visible = local.length > 2 ? local.substring(0, 2) : local;
+      return '$visible••@$domain';
+    }
+    return id;
   }
 
   Future<void> signOut() async {

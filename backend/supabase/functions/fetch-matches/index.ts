@@ -117,7 +117,7 @@ Deno.serve(async (req: Request) => {
 
     const primaryCount = filtered.length;
 
-    // 4. AUTO-EXPANSION : si pas assez de matchs, enrichir avec les ligues Tier 3
+    // 4. AUTO-EXPANSION : si pas assez de matchs, enrichir progressivement
     const { data: minDailyRow } = await supabase
       .from("app_config")
       .select("value")
@@ -129,6 +129,7 @@ Deno.serve(async (req: Request) => {
     if (filtered.length < MIN_DAILY_MATCHES) {
       console.log(`[fetch-matches] Only ${filtered.length} matches from active leagues (need ${MIN_DAILY_MATCHES}). Auto-expanding...`);
 
+      // Etape 1 : ligues Tier 3 deja configurees en DB
       const { data: expansionLeagues } = await supabase
         .from("leagues_config")
         .select("league_id")
@@ -136,8 +137,10 @@ Deno.serve(async (req: Request) => {
 
       if (expansionLeagues && expansionLeagues.length > 0) {
         const expansionIds = new Set(expansionLeagues.map((l: { league_id: number }) => l.league_id));
+        const currentFixtureIds = new Set(filtered.map(f => f.fixture.id));
 
         const expansionFixtures = allFixtures.filter((f) => {
+          if (currentFixtureIds.has(f.fixture.id)) return false;
           if (!expansionIds.has(f.league.id)) return false;
           if (!f.teams.home.id || !f.teams.away.id) return false;
           return true;
@@ -150,9 +153,37 @@ Deno.serve(async (req: Request) => {
           filtered.push(f);
           leagueTierMap.set(f.league.id, 3);
         }
-        expansionUsed = extra.length;
-        if (expansionUsed > 0) {
-          console.log(`[fetch-matches] Auto-expansion: +${expansionUsed} matches from ${new Set(extra.map(f => f.league.name)).size} expansion leagues`);
+        expansionUsed += extra.length;
+        if (extra.length > 0) {
+          console.log(`[fetch-matches] Expansion Tier3: +${extra.length} matches from ${new Set(extra.map(f => f.league.name)).size} leagues`);
+        }
+      }
+
+      // Etape 2 : si encore insuffisant, piocher dans toutes les ligues de l'API
+      // Filtre qualite : exclut U18-U23, amicaux, reservistes, futsal, virtual
+      if (filtered.length < MIN_DAILY_MATCHES) {
+        const LOW_QUALITY_KEYWORDS = ["u18", "u19", "u20", "u21", "u23", "youth", "reserve", "friendly", "amateur", "women", "futsal", "beach", "virtual", "esport"];
+        const alreadyIncluded = new Set(filtered.map(f => f.fixture.id));
+
+        const fallbackFixtures = allFixtures.filter((f) => {
+          if (alreadyIncluded.has(f.fixture.id)) return false;
+          if (!f.teams.home.id || !f.teams.away.id) return false;
+          const leagueLower = f.league.name.toLowerCase();
+          if (LOW_QUALITY_KEYWORDS.some(kw => leagueLower.includes(kw))) return false;
+          return true;
+        });
+
+        const stillNeeded = MIN_DAILY_MATCHES - filtered.length;
+        const fallbackExtra = fallbackFixtures.slice(0, stillNeeded);
+
+        for (const f of fallbackExtra) {
+          filtered.push(f);
+          leagueTierMap.set(f.league.id, 4); // tier 4 = expansion API globale
+        }
+        expansionUsed += fallbackExtra.length;
+        if (fallbackExtra.length > 0) {
+          const leagueNames = [...new Set(fallbackExtra.map(f => f.league.name))].slice(0, 5).join(", ");
+          console.log(`[fetch-matches] Expansion API globale: +${fallbackExtra.length} matches (ex: ${leagueNames})`);
         }
       }
     }
@@ -184,8 +215,11 @@ Deno.serve(async (req: Request) => {
       away_score: f.goals.away ?? null,
     }));
 
+    // Deduplication : evite "ON CONFLICT affects row a second time" si doublons dans filtered
+    const dedupedRows = rows.filter((row, idx, arr) => arr.findIndex(r => r.external_id === row.external_id) === idx);
+
     // 4. Upsert — retourne les IDs pour savoir lesquels sont nouveaux
-    const externalIds = rows.map((r) => r.external_id);
+    const externalIds = dedupedRows.map((r) => r.external_id);
 
     // Identifie les matchs déjà en DB avant l'upsert
     const { data: existingMatches } = await supabase
@@ -196,14 +230,14 @@ Deno.serve(async (req: Request) => {
 
     const { error: upsertError } = await supabase
       .from("matches")
-      .upsert(rows, { onConflict: "external_id", ignoreDuplicates: false });
+      .upsert(dedupedRows, { onConflict: "external_id", ignoreDuplicates: false });
 
     if (upsertError) throw upsertError;
 
     // 5. Identifie les NOUVEAUX matchs (pas encore en DB avant l'upsert)
     const newExternalIds = externalIds.filter((eid) => !existingSet.has(eid));
 
-    console.log(`[fetch-matches] Upserted ${rows.length} matches (${newExternalIds.length} new)`);
+    console.log(`[fetch-matches] Upserted ${dedupedRows.length} matches (${newExternalIds.length} new)`);
 
     // 6. Déclenche predict-prematch pour les nouveaux matchs scheduled
     let predictTriggered = 0;
@@ -219,21 +253,31 @@ Deno.serve(async (req: Request) => {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-        // Déclenche predict-prematch en parallèle (mode initial, sans lineups)
-        const results = await Promise.allSettled(
-          newMatches.map((m: { id: number }) =>
-            fetch(`${supabaseUrl}/functions/v1/predict-prematch`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${serviceKey}`,
-              },
-              body: JSON.stringify({ match_id: m.id }),
-            })
-          ),
-        );
-        predictTriggered = results.filter((r) => r.status === "fulfilled").length;
-        console.log(`[fetch-matches] Auto-triggered predict-prematch for ${predictTriggered}/${newMatches.length} new matches`);
+        // Declenche predict-prematch sequentiellement par batch de 3
+        // (evite les BOOT_ERROR/timeout causes par trop d'invocations simultanees)
+        const BATCH_SIZE = 3;
+        const BATCH_DELAY_MS = 3000;
+
+        for (let i = 0; i < newMatches.length; i += BATCH_SIZE) {
+          const batch = (newMatches as Array<{ id: number }>).slice(i, i + BATCH_SIZE);
+          const results = await Promise.allSettled(
+            batch.map((m) =>
+              fetch(`${supabaseUrl}/functions/v1/predict-prematch`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${serviceKey}`,
+                },
+                body: JSON.stringify({ match_id: m.id }),
+              })
+            ),
+          );
+          predictTriggered += results.filter((r) => r.status === "fulfilled").length;
+          if (i + BATCH_SIZE < newMatches.length) {
+            await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+          }
+        }
+        console.log(`[fetch-matches] Auto-triggered predict-prematch for ${predictTriggered}/${newMatches.length} new matches (batched)`);
       }
     }
 

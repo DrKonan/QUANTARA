@@ -2,30 +2,28 @@
 // NAKORA — Edge Function : generate-combos
 //
 // Génère les combinés pour UN créneau horaire (slot) :
-//   • 'day'     → matchs AVANT 22h UTC  (lancé à 4h UTC)
-//   • 'evening' → matchs À PARTIR DE 22h UTC (lancé à 21h UTC)
+//   • 'day'     → matchs AVANT 22h UTC  (lancé à 9h UTC)
+//   • 'evening' → matchs A PARTIR DE 22h UTC (lancé à 23h UTC)
 //
 // Chaque slot produit jusqu'à 2 combos : 'safe' (PRO+VIP) et 'bold' (VIP)
 //
-// STRATÉGIE :
-// — Sélectionne des prédictions à confiance ≥ 0.72 avec cotes bookmaker
-// — Marchés robustes uniquement : btts, over_under, double_chance
-//   (peu sensibles aux changements de compo)
-// — Max 1 jambe par match, diversité de ligues favorisée
-// — "Sûr" (3-4 jambes, cote ~3-6) → PRO + VIP
-// — "Audacieux" (4-6 jambes, cote ~6-15) → VIP uniquement
-//
-// Cron : 4h UTC → slot=day | 21h UTC → slot=evening
+// STRATEGIE :
+// — Priorité absolue à la CONFIANCE : on prend les prédictions
+//   les plus certaines, peu importe le marché ou la cote.
+// — Seul 'correct_score' est exclu (fondamentalement imprévisible).
+// — Safe  : top 3 par confiance (seuil ≥ 0.78), 1 par match, max 2 par ligue
+// — Bold  : top 5 par confiance (seuil ≥ 0.72), 1 par match, max 2 par ligue
+// — Les cotes sont affichées pour info mais ne pilotent PAS la sélection.
 // ============================================================
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse } from "../_shared/helpers.ts";
 
-// V1.2 — Marchés éligibles pour les combinés
-// result inclus (marché le plus commun) ; correct_score et first_team exclus (trop aléatoires)
-const COMBO_MARKETS = ["btts", "over_under", "double_chance", "result", "half_time", "clean_sheet"];
-const MIN_CONFIDENCE = 0.72;  // abaissé de 0.80 → couvre bien plus de prédictions
-const MIN_ODDS = 1.15;        // cote min par jambe
-const MAX_ODDS = 4.00;        // cote max par jambe (pool commun safe+bold)
+const SAFE_MIN_CONFIDENCE = 0.78;  // seuil jambes du combo safe
+const BOLD_MIN_CONFIDENCE = 0.72;  // seuil jambes du combo bold
+const MIN_LEG_ODDS = 1.40;         // cote min par jambe — évite les paris sans valeur
+
+// correct_score et first_team_to_score exclus : trop aléatoires quelle que soit la confiance
+const EXCLUDED_MARKETS = ["correct_score", "first_team_to_score"];
 
 interface EligiblePrediction {
   id: number;
@@ -54,44 +52,34 @@ interface ComboLeg {
 }
 
 // Cote synthétique quand le bookmaker ne fournit pas de données
-// Formule : 1 / (confiance × 0.95) — simule une marge bookmaker de 5%
+// Affichage seulement — ne pilote pas la sélection
 function syntheticOdds(confidence: number): number {
   return Math.round((1 / (confidence * 0.95)) * 100) / 100;
 }
 
 // ----------------------------------------------------------------
-// Algorithme de sélection des jambes
-// Greedy : prend les meilleures prédictions en évitant les doublons
-// de match et en favorisant la diversité de ligues
+// Sélection des jambes uniquement par confiance décroissante
+// Max 1 jambe par match, max 2 par ligue
 // ----------------------------------------------------------------
 function selectLegs(
   pool: EligiblePrediction[],
   targetLegs: number,
-  targetMinOdds: number,
-  targetMaxOdds: number,
   excludeMatchIds: Set<number>,
   minLegs = 2,
 ): ComboLeg[] | null {
-  // Trie par un score combiné : haute confiance + cote intéressante
-  const scored = pool
+  // Tri par confiance décroissante — c'est le seul critère
+  const sorted = pool
     .filter(p => !excludeMatchIds.has(p.match_id))
-    .map(p => ({
-      ...p,
-      // Score = confiance * log(cote) — favorise les cotes > 1.5 à confiance égale
-      _score: p.confidence * Math.log(p.bookmaker_odds + 0.5),
-    }))
-    .sort((a, b) => b._score - a._score);
+    .sort((a, b) => b.confidence - a.confidence);
 
-  // Greedy : prend les meilleures, max 1 par match, favorise diversité de ligues
   const selected: ComboLeg[] = [];
   const usedMatches = new Set<number>();
-  const usedLeagues = new Map<number, number>(); // league_id → count
+  const usedLeagues = new Map<number, number>();
 
-  for (const p of scored) {
+  for (const p of sorted) {
     if (selected.length >= targetLegs) break;
     if (usedMatches.has(p.match_id)) continue;
-    
-    // Limite à 2 jambes max par ligue (favorise diversité)
+
     const leagueCount = usedLeagues.get(p.league_id) ?? 0;
     if (leagueCount >= 2) continue;
 
@@ -110,22 +98,7 @@ function selectLegs(
     usedLeagues.set(p.league_id, leagueCount + 1);
   }
 
-  if (selected.length < minLegs) return null;
-
-  // Ajuste si les cotes combinées dépassent le plafond cible
-  // Bug fix : recalcule runningOdds à chaque retrait (contrairement à l'ancienne const)
-  let runningOdds = selected.reduce((acc, l) => acc * l.bookmaker_odds, 1);
-  while (runningOdds > targetMaxOdds && selected.length > minLegs) {
-    selected.sort((a, b) => a.confidence - b.confidence);
-    selected.shift(); // retire la jambe la moins confiante
-    runningOdds = selected.reduce((acc, l) => acc * l.bookmaker_odds, 1);
-  }
-
-  if (selected.length < minLegs) return null;
-  // On accepte même si on est un peu sous targetMinOdds (mieux qu'aucun combo)
-  if (runningOdds < targetMinOdds * 0.65) return null;
-
-  return selected;
+  return selected.length >= minLegs ? selected : null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -201,29 +174,29 @@ Deno.serve(async (req: Request) => {
       .in("match_id", matchIds)
       .eq("is_published", true)
       .eq("is_live", false)
-      .gte("confidence", MIN_CONFIDENCE)
+      .gte("confidence", BOLD_MIN_CONFIDENCE)
       .order("confidence", { ascending: false });
 
     if (!predsRaw || predsRaw.length === 0) {
-      console.log(`[generate-combos] No eligible predictions with odds for ${today}`);
-      return jsonResponse({ message: "No predictions with bookmaker odds", date: today });
+      console.log(`[generate-combos] No eligible predictions for ${today}`);
+      return jsonResponse({ message: "No eligible predictions", date: today });
     }
 
-    // Filtre : marchés éligibles + cotes dans la plage
-    // Si bookmaker_odds est null → cote synthétique basée sur la confiance
-    const pool: EligiblePrediction[] = [];
+    // Pool unique : exclut uniquement les marchés fondamentalement imprévisibles
+    // Pas de filtre sur les cotes — la confiance prime
+    const allPool: EligiblePrediction[] = [];
     for (const p of predsRaw as Array<{ id: number; match_id: number; prediction_type: string; prediction: string; confidence: number; bookmaker_odds: number | null }>) {
-      if (!COMBO_MARKETS.includes(p.prediction_type)) continue;
+      if (EXCLUDED_MARKETS.includes(p.prediction_type)) continue;
 
       const odds = p.bookmaker_odds ?? syntheticOdds(p.confidence);
-      if (odds < MIN_ODDS || odds > MAX_ODDS) continue;
+      if (odds < MIN_LEG_ODDS) continue; // cote trop basse = pas de valeur dans un combo
 
       const match = matchMap.get(p.match_id);
       if (!match) continue;
 
-      pool.push({
+      allPool.push({
         ...p,
-        bookmaker_odds: odds,
+        bookmaker_odds: p.bookmaker_odds ?? syntheticOdds(p.confidence),
         home_team: match.home_team,
         away_team: match.away_team,
         league: match.league,
@@ -232,11 +205,13 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    console.log(`[generate-combos] Pool: ${pool.length} eligible predictions from ${matchesRaw.length} matches (slot=${slot})`);
+    // Sous-pool safe : confiance >= SAFE_MIN_CONFIDENCE
+    const safePool = allPool.filter(p => p.confidence >= SAFE_MIN_CONFIDENCE);
 
-    if (pool.length < 3) {
-      console.log(`[generate-combos] Not enough eligible predictions (need ≥3)`);
-      return jsonResponse({ message: "Not enough eligible predictions for combos", pool_size: pool.length, slot });
+    console.log(`[generate-combos] Pool: ${allPool.length} predictions (safe pool: ${safePool.length}) from ${matchesRaw.length} matches (slot=${slot})`);
+
+    if (allPool.length < 2) {
+      return jsonResponse({ message: "Not enough eligible predictions for combos", pool_size: allPool.length, slot });
     }
 
     const combosToInsert: Array<{
@@ -250,8 +225,8 @@ Deno.serve(async (req: Request) => {
       min_plan: string;
     }> = [];
 
-    // ── COMBO 1 : "SÛR" — 2-4 jambes, cote cible 1.6–8.0 ──────
-    const safeLegs = selectLegs(pool, 4, 1.6, 8.0, new Set(), 2);
+    // ── COMBO 1 : "SUR" — top 3 par confiance (≥ 0.78), 1 par match ──
+    const safeLegs = selectLegs(safePool, 3, new Set(), 2);
     if (safeLegs) {
       const combinedOdds = safeLegs.reduce((acc, l) => acc * l.bookmaker_odds, 1);
       const combinedConf = safeLegs.reduce((acc, l) => acc * l.confidence, 1);
@@ -268,39 +243,9 @@ Deno.serve(async (req: Request) => {
       console.log(`[generate-combos] Safe combo: ${safeLegs.length} legs, odds=${combinedOdds.toFixed(2)}, conf=${combinedConf.toFixed(3)}`);
     }
 
-    // ── COMBO 2 : "AUDACIEUX" — 4-6 jambes, cote entre 6.0 et 20.0 ─
-    // Exclut les matchs déjà utilisés dans le combo sûr
-    const safeMatchIds = new Set(safeLegs?.map(l => l.match_id) ?? []);
-    
-    // Pour le combo audacieux, élargit le pool : confiance >= 0.70
-    const { data: widePreds } = await supabase
-      .from("predictions")
-      .select("id, match_id, prediction_type, prediction, confidence, bookmaker_odds")
-      .in("match_id", matchIds)
-      .eq("is_published", true)
-      .eq("is_live", false)
-      .gte("confidence", 0.70)
-      .order("confidence", { ascending: false });
-
-    const widePool: EligiblePrediction[] = [];
-    for (const p of (widePreds ?? []) as Array<{ id: number; match_id: number; prediction_type: string; prediction: string; confidence: number; bookmaker_odds: number | null }>) {
-      if (!COMBO_MARKETS.includes(p.prediction_type)) continue;
-      const odds = p.bookmaker_odds ?? syntheticOdds(p.confidence);
-      if (odds < MIN_ODDS || odds > MAX_ODDS) continue;
-      const match = matchMap.get(p.match_id);
-      if (!match) continue;
-      widePool.push({
-        ...p,
-        bookmaker_odds: odds,
-        home_team: match.home_team,
-        away_team: match.away_team,
-        league: match.league,
-        league_id: match.league_id,
-        match_date: match.match_date,
-      });
-    }
-
-    const boldLegs = selectLegs(widePool, 6, 4.0, 30.0, safeMatchIds, 3);
+    // ── COMBO 2 : "AUDACIEUX" — top 5 par confiance (≥ 0.72) ──
+    // Peut inclure les mêmes matchs que le safe (pas d'exclusion)
+    const boldLegs = selectLegs(allPool, 5, new Set(), 3);
     if (boldLegs) {
       const combinedOdds = boldLegs.reduce((acc, l) => acc * l.bookmaker_odds, 1);
       const combinedConf = boldLegs.reduce((acc, l) => acc * l.confidence, 1);
