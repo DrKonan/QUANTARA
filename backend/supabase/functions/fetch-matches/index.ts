@@ -123,17 +123,19 @@ Deno.serve(async (req: Request) => {
       .select("value")
       .eq("key", "min_daily_matches")
       .single();
-    const MIN_DAILY_MATCHES = minDailyRow ? parseInt(minDailyRow.value, 10) : 25;
+    const MIN_DAILY_MATCHES = minDailyRow ? parseInt(minDailyRow.value, 10) : 30;
 
     let expansionUsed = 0;
     if (filtered.length < MIN_DAILY_MATCHES) {
       console.log(`[fetch-matches] Only ${filtered.length} matches from active leagues (need ${MIN_DAILY_MATCHES}). Auto-expanding...`);
 
-      // Etape 1 : ligues Tier 3 deja configurees en DB
+      // Etape 1 : ligues Tier 3 deja configurees en DB (IS_ACTIVE = false)
+      // Triées par tier asc : Tier 3 DB d'abord (plus fiables), puis fallback global
       const { data: expansionLeagues } = await supabase
         .from("leagues_config")
-        .select("league_id")
-        .eq("tier", 3);
+        .select("league_id, tier")
+        .eq("tier", 3)
+        .eq("is_active", false);
 
       if (expansionLeagues && expansionLeagues.length > 0) {
         const expansionIds = new Set(expansionLeagues.map((l: { league_id: number }) => l.league_id));
@@ -160,13 +162,19 @@ Deno.serve(async (req: Request) => {
       }
 
       // Etape 2 : si encore insuffisant, piocher dans toutes les ligues de l'API
-      // Filtre qualite : exclut U18-U23, amicaux, reservistes, futsal, virtual
+      // Filtre qualite : exclut jeunes, amicaux, futsal, virtual, femmes (hors config)
       if (filtered.length < MIN_DAILY_MATCHES) {
-        const LOW_QUALITY_KEYWORDS = ["u18", "u19", "u20", "u21", "u23", "youth", "reserve", "friendly", "amateur", "women", "futsal", "beach", "virtual", "esport"];
+        const LOW_QUALITY_KEYWORDS = [
+          "u18", "u19", "u20", "u21", "u23", "youth", "reserve",
+          "friendly", "amateur", "women", "futsal", "beach", "virtual", "esport",
+          "indoor", "cup u", "u17", "u16", "u15",
+        ];
         const alreadyIncluded = new Set(filtered.map(f => f.fixture.id));
+        const configuredIds = new Set(leagueIdSet); // ne remet pas en doublon les ligues actives
 
         const fallbackFixtures = allFixtures.filter((f) => {
           if (alreadyIncluded.has(f.fixture.id)) return false;
+          if (configuredIds.has(f.league.id)) return false; // déjà traité (actif mais pas de match ce jour)
           if (!f.teams.home.id || !f.teams.away.id) return false;
           const leagueLower = f.league.name.toLowerCase();
           if (LOW_QUALITY_KEYWORDS.some(kw => leagueLower.includes(kw))) return false;
