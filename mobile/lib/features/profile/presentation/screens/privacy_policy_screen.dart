@@ -166,7 +166,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
                       "9. Contact",
                       "Pour toute question relative à la confidentialité :\n\n"
                           "📧 support@nakora.app\n"
-                          "📍 Abidjan, Côte d'Ivoire",
+                          "📍 Abidjan, Côte d'Ivoire\n\n"
+                          "Développeur : DOC CODE DEV\n"
+                          "Application : Nakora",
                     ),
 
                     const SizedBox(height: 40),
