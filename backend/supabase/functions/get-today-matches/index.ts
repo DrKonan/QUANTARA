@@ -90,7 +90,7 @@ Deno.serve(async (req: Request) => {
 
     // --- Récupère TOUS les matchs du jour (y compris terminés) ---
     // On les regroupe ensuite par statut pour le client
-    const { data: matches, error: matchError } = await supabase
+    const { data: matchesInWindow, error: matchError } = await supabase
       .from("matches")
       .select("id, external_id, home_team, away_team, home_team_id, away_team_id, league, league_id, tier, match_date, status, home_score, away_score, lineups_ready")
       .gte("match_date", dayStart)
@@ -100,6 +100,20 @@ Deno.serve(async (req: Request) => {
       .order("match_date", { ascending: true });
 
     if (matchError) throw matchError;
+
+    // --- Récupère aussi les matchs LIVE hors fenêtre (changement de date en cours de match) ---
+    // Un match commencé "hier" à 23:30 et encore en cours ne doit pas disparaître à minuit.
+    const { data: liveOutsideWindow } = await supabase
+      .from("matches")
+      .select("id, external_id, home_team, away_team, home_team_id, away_team_id, league, league_id, tier, match_date, status, home_score, away_score, lineups_ready")
+      .eq("status", "live")
+      .not("tier", "is", null)
+      .lt("match_date", dayStart); // commencé avant la fenêtre courante
+
+    // Fusionne sans doublons (les matchs live dans la fenêtre sont déjà inclus)
+    const windowIds = new Set((matchesInWindow ?? []).map((m: MatchRow) => m.id));
+    const extraLive = (liveOutsideWindow ?? []).filter((m: MatchRow) => !windowIds.has(m.id));
+    const matches = [...(matchesInWindow ?? []), ...extraLive];
 
     // --- Récupère les catégories/pays depuis leagues_config ---
     const leagueIds = [...new Set((matches ?? []).map((m: MatchRow) => m.league_id))];

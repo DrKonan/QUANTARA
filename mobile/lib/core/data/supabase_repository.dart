@@ -154,8 +154,8 @@ class SupabaseRepository {
 
     final metaMap = await _getLeagueMetaMap();
 
-    // Fetch ALL matches (including finished, excluding cancelled)
-    final data = await _client
+    // Fetch matches in today's window (including finished, excluding cancelled)
+    final dataInWindow = await _client
         .from('matches')
         .select()
         .gte('match_date', dayStart)
@@ -163,7 +163,20 @@ class SupabaseRepository {
         .not('status', 'eq', 'cancelled')
         .order('match_date', ascending: true);
 
-    final matches = (data as List).map((json) => _parseMatch(json, metaMap: metaMap)).toList();
+    // Also fetch any LIVE matches that started before today's window
+    // (cross-midnight matches must not vanish at midnight)
+    final dataLiveOutside = await _client
+        .from('matches')
+        .select()
+        .eq('status', 'live')
+        .lt('match_date', dayStart);
+
+    // Merge without duplicates
+    final windowIds = {for (final r in (dataInWindow as List)) r['id']};
+    final extra = (dataLiveOutside as List).where((r) => !windowIds.contains(r['id'])).toList();
+    final rawAll = [...dataInWindow, ...extra];
+
+    final matches = rawAll.map((json) => _parseMatch(json, metaMap: metaMap)).toList();
     final nowMs = now.millisecondsSinceEpoch;
 
     // Fetch predictions for ALL matches (not just finished) so upcoming/live show pronos too
