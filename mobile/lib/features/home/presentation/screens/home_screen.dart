@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +28,42 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _combosExpanded = true;
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-refresh every 3 minutes when there are live or near-kickoff matches
+    _refreshTimer = Timer.periodic(const Duration(minutes: 3), (_) {
+      _silentRefreshIfNeeded();
+    });
+  }
+
+  /// Refresh match data silently if there are live matches or matches
+  /// starting within the next 2 hours. This ensures status transitions
+  /// (scheduled → live) are reflected without user intervention.
+  void _silentRefreshIfNeeded() {
+    final matches = ref.read(activeMatchesProvider).valueOrNull;
+    if (matches == null) return;
+
+    final now = DateTime.now().toUtc();
+    final hasLive = matches.any((m) => m.isLive);
+    final hasSoon = matches.any((m) {
+      if (m.isLive || m.isFinished) return false;
+      final diff = m.match.dateTime.difference(now).inMinutes;
+      return diff >= -10 && diff <= 120; // within 2h or just started
+    });
+
+    if (hasLive || hasSoon) {
+      ref.invalidate(dailyResponseProvider);
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

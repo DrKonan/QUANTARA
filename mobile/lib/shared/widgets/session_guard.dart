@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/biometric_service.dart';
+import '../../features/predictions/domain/predictions_provider.dart';
 
 /// Wraps the app and listens for auth state changes.
 /// When the session expires (token refresh fails), shows a re-login dialog
@@ -55,6 +56,15 @@ class _SessionGuardState extends ConsumerState<SessionGuard> with WidgetsBinding
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _tryRefreshSession();
+      _refreshMatchDataIfAuthenticated();
+    }
+  }
+
+  /// Refresh match data when user comes back to the app so live matches
+  /// and status transitions (scheduled → live) are immediately visible.
+  void _refreshMatchDataIfAuthenticated() {
+    if (Supabase.instance.client.auth.currentSession != null) {
+      ref.invalidate(dailyResponseProvider);
     }
   }
 
