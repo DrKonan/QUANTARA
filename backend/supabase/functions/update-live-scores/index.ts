@@ -29,17 +29,30 @@ Deno.serve(async (_req: Request) => {
     const now = new Date();
 
     // 1. Vérifie d'abord en DB s'il y a des matchs à surveiller
-    //    (scheduled proches du kick-off OU déjà live)
-    //    → Si aucun, on économise l'appel API.
+    //    → Les matchs "live" sont TOUJOURS inclus (pas de filtre date) car
+    //      un match bloqué en "live" depuis des jours ne serait jamais rattrapé sinon.
+    //    → Les matchs "scheduled" : seulement ceux proches du kick-off.
     const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString();
-    const { data: ourMatches, error: dbError } = await supabase
-      .from("matches")
-      .select("id, external_id, status, match_date")
-      .in("status", ["scheduled", "live"])
-      .gte("match_date", threeHoursAgo);
 
-    if (dbError) throw dbError;
-    if (!ourMatches || ourMatches.length === 0) {
+    const [{ data: liveMatches, error: liveErr }, { data: scheduledMatches, error: schedErr }] =
+      await Promise.all([
+        supabase
+          .from("matches")
+          .select("id, external_id, status, match_date")
+          .eq("status", "live"),
+        supabase
+          .from("matches")
+          .select("id, external_id, status, match_date")
+          .eq("status", "scheduled")
+          .gte("match_date", threeHoursAgo),
+      ]);
+
+    if (liveErr) throw liveErr;
+    if (schedErr) throw schedErr;
+
+    const ourMatches = [...(liveMatches ?? []), ...(scheduledMatches ?? [])];
+
+    if (ourMatches.length === 0) {
       return jsonResponse({ message: "No active matches to track", apiCalls: 0 });
     }
 
