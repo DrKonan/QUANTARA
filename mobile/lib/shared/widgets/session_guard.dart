@@ -26,30 +26,34 @@ class _SessionGuardState extends ConsumerState<SessionGuard> with WidgetsBinding
     WidgetsBinding.instance.addObserver(this);
     _wasAuthenticated = Supabase.instance.client.auth.currentSession != null;
 
-    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-      final event = data.event;
-      final hasSession = data.session != null;
+    Supabase.instance.client.auth.onAuthStateChange.listen(
+      (data) {
+        final event = data.event;
+        final hasSession = data.session != null;
 
-      if (event == AuthChangeEvent.tokenRefreshed) {
-        _wasAuthenticated = true;
-        return;
-      }
-
-      if (event == AuthChangeEvent.signedIn) {
-        _wasAuthenticated = true;
-        if (_dialogShown && mounted) {
-          Navigator.of(context, rootNavigator: true).pop();
-          _dialogShown = false;
+        if (event == AuthChangeEvent.tokenRefreshed) {
+          _wasAuthenticated = true;
+          return;
         }
-        return;
-      }
 
-      // Session lost unexpectedly (not user-initiated signout)
-      if (_wasAuthenticated && !hasSession && event == AuthChangeEvent.signedOut) {
-        _wasAuthenticated = false;
-        _showSessionExpiredDialog();
-      }
-    });
+        if (event == AuthChangeEvent.signedIn) {
+          _wasAuthenticated = true;
+          if (_dialogShown && mounted) {
+            Navigator.of(context, rootNavigator: true).pop();
+            _dialogShown = false;
+          }
+          return;
+        }
+
+        // Session lost unexpectedly (not user-initiated signout)
+        if (_wasAuthenticated && !hasSession && event == AuthChangeEvent.signedOut) {
+          _wasAuthenticated = false;
+          _showSessionExpiredDialog();
+        }
+      },
+      // Network errors (no internet) must not crash the app
+      onError: (_) {},
+    );
   }
 
   @override
@@ -69,22 +73,23 @@ class _SessionGuardState extends ConsumerState<SessionGuard> with WidgetsBinding
   }
 
   Future<void> _tryRefreshSession() async {
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session == null) return;
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session == null) return;
 
-    // If token expires within 60s, try refresh
-    final expiresAt = session.expiresAt;
-    if (expiresAt != null) {
-      final expiresIn = DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000)
-          .difference(DateTime.now())
-          .inSeconds;
-      if (expiresIn < 60) {
-        try {
+      // If token expires within 60s, try refresh
+      final expiresAt = session.expiresAt;
+      if (expiresAt != null) {
+        final expiresIn = DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000)
+            .difference(DateTime.now())
+            .inSeconds;
+        if (expiresIn < 60) {
           await Supabase.instance.client.auth.refreshSession();
-        } catch (_) {
-          // Will be caught by onAuthStateChange listener
         }
       }
+    } catch (_) {
+      // Network errors (SocketException, DNS failure) must not crash the app.
+      // Actual session expiry is handled by onAuthStateChange → signedOut event.
     }
   }
 
