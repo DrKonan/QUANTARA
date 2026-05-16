@@ -38,9 +38,18 @@ class _SessionGuardState extends ConsumerState<SessionGuard> with WidgetsBinding
 
         if (event == AuthChangeEvent.signedIn) {
           _wasAuthenticated = true;
-          if (_dialogShown && mounted) {
-            Navigator.of(context, rootNavigator: true).pop();
-            _dialogShown = false;
+          if (_dialogShown) {
+            // Use addPostFrameCallback: the stream may fire synchronously
+            // during initState (StartWithStreamSink replays current state),
+            // before the widget is attached to a Navigator.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              final nav = Navigator.maybeOf(context, rootNavigator: true);
+              if (nav != null && _dialogShown) {
+                nav.pop();
+                _dialogShown = false;
+              }
+            });
           }
           return;
         }
@@ -48,7 +57,9 @@ class _SessionGuardState extends ConsumerState<SessionGuard> with WidgetsBinding
         // Session lost unexpectedly (not user-initiated signout)
         if (_wasAuthenticated && !hasSession && event == AuthChangeEvent.signedOut) {
           _wasAuthenticated = false;
-          _showSessionExpiredDialog();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _showSessionExpiredDialog();
+          });
         }
       },
       // Network errors (no internet) must not crash the app
