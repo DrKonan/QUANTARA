@@ -158,6 +158,9 @@ Deno.serve(async (_req: Request) => {
     }
 
     let updatedCount = 0;
+    // Limite les appels individuels pour les scheduled hors-flux-live (max 5/cycle)
+    const MAX_SCHED_INDIVIDUAL = 5;
+    let schedIndividualCalls = 0;
 
     for (const match of relevantMatches) {
       const liveFix = liveMap.get(match.external_id);
@@ -205,16 +208,50 @@ Deno.serve(async (_req: Request) => {
             if (!error) updatedCount++;
           }
         }
+      } else if (match.status === "scheduled" && schedIndividualCalls < MAX_SCHED_INDIVIDUAL) {
+        // Scheduled passé le coup d'envoi et absent du flux live (ligue non couverte).
+        // Appel individuel pour récupérer le vrai statut (live / finished / postponed).
+        const kickoff = new Date(match.match_date);
+        const minutesSinceKickoff = (now.getTime() - kickoff.getTime()) / 60000;
+
+        if (minutesSinceKickoff > 5) {
+          schedIndividualCalls++;
+          try {
+            const fixtureData = await apifootball("/fixtures", {
+              id: match.external_id,
+            }) as ApiFixture[];
+            const fix = fixtureData?.[0];
+            if (fix) {
+              const newStatus = mapFixtureStatus(fix.fixture.status.short);
+              if (newStatus !== "scheduled") {
+                const { error } = await supabase
+                  .from("matches")
+                  .update({
+                    status: newStatus,
+                    home_score: fix.goals.home ?? null,
+                    away_score: fix.goals.away ?? null,
+                  })
+                  .eq("id", match.id);
+                if (!error) {
+                  updatedCount++;
+                  console.log(`[update-live-scores] ${match.external_id} (${minutesSinceKickoff.toFixed(0)}min) → ${newStatus} [individual]`);
+                }
+              }
+            }
+          } catch (fetchErr) {
+            console.warn(`[update-live-scores] Individual fetch failed for ${match.external_id}:`, fetchErr);
+          }
+        }
       }
     }
 
-    console.log(`[update-live-scores] Phase1 cleaned: ${cleanedCount} | Phase2 relevant: ${relevantMatches.length}, updated: ${updatedCount}, API live: ${liveMap.size}`);
+    console.log(`[update-live-scores] Phase1 cleaned: ${cleanedCount} | Phase2 relevant: ${relevantMatches.length}, updated: ${updatedCount}, API live: ${liveMap.size}, schedIndividual: ${schedIndividualCalls}`);
     return jsonResponse({
       success: true,
       cleaned: cleanedCount,
       relevant: relevantMatches.length,
       updated: updatedCount,
-      apiCalls: 1 + recentApiCalls,
+      apiCalls: 1 + recentApiCalls + schedIndividualCalls,
     });
   } catch (err) {
     console.error("[update-live-scores] Error:", err);
