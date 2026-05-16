@@ -74,7 +74,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     } catch (e, stack) {
       debugPrint('[Nakora] SIGNUP ERROR: $e');
       debugPrint('[Nakora] STACK: $stack');
-      ref.read(authErrorProvider.notifier).state = _mapError(e);
+      if (mounted) ref.read(authErrorProvider.notifier).state = _mapError(e);
     } finally {
       if (mounted) ref.read(authLoadingProvider.notifier).state = false;
     }
