@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 class AppTheme {
   static ThemeData get dark {
+    // Use locally bundled Poppins — never fetches from Google Fonts CDN.
+    final baseTextTheme = ThemeData.dark().textTheme.apply(
+          fontFamily: 'Poppins',
+          bodyColor: AppColors.textPrimary,
+          displayColor: AppColors.textPrimary,
+        );
+
     return ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.background,
@@ -13,9 +19,7 @@ class AppTheme {
         surface: AppColors.surface,
         error: AppColors.error,
       ),
-      textTheme: GoogleFonts.poppinsTextTheme(
-        ThemeData.dark().textTheme,
-      ),
+      textTheme: baseTextTheme,
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.background,
         elevation: 0,
