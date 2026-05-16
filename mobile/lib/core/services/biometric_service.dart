@@ -33,26 +33,26 @@ class BiometricService {
 
   /// Check if user has previously enabled biometric login.
   Future<bool> get isEnabled async {
-    final val = await _storage.read(key: _keyEnabled);
+    final val = await _safeRead(_keyEnabled);
     return val == 'true';
   }
 
   /// Check if real credentials are stored (= biometric login is ready).
   Future<bool> get hasStoredCredentials async {
-    final email    = await _storage.read(key: _keyEmail);
-    final password = await _storage.read(key: _keyPassword);
+    final email    = await _safeRead(_keyEmail);
+    final password = await _safeRead(_keyPassword);
     return email != null && email.isNotEmpty && email != '_pending_' &&
            password != null && password.isNotEmpty && password != '_pending_';
   }
 
   /// Returns the auth email stored for biometric (internal Supabase email).
   Future<String?> get storedAuthEmail async {
-    return _storage.read(key: _keyEmail);
+    return _safeRead(_keyEmail);
   }
 
   /// Returns the human-readable display label stored for biometric.
   Future<String?> get storedDisplay async {
-    return _storage.read(key: _keyDisplay);
+    return _safeRead(_keyDisplay);
   }
 
   /// Get a user-friendly label for the available biometric type.
@@ -66,6 +66,26 @@ class BiometricService {
     } catch (_) {
       return 'Biomtrie';
     }
+  }
+
+  /// Safe read from secure storage — returns null and clears all biometric data
+  /// if the storage is corrupted (e.g. after app reinstall, keystore change,
+  /// or Android backup/restore causing BadPaddingException).
+  Future<String?> _safeRead(String key) async {
+    try {
+      return await _storage.read(key: key);
+    } catch (e) {
+      debugPrint('[Nakora] Secure storage corrupted ($key): $e — clearing all biometric data');
+      await _clearAll();
+      return null;
+    }
+  }
+
+  /// Wipe all biometric keys (called when storage is found corrupted).
+  Future<void> _clearAll() async {
+    try {
+      await _storage.deleteAll();
+    } catch (_) {}
   }
 
   /// Enable biometric login (flag only).
@@ -145,8 +165,8 @@ class BiometricService {
 
       if (!authenticated) return false;
 
-      final email    = await _storage.read(key: _keyEmail);
-      final password = await _storage.read(key: _keyPassword);
+      final email    = await _safeRead(_keyEmail);
+      final password = await _safeRead(_keyPassword);
 
       if (email == null || password == null) {
         debugPrint('[Nakora] Biometric auth OK but no stored credentials');
