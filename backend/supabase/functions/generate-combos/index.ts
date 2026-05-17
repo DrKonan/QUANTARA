@@ -152,12 +152,14 @@ Deno.serve(async (req: Request) => {
     }
 
     // Récupère les matchs du créneau horaire (slot)
+    // IMPORTANT : pour le slot "evening", les matchs de 22h sont déjà "live"
+    // quand le combo est généré à 23h UTC → inclure "live" en plus de "scheduled"
     const { data: matchesRaw } = await supabase
       .from("matches")
       .select("id, home_team, away_team, league, league_id, match_date, status")
       .gte("match_date", slotStart)
       .lte("match_date", slotEnd)
-      .eq("status", "scheduled")
+      .in("status", ["scheduled", "live"])
       .order("match_date", { ascending: true });
 
     if (!matchesRaw || matchesRaw.length === 0) {
