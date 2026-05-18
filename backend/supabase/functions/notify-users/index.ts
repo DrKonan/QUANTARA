@@ -158,15 +158,19 @@ async function sendFCMNotification(
           body: JSON.stringify({
             message: {
               token,
-              notification: { title, body },
-              data: data ?? {},
+              // Data-only: title/body in data so our background handler
+              // always controls display (respects user preferences on-device).
+              data: {
+                title,
+                body,
+                ...(data ?? {}),
+              },
               android: {
                 priority: "high",
-                notification: { channel_id: "nakora_predictions" },
               },
               apns: {
                 headers: { "apns-priority": "10" },
-                payload: { aps: { sound: "default", badge: 1, "content-available": 1 } },
+                payload: { aps: { "content-available": 1 } },
               },
             },
           }),

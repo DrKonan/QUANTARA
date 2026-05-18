@@ -11,26 +11,29 @@ import '../router/app_router.dart';
 
 /// Top-level handler for background/terminated messages (isolate séparé).
 /// Appelé par FCM quand l'app est fermée ou en arrière-plan.
+/// Toutes les notifications FCM sont data-only — on contrôle l'affichage
+/// ici pour respecter les préférences utilisateur (SharedPreferences).
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // For NOTIFICATION messages (with a `notification` field):
-  //   → Android + FCM SDK already display them automatically using
-  //     the default_notification_channel_id declared in the manifest.
-  //     We must NOT show a duplicate. Just return.
-  if (message.notification != null) return;
-
-  // For DATA-ONLY messages (no `notification` field):
-  //   → Android does NOT display anything automatically.
-  //     We must build and show the local notification ourselves.
   final title = message.data['title'] as String?;
   final body  = message.data['body']  as String?;
   if (title == null || title.isEmpty) return;
 
+  // Check user preferences (SharedPreferences persists across isolates).
+  final prefs = await SharedPreferences.getInstance();
+  final masterOn = prefs.getBool('notif_master') ?? true;
+  if (!masterOn) return;
+
+  final type = message.data['type'] as String? ?? '';
+  final prefKey = _prefKeyForType(type);
+  if (prefKey != null && !(prefs.getBool(prefKey) ?? true)) return;
+
   // Re-initialize flutter_local_notifications in this fresh isolate.
   final localNotifications = FlutterLocalNotificationsPlugin();
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const iosInit = DarwinInitializationSettings();
   await localNotifications.initialize(
-    const InitializationSettings(android: androidInit),
+    const InitializationSettings(android: androidInit, iOS: iosInit),
   );
 
   // Create the high-importance channel (idempotent — safe to call every time).
@@ -66,7 +69,18 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     payload: message.data['match_id']?.toString(),
   );
 
-  debugPrint('[Nakora] Background data-only notification shown: $title');
+  debugPrint('[Nakora] Background notification shown: $title');
+}
+
+/// Maps FCM notification type to SharedPreferences key.
+String? _prefKeyForType(String type) {
+  switch (type) {
+    case 'new_predictions': return 'notif_predictions';
+    case 'prediction_results': return 'notif_results';
+    case 'live_prediction': return 'notif_live';
+    case 'combo_available': return 'notif_combos';
+    default: return null;
+  }
 }
 
 // Preference keys (must match notification_settings_screen.dart)
@@ -336,40 +350,61 @@ class NotificationService {
   // ── Firebase push handling ──
 
   void _handleForegroundMessage(RemoteMessage message) {
-    debugPrint('[Nakora] Foreground message: ${message.notification?.title}');
+    // All FCM messages are data-only — read title/body from data field.
+    final title = message.data['title'] as String?;
+    final body  = message.data['body']  as String?;
 
-    final notification = message.notification;
-    if (notification == null) return;
+    debugPrint('[Nakora] Foreground message type=${message.data["type"]}: $title');
 
-    // Store in notification center
-    NotificationStore.add(NotificationItem(
-      title: notification.title ?? '',
-      body: notification.body ?? '',
-      timestamp: DateTime.now().toIso8601String(),
-      type: message.data['type'],
-    ));
+    if (title == null || title.isEmpty) return;
 
-    _localNotifications.show(
-      notification.hashCode,
-      notification.title,
-      notification.body,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          _androidChannel.id,
-          _androidChannel.name,
-          channelDescription: _androidChannel.description,
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
+    final type = message.data['type'] as String? ?? '';
+    final prefKey = _prefKeyForTypeStatic(type);
+
+    // Check preferences asynchronously before showing.
+    Future(() async {
+      if (prefKey != null && !await _isEnabled(prefKey)) return;
+
+      // Store in notification center
+      NotificationStore.add(NotificationItem(
+        title: title,
+        body: body ?? '',
+        timestamp: DateTime.now().toIso8601String(),
+        type: type.isNotEmpty ? type : null,
+      ));
+
+      await _localNotifications.show(
+        message.hashCode,
+        title,
+        body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            _androidChannel.id,
+            _androidChannel.name,
+            channelDescription: _androidChannel.description,
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          ),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
         ),
-        iOS: const DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      ),
-      payload: message.data['match_id']?.toString(),
-    );
+        payload: message.data['match_id']?.toString(),
+      );
+    });
+  }
+
+  static String? _prefKeyForTypeStatic(String type) {
+    switch (type) {
+      case 'new_predictions': return _kPredictions;
+      case 'prediction_results': return _kResults;
+      case 'live_prediction': return _kLive;
+      case 'combo_available': return _kCombos;
+      default: return null;
+    }
   }
 
   void _handleNotificationTap(RemoteMessage message) {
@@ -385,6 +420,7 @@ class NotificationService {
     switch (type) {
       case 'new_predictions':
       case 'live_prediction':
+      case 'combo_available':
       case 'combo':
         GoRouter.of(context).go('/home');
         break;
