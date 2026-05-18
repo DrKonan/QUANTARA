@@ -264,17 +264,29 @@ Deno.serve(async (req: Request) => {
     let combos: unknown[] = [];
     const { data: combosRaw } = await supabase
       .from("combo_predictions")
-      .select("id, combo_type, combo_slot, combined_odds, combined_confidence, leg_count, legs, status, min_plan, created_at")
+      .select("id, combo_type, combo_slot, combined_odds, combined_confidence, leg_count, legs, status, min_plan, created_at, result_detail")
       .eq("combo_date", localDate)
       .order("combo_type", { ascending: true });
 
     if (combosRaw && combosRaw.length > 0) {
       combos = combosRaw.map((c: {
         id: number; combo_type: string; combo_slot: string; combined_odds: number; combined_confidence: number;
-        leg_count: number; legs: unknown; status: string; min_plan: string; created_at: string;
+        leg_count: number; legs: Array<{ prediction_id: number; [key: string]: unknown }>; status: string; min_plan: string; created_at: string;
+        result_detail: Array<{ prediction_id: number; is_correct: boolean | null }> | null;
       }) => {
         // Vérifie si l'utilisateur a accès à ce combo
         const hasAccess = hasCombos && (c.min_plan === "pro" || (c.min_plan === "vip" && userPlan === "vip"));
+
+        // Merge is_correct into legs from result_detail
+        let legs = null;
+        if (hasAccess && c.legs) {
+          const resultMap = new Map((c.result_detail ?? []).map(r => [r.prediction_id, r.is_correct]));
+          legs = c.legs.map(leg => ({
+            ...leg,
+            is_correct: resultMap.get(leg.prediction_id) ?? null,
+          }));
+        }
+
         return {
           id: c.id,
           combo_type: c.combo_type,
@@ -282,7 +294,7 @@ Deno.serve(async (req: Request) => {
           combined_odds: hasAccess ? c.combined_odds : null,
           combined_confidence: hasAccess ? c.combined_confidence : null,
           leg_count: c.leg_count,
-          legs: hasAccess ? c.legs : null,
+          legs,
           status: c.status,
           is_locked: !hasAccess,
           min_plan: c.min_plan,

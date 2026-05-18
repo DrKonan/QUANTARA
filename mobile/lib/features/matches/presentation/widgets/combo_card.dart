@@ -177,14 +177,24 @@ class ComboCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          Text(
-            '@${leg.bookmakerOdds.toStringAsFixed(2)}',
-            style: TextStyle(
-              color: Colors.white.withAlpha(180),
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+          // Result icon (only when combo is resolved)
+          if (leg.isCorrect != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Text(
+                leg.isCorrect! ? '✅' : '❌',
+                style: const TextStyle(fontSize: 12),
+              ),
+            )
+          else
+            Text(
+              '@${leg.bookmakerOdds.toStringAsFixed(2)}',
+              style: TextStyle(
+                color: Colors.white.withAlpha(180),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -254,8 +264,8 @@ class ComboCard extends StatelessWidget {
               ),
             ],
           ),
-          // Status badge
-          if (!combo.isActive)
+          // Status badge (hidden for locked users to push upgrade)
+          if (!combo.isActive && !isLocked)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
@@ -279,8 +289,48 @@ class ComboCard extends StatelessWidget {
                 ),
               ),
             ),
+          // Teaser for locked users when result is ready
+          if (!combo.isActive && isLocked)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: accent.withAlpha(20),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: accent.withAlpha(60)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.lock_rounded, color: accent, size: 10),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Résultat disponible',
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // Min plan badge
           if (combo.isActive)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD4AF37).withAlpha(20),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                combo.minPlan.toUpperCase(),
+                style: const TextStyle(
+                  color: Color(0xFFD4AF37),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(

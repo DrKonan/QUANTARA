@@ -235,17 +235,22 @@ Deno.serve(async (_req: Request) => {
       .gte("updated_at", twentyFourHoursAgo);
 
     if (matchError) throw matchError;
-    if (!matches || matches.length === 0) {
-      return jsonResponse({ message: "No recently finished matches to evaluate", evaluated: 0 });
-    }
 
-    console.log(`[evaluate-predictions] Evaluating ${matches.length} matches`);
+    // Ne pas retourner prématurément : les combos doivent être évalués même
+    // si aucun nouveau match terminé n'a été trouvé (les jambes peuvent avoir
+    // été évaluées lors d'un cycle précédent).
     let totalEvaluated = 0;
+
+    if (!matches || matches.length === 0) {
+      console.log("[evaluate-predictions] No recently finished matches — checking combos only");
+    } else {
+      console.log(`[evaluate-predictions] Evaluating ${matches.length} matches`);
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    for (const match of matches) {
+    for (const match of (matches ?? [])) {
       // Récupère le résultat final via API-Football
       const fixtureData = await apifootball("/fixtures", {
         id: match.external_id,
@@ -425,7 +430,7 @@ Deno.serve(async (_req: Request) => {
       console.warn("[evaluate-predictions] Combo evaluation failed:", comboErr);
     }
 
-    return jsonResponse({ success: true, matches: matches.length, predictions_evaluated: totalEvaluated });
+    return jsonResponse({ success: true, matches: matches?.length ?? 0, predictions_evaluated: totalEvaluated });
   } catch (err) {
     console.error("[evaluate-predictions] Error:", err);
     return jsonResponse({ error: (err as Error).message }, 500);

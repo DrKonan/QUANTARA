@@ -101,6 +101,7 @@ class ComboLeg {
   final String prediction;
   final double confidence;
   final double bookmakerOdds;
+  final bool? isCorrect;
 
   const ComboLeg({
     required this.predictionId,
@@ -112,6 +113,7 @@ class ComboLeg {
     required this.prediction,
     required this.confidence,
     required this.bookmakerOdds,
+    this.isCorrect,
   });
 
   int get confidencePercent => (confidence * 100).round();
@@ -191,6 +193,7 @@ class ComboLeg {
       prediction: json['prediction'] as String? ?? '',
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
       bookmakerOdds: (json['bookmaker_odds'] as num?)?.toDouble() ?? 1.0,
+      isCorrect: json['is_correct'] as bool?,
     );
   }
 }
