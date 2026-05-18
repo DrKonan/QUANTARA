@@ -9,17 +9,16 @@
 //
 // STRATEGIE :
 // — Priorité absolue à la CONFIANCE : on prend les prédictions
-//   les plus certaines, peu importe le marché ou la cote.
+//   les plus certaines, peu importe le marché, la cote ou la ligue.
 // — Seul 'correct_score' est exclu (fondamentalement imprévisible).
-// — Safe  : top 3 par confiance (seuil ≥ 0.78), 1 par match, max 2 par ligue
-// — Bold  : top 5 par confiance (seuil ≥ 0.72), 1 par match, max 2 par ligue
+// — Safe  : top 3 par confiance (même pool que bold, ≥ 0.72), 1 par match
+// — Bold  : top 5 par confiance (≥ 0.72), 1 par match, max 2 par ligue
 // — Les cotes sont affichées pour info mais ne pilotent PAS la sélection.
 // ============================================================
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
 import { jsonResponse } from "../_shared/helpers.ts";
 
-const SAFE_MIN_CONFIDENCE = 0.78;  // seuil jambes du combo safe
-const BOLD_MIN_CONFIDENCE = 0.72;  // seuil jambes du combo bold
+const BOLD_MIN_CONFIDENCE = 0.72;  // seuil commun (safe + bold)
 const MIN_LEG_ODDS = 1.40;         // cote min par jambe — évite les paris sans valeur
 
 // correct_score et first_team_to_score exclus : trop aléatoires quelle que soit la confiance
@@ -207,10 +206,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Sous-pool safe : confiance >= SAFE_MIN_CONFIDENCE
-    const safePool = allPool.filter(p => p.confidence >= SAFE_MIN_CONFIDENCE);
-
-    console.log(`[generate-combos] Pool: ${allPool.length} predictions (safe pool: ${safePool.length}) from ${matchesRaw.length} matches (slot=${slot})`);
+    // Safe et Bold partagent le même pool (≥ 0.72, tout championnat confondu)
+    // La différence : Safe prend les 3 meilleures jambes, Bold en prend 5.
+    console.log(`[generate-combos] Pool: ${allPool.length} predictions from ${matchesRaw.length} matches (slot=${slot})`);
 
     if (allPool.length < 2) {
       return jsonResponse({ message: "Not enough eligible predictions for combos", pool_size: allPool.length, slot });
@@ -227,8 +225,8 @@ Deno.serve(async (req: Request) => {
       min_plan: string;
     }> = [];
 
-    // ── COMBO 1 : "SUR" — top 3 par confiance (≥ 0.78), 1 par match ──
-    const safeLegs = selectLegs(safePool, 3, new Set(), 2);
+    // ── COMBO 1 : "SUR" — top 3 par confiance, tout championnat confondu ──
+    const safeLegs = selectLegs(allPool, 3, new Set(), 2);
     if (safeLegs) {
       const combinedOdds = safeLegs.reduce((acc, l) => acc * l.bookmaker_odds, 1);
       const combinedConf = safeLegs.reduce((acc, l) => acc * l.confidence, 1);
