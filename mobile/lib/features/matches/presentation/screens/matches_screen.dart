@@ -154,9 +154,14 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> with SingleTicker
         return isFinished ? _buildEmptyFinished() : _buildEmpty();
       }
 
-      final live = filtered.where((m) => m.isLive).length;
+      // Separate live matches so they don't appear twice (once in a live section,
+      // once inside their league group in the upcoming section).
+      final liveMatches = isFinished ? <TodayMatch>[] : filtered.where((m) => m.isLive).toList();
+      final nonLiveMatches = isFinished ? filtered : filtered.where((m) => !m.isLive).toList();
+
+      final live = liveMatches.length;
       final withPred = filtered.where((m) => m.hasOfficialPredictions).length;
-      final groups = _groupByCategoryCountryLeague(filtered);
+      final groups = _groupByCategoryCountryLeague(nonLiveMatches);
 
       return CustomScrollView(
         key: PageStorageKey(isFinished ? 'finished_matches' : 'active_matches'),
@@ -180,6 +185,44 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> with SingleTicker
               ),
             ),
           ),
+          // ── Live section at the top of "À venir" tab ──
+          if (liveMatches.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
+                    ),
+                    const Text(
+                      "EN DIRECT",
+                      style: TextStyle(color: AppColors.error, fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 1.2),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
+                      child: Text("${liveMatches.length}", style: const TextStyle(color: AppColors.error, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (ctx, i) => _MatchTile(todayMatch: liveMatches[i]),
+                  childCount: liveMatches.length,
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+          ],
           ...groups.expand((cat) => [
             SliverToBoxAdapter(child: _CategoryHeader(group: cat)),
             ...cat.countries.expand((country) => [
