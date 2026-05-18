@@ -163,6 +163,7 @@ abstract class AppConstants {
     ),
     PaymentCountry(
       code: 'CI', name: "Côte d'Ivoire", dialCode: '225', flag: '🇨🇮',
+      localDigits: 10, keepLeadingZero: true,
       methods: [
         PaymentMethod(id: 'wave_ci', name: 'Wave', color: 0xFF1BA8F0, icon: 'waves'),
         PaymentMethod(id: 'orange_ci', name: 'Orange Money', color: 0xFFFF6600, icon: 'phone'),
@@ -268,6 +269,11 @@ class PaymentCountry {
   final String flag;
   final List<PaymentMethod> methods;
   final int localDigits;
+  /// Quand `true`, le 0 initial du numéro local fait partie du numéro
+  /// abonné (pas un indicatif national) et ne doit PAS être supprimé
+  /// lors de la construction du format E.164.
+  /// Ex: Côte d'Ivoire — 0707123456 → +2250707123456 (pas +225707123456)
+  final bool keepLeadingZero;
 
   const PaymentCountry({
     required this.code,
@@ -276,6 +282,7 @@ class PaymentCountry {
     required this.flag,
     required this.methods,
     this.localDigits = 9,
+    this.keepLeadingZero = false,
   });
 
   String get label => '$flag +$dialCode';

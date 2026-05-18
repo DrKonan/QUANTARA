@@ -79,7 +79,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String _buildFullPhone() {
     final raw = _phoneCtrl.text.trim().replaceAll(RegExp(r'[\s\-]'), '');
     if (raw.startsWith('+')) return raw;
-    if (raw.startsWith('0')) return '+${_selectedCountry.dialCode}${raw.substring(1)}';
+    if (raw.startsWith('0')) {
+      if (_selectedCountry.keepLeadingZero) {
+        return '+${_selectedCountry.dialCode}$raw';
+      }
+      return '+${_selectedCountry.dialCode}${raw.substring(1)}';
+    }
     return '+${_selectedCountry.dialCode}$raw';
   }
 

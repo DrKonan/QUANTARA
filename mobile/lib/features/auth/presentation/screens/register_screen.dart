@@ -44,7 +44,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String _buildFullPhone() {
     final raw = _phoneCtrl.text.trim().replaceAll(RegExp(r'[\s\-]'), '');
     if (raw.startsWith('+')) return raw;
-    if (raw.startsWith('0')) return '+${_selectedCountry.dialCode}${raw.substring(1)}';
+    if (raw.startsWith('0')) {
+      // Pour les pays où le 0 initial fait partie du numéro abonné (ex: CI),
+      // on le conserve dans le format E.164.
+      if (_selectedCountry.keepLeadingZero) {
+        return '+${_selectedCountry.dialCode}$raw';
+      }
+      return '+${_selectedCountry.dialCode}${raw.substring(1)}';
+    }
     return '+${_selectedCountry.dialCode}$raw';
   }
 
