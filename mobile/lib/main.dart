@@ -12,6 +12,7 @@ import 'core/config/app_config.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/analytics_service.dart';
 import 'shared/widgets/session_guard.dart';
+import 'shared/widgets/update_guard.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,7 +58,9 @@ class NakoraApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      builder: (context, child) => SessionGuard(child: child ?? const SizedBox()),
+      builder: (context, child) => UpdateGuard(
+        child: SessionGuard(child: child ?? const SizedBox()),
+      ),
     );
   }
 }
