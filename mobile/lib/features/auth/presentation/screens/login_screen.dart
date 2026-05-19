@@ -85,6 +85,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
       return '+${_selectedCountry.dialCode}${raw.substring(1)}';
     }
+    // Auto-correction : si keepLeadingZero et saisie sans le 0 (ex: CI)
+    if (_selectedCountry.keepLeadingZero &&
+        raw.length == _selectedCountry.localDigits - 1) {
+      return '+${_selectedCountry.dialCode}0$raw';
+    }
     return '+${_selectedCountry.dialCode}$raw';
   }
 
@@ -272,7 +277,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       keyboardType: TextInputType.phone,
                       style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
                       decoration: InputDecoration(
-                        hintText: 'X' * _selectedCountry.localDigits,
+                        hintText: _selectedCountry.keepLeadingZero
+                            ? '0${'X' * (_selectedCountry.localDigits - 1)}'
+                            : 'X' * _selectedCountry.localDigits,
                         hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.4)),
                         prefixIcon: const Icon(Icons.phone_outlined, color: AppColors.textSecondary, size: 20),
                       ),
