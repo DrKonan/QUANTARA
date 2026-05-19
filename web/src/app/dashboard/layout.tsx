@@ -85,7 +85,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   async function handleLogout() {
     setLoggingOut(true);
-    await fetch("/nakora/api/auth/logout", { method: "POST" });
+    await fetch("/quantara/api/auth/logout", { method: "POST" });
     window.location.href = "/nakora/login";
   }
 
