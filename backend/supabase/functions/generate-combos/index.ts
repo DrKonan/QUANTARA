@@ -25,7 +25,9 @@ const BOLD_MIN_CONFIDENCE = 0.72;  // seuil jambes du combo bold
 const MIN_LEG_ODDS = 1.40;         // cote min par jambe — évite les paris sans valeur
 
 // correct_score et first_team_to_score exclus : trop aléatoires quelle que soit la confiance
-const EXCLUDED_MARKETS = ["correct_score", "first_team_to_score"];
+// corners et cards exclus : les cotes sont synthétiques (6.5 cartons / 12.5 corners par défaut),
+// pas de vraies tendances capturées — à réintégrer quand un système dédié sera en place
+const EXCLUDED_MARKETS = ["correct_score", "first_team_to_score", "corners", "cards"];
 
 interface EligiblePrediction {
   id: number;
