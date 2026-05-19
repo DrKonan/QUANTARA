@@ -1,4 +1,13 @@
 export default function Hero() {
+  const floatingIcons: { icon: string; top: string; left?: string; right?: string; delay: string; size: number }[] = [
+    { icon: "⚽", top: "18%", left: "8%", delay: "0s", size: 32 },
+    { icon: "🏀", top: "28%", right: "7%", delay: "0.6s", size: 28 },
+    { icon: "🏒", top: "65%", left: "5%", delay: "1.2s", size: 26 },
+    { icon: "📊", top: "70%", right: "9%", delay: "0.3s", size: 24 },
+    { icon: "🎯", top: "40%", left: "3%", delay: "0.9s", size: 22 },
+    { icon: "🏆", top: "50%", right: "4%", delay: "1.5s", size: 28 },
+  ];
+
   return (
     <section style={{
       minHeight: "100vh",
@@ -9,6 +18,23 @@ export default function Hero() {
       overflow: "hidden",
       paddingTop: 68,
     }}>
+      {/* Floating sport icons */}
+      {floatingIcons.map((ic, i) => (
+        <div key={i} style={{
+          position: "absolute",
+          top: ic.top,
+          left: "left" in ic ? ic.left : undefined,
+          right: "right" in ic ? ic.right : undefined,
+          fontSize: ic.size,
+          opacity: 0.18,
+          animation: `float ${2.5 + i * 0.4}s ease-in-out infinite`,
+          animationDelay: ic.delay,
+          pointerEvents: "none",
+          filter: "blur(0.5px)",
+        }}>
+          {ic.icon}
+        </div>
+      ))}
       {/* Background radial glow */}
       <div style={{
         position: "absolute", top: "20%", left: "50%", transform: "translateX(-50%)",
@@ -89,12 +115,40 @@ export default function Hero() {
         <div className="animate-fade-up delay-400" style={{
           display: "flex",
           justifyContent: "center",
+          alignItems: "center",
           gap: 40,
           flexWrap: "wrap",
         }}>
+          {/* Avatar stack */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex" }}>
+              {["Kouassi", "Mamadou", "Fatou", "Ibrahima"].map((seed, i) => (
+                <div key={seed} style={{
+                  width: 32, height: 32, borderRadius: "50%",
+                  border: "2px solid rgba(8,8,16,0.9)",
+                  overflow: "hidden",
+                  marginLeft: i === 0 ? 0 : -10,
+                  background: "rgba(212,175,55,0.15)",
+                }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`https://api.dicebear.com/9.x/lorelei/svg?seed=${seed}&backgroundColor=transparent`}
+                    alt=""
+                    width={32}
+                    height={32}
+                    style={{ width: "100%", height: "100%" }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div style={{ textAlign: "left" }}>
+              <div style={{ fontSize: "1rem", fontWeight: 800, color: "#D4AF37" }}>5k+</div>
+              <div style={{ fontSize: 11, color: "rgba(240,240,240,0.5)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Utilisateurs actifs</div>
+            </div>
+          </div>
+
           {[
             { value: "85%", label: "Taux de réussite" },
-            { value: "5k+", label: "Utilisateurs actifs" },
             { value: "3", label: "Sports couverts" },
           ].map((s) => (
             <div key={s.label} style={{ textAlign: "center" }}>

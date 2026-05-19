@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 
 export default function Footer() {
   const year = new Date().getFullYear();
@@ -46,10 +47,12 @@ export default function Footer() {
           {/* Brand */}
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <img
+              <Image
                 src="/logo.png"
                 alt="Nakora"
-                style={{ width: 32, height: 32, borderRadius: 9, objectFit: "cover" }}
+                width={32}
+                height={32}
+                style={{ borderRadius: 9, objectFit: "cover" }}
               />
               <span style={{ fontSize: 18, fontWeight: 800, color: "#f0f0f0" }}>
                 nakora<span style={{ color: "#D4AF37" }}>.</span>

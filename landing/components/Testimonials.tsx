@@ -2,7 +2,7 @@ const testimonials = [
   {
     name: "Kouassi A.",
     location: "Abidjan, CI",
-    avatar: "KA",
+    seed: "KouassiAbidjan",
     color: "#D4AF37",
     stars: 5,
     text: "Depuis que j'utilise Nakora, mon taux de réussite a vraiment augmenté. Le combo sûr m'a permis de gagner 3 semaines de suite. L'IA analyse mieux que moi.",
@@ -10,7 +10,7 @@ const testimonials = [
   {
     name: "Mamadou D.",
     location: "Dakar, SN",
-    avatar: "MD",
+    seed: "MamadouDakar",
     color: "#22c55e",
     stars: 5,
     text: "L'appli est très intuitive. Je reçois mes pronos le matin et je mise tranquillement. Le suivi live est un énorme plus, tu sais en temps réel si ton combo tient.",
@@ -18,7 +18,7 @@ const testimonials = [
   {
     name: "Ibrahima S.",
     location: "Paris, FR",
-    avatar: "IS",
+    seed: "IbrahimaParis",
     color: "#818cf8",
     stars: 5,
     text: "J'ai essayé plusieurs apps de pronostics. Nakora est la seule qui publie son vrai win rate sans l'embellir. Cette transparence m'a convaincu de passer VIP.",
@@ -26,7 +26,7 @@ const testimonials = [
   {
     name: "Christophe M.",
     location: "Lyon, FR",
-    avatar: "CM",
+    seed: "ChristopheLyon",
     color: "#f59e0b",
     stars: 4,
     text: "Le combo audacieux est risqué mais quand ça passe, c'est énorme. J'ai eu ×8.4 ce mois-ci. L'indépendance entre safe et bold est une bonne idée stratégique.",
@@ -34,7 +34,7 @@ const testimonials = [
   {
     name: "Fatou B.",
     location: "Bamako, ML",
-    avatar: "FB",
+    seed: "FatouBamako",
     color: "#ec4899",
     stars: 5,
     text: "Très bonne application. Je ne connaissais pas grand chose au foot mais les explications sont claires. J'ai commencé en FREE et je suis passée PRO après 2 semaines.",
@@ -42,7 +42,7 @@ const testimonials = [
   {
     name: "Oumar T.",
     location: "Lomé, TG",
-    avatar: "OT",
+    seed: "OumarLome",
     color: "#06b6d4",
     stars: 5,
     text: "Support réactif, interface propre, pronostics fiables. Nakora fait exactement ce qu'il promet. Je recommande à tous ceux qui veulent être sérieux dans leurs mises.",
@@ -109,12 +109,20 @@ export default function Testimonials() {
               {/* Author */}
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{
-                  width: 38, height: 38, borderRadius: "50%",
-                  background: `${t.color}22`,
-                  border: `1px solid ${t.color}44`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 12, fontWeight: 700, color: t.color, flexShrink: 0,
-                }}>{t.avatar}</div>
+                  width: 44, height: 44, borderRadius: "50%",
+                  border: `2px solid ${t.color}44`,
+                  overflow: "hidden", flexShrink: 0,
+                  background: `${t.color}11`,
+                }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`https://api.dicebear.com/9.x/lorelei/svg?seed=${t.seed}&backgroundColor=transparent`}
+                    alt={t.name}
+                    width={44}
+                    height={44}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                </div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#f0f0f0" }}>{t.name}</div>
                   <div style={{ fontSize: 11, color: "rgba(240,240,240,0.4)" }}>{t.location}</div>

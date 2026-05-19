@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import Image from "next/image";
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -28,10 +29,12 @@ export default function Navbar() {
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 68 }}>
         {/* Logo */}
         <a href="#" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-          <img
+          <Image
             src="/logo.png"
             alt="Nakora"
-            style={{ width: 36, height: 36, borderRadius: 10, objectFit: "cover" }}
+            width={36}
+            height={36}
+            style={{ borderRadius: 10, objectFit: "cover" }}
           />
           <span style={{ fontSize: 20, fontWeight: 800, color: "#f0f0f0", letterSpacing: "-0.3px" }}>
             nakora
