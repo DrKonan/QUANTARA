@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Quantara — Back-office",
-  description: "Dashboard administrateur Quantara",
+  title: "Nakora — Back-office",
+  description: "Dashboard administrateur Nakora",
 };
 
 export default function RootLayout({

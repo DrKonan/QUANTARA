@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Conditions d'utilisation - Quantara",
-  description: "Conditions générales d'utilisation de l'application Quantara",
+  title: "Conditions d'utilisation - Nakora",
+  description: "Conditions générales d'utilisation de l'application Nakora",
 };
 
 export default function TermsOfServicePage() {
@@ -19,22 +19,22 @@ export default function TermsOfServicePage() {
         </div>
 
         <Section title="1. Acceptation des conditions">
-          {`En téléchargeant, installant ou utilisant l'application Quantara, vous acceptez d'être lié par les présentes Conditions Générales d'Utilisation (CGU). Si vous n'acceptez pas ces conditions, veuillez ne pas utiliser l'application.
+          {`En téléchargeant, installant ou utilisant l'application Nakora, vous acceptez d'être lié par les présentes Conditions Générales d'Utilisation (CGU). Si vous n'acceptez pas ces conditions, veuillez ne pas utiliser l'application.
 
-Quantara se réserve le droit de modifier ces CGU à tout moment. Les modifications prennent effet dès leur publication dans l'application.`}
+Nakora se réserve le droit de modifier ces CGU à tout moment. Les modifications prennent effet dès leur publication dans l'application.`}
         </Section>
 
         <Section title="2. Description du service">
-          {`Quantara est une application d'analyse sportive basée sur l'intelligence artificielle. Elle fournit des prédictions et analyses pour le football, le basketball et le hockey sur glace.
+          {`Nakora est une application d'analyse sportive basée sur l'intelligence artificielle. Elle fournit des prédictions et analyses pour le football.
 
-Les prédictions sont fournies à titre informatif uniquement et ne constituent en aucun cas des conseils de paris ou d'investissement. Quantara ne garantit pas l'exactitude des prédictions.`}
+Les prédictions sont fournies à titre informatif uniquement et ne constituent en aucun cas des conseils de paris ou d'investissement. Nakora ne garantit pas l'exactitude des prédictions.`}
         </Section>
 
         <Section title="3. Inscription et compte">
           {`• Vous devez fournir un numéro de téléphone valide pour créer un compte
 • Vous êtes responsable de la confidentialité de votre mot de passe
 • Un seul compte par personne est autorisé
-• Vous devez avoir au moins 18 ans pour utiliser Quantara
+• Vous devez avoir au moins 18 ans pour utiliser Nakora
 • Toute information fournie doit être exacte et à jour`}
         </Section>
 
@@ -50,13 +50,13 @@ Toute tentative de contournement de cette limitation (création de comptes multi
 • Les paiements s'effectuent via Mobile Money (PawaPay, Wave)
 • Les abonnements se renouvellent automatiquement sauf annulation
 • Aucun remboursement n'est accordé pour la période en cours
-• Quantara se réserve le droit de modifier les tarifs avec préavis`}
+• Nakora se réserve le droit de modifier les tarifs avec préavis`}
         </Section>
 
         <Section title="6. Utilisation acceptable">
           {`Il est interdit de :
 
-• Partager, redistribuer ou revendre les prédictions de Quantara
+• Partager, redistribuer ou revendre les prédictions de Nakora
 • Utiliser des robots ou scripts pour accéder au service
 • Tenter de contourner les mesures de sécurité
 • Utiliser le service à des fins illégales
@@ -65,13 +65,13 @@ Toute tentative de contournement de cette limitation (création de comptes multi
         </Section>
 
         <Section title="7. Propriété intellectuelle">
-          {`Tous les contenus de Quantara (textes, graphiques, logos, algorithmes, prédictions, design) sont protégés par le droit de la propriété intellectuelle et appartiennent à Quantara.
+          {`Tous les contenus de Nakora (textes, graphiques, logos, algorithmes, prédictions, design) sont protégés par le droit de la propriété intellectuelle et appartiennent à Nakora.
 
 Toute reproduction, modification ou distribution non autorisée est strictement interdite.`}
         </Section>
 
         <Section title="8. Limitation de responsabilité">
-          {`Quantara fournit ses analyses à titre informatif. En aucun cas Quantara ne pourra être tenu responsable :
+          {`Nakora fournit ses analyses à titre informatif. En aucun cas Nakora ne pourra être tenu responsable :
 
 • Des pertes financières liées aux paris sportifs
 • De l'inexactitude des prédictions
@@ -82,7 +82,7 @@ Le jeu comporte des risques. Jouez de manière responsable.`}
         </Section>
 
         <Section title="9. Suspension et résiliation">
-          {`Quantara se réserve le droit de suspendre ou résilier votre compte en cas de violation des présentes CGU, sans préavis ni remboursement.
+          {`Nakora se réserve le droit de suspendre ou résilier votre compte en cas de violation des présentes CGU, sans préavis ni remboursement.
 
 Vous pouvez à tout moment supprimer votre compte depuis les paramètres de l'application. La suppression est irréversible et entraîne la perte de toutes vos données.`}
         </Section>
@@ -90,7 +90,7 @@ Vous pouvez à tout moment supprimer votre compte depuis les paramètres de l'ap
         <Section title="10. Protection des données">
           {`Le traitement de vos données personnelles est régi par notre Politique de Confidentialité, accessible depuis l'application et sur notre site web.
 
-En utilisant Quantara, vous consentez à la collecte et au traitement de vos données conformément à cette politique.`}
+En utilisant Nakora, vous consentez à la collecte et au traitement de vos données conformément à cette politique.`}
         </Section>
 
         <Section title="11. Droit applicable">
@@ -102,12 +102,12 @@ Si une disposition des présentes CGU est jugée invalide, les autres dispositio
         <Section title="12. Contact">
           {`Pour toute question relative aux présentes CGU :
 
-📧 Email : support@quantara.app
+📧 Email : support@nakora.app
 📱 Application : Aide & Support > Nous contacter`}
         </Section>
 
         <div className="mt-16 pt-8 border-t border-gray-800 text-center text-gray-500 text-sm">
-          © 2026 Quantara. Tous droits réservés.
+          © 2026 Nakora. Tous droits réservés.
         </div>
       </div>
     </main>

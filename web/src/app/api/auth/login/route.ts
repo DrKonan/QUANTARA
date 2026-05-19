@@ -8,7 +8,7 @@ const ADMIN_PASSWORD_HASH = crypto
   .update("ASAcodeur277")
   .digest("hex");
 
-const SESSION_COOKIE = "quantara_admin_session";
+const SESSION_COOKIE = "nakora_admin_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 jours
 
 function hashPassword(password: string): string {
