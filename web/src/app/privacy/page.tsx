@@ -83,9 +83,9 @@ La suppression du compte est irréversible et entraîne l'effacement de toutes v
         </Section>
 
         <Section title="7. Données de paiement">
-          {`Nakora ne stocke aucune donnée de paiement sensible. Les transactions sont traitées directement par nos partenaires PawaPay et Wave.
+          {`Nakora ne stocke aucune donnée de paiement sensible. Les transactions sont traitées directement par nos partenaires de paiement Mobile Money.
 
-Pays supportés : Côte d'Ivoire, Sénégal, Mali, Burkina Faso, Bénin, Togo, Niger, Guinée, Cameroun, Gabon, Congo, RD Congo.`}
+Nakora est disponible à l'international. La disponibilité des moyens de paiement varie selon les pays.`}
         </Section>
 
         <Section title="8. Contact">

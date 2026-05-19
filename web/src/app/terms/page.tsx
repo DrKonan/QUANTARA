@@ -25,7 +25,7 @@ Nakora se réserve le droit de modifier ces CGU à tout moment. Les modification
         </Section>
 
         <Section title="2. Description du service">
-          {`Nakora est une application d'analyse sportive basée sur l'intelligence artificielle. Elle fournit des prédictions et analyses pour le football.
+          {`Nakora est une application d'analyse sportive basée sur l'intelligence artificielle. Elle fournit des prédictions et analyses pour le football, le basketball et le hockey sur glace.
 
 Les prédictions sont fournies à titre informatif uniquement et ne constituent en aucun cas des conseils de paris ou d'investissement. Nakora ne garantit pas l'exactitude des prédictions.`}
         </Section>
