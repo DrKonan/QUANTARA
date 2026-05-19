@@ -19,14 +19,21 @@ interface ComboLeg {
   league: string;
 }
 
+interface ResultDetail {
+  prediction_id: number;
+  is_correct: boolean | null;
+}
+
 interface Combo {
   id: number;
   combo_date: string;
   combo_type: string;
+  combo_slot: string | null;
   combined_odds: number;
   combined_confidence: number;
   leg_count: number;
   legs: ComboLeg[];
+  result_detail: ResultDetail[] | null;
   min_plan: string;
   status: string | null;
   created_at: string;
@@ -232,7 +239,7 @@ function ComboCard({ combo }: { combo: Combo }) {
             <Icon size={17} style={{ color: accent }} />
           </div>
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-[15px]">{label}</span>
               <span
                 className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md tracking-wider"
@@ -240,6 +247,9 @@ function ComboCard({ combo }: { combo: Combo }) {
               >
                 {planLabel}
               </span>
+              {combo.combo_slot === "evening" && (
+                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md text-[#818cf8] bg-[#818cf8]/10 tracking-wider uppercase">Soir</span>
+              )}
             </div>
             <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
               {combo.leg_count} sélection{combo.leg_count > 1 ? "s" : ""}
@@ -273,22 +283,28 @@ function ComboCard({ combo }: { combo: Combo }) {
 
       {/* Legs */}
       <div className="p-4 space-y-2">
-        {combo.legs.map((leg, i) => (
-          <LegRow key={i} leg={leg} />
-        ))}
+        {combo.legs.map((leg, i) => {
+          const detail = combo.result_detail?.find(d => d.prediction_id === leg.prediction_id);
+          return <LegRow key={i} leg={leg} isCorrect={detail?.is_correct} />;
+        })}
       </div>
     </div>
   );
 }
 
 // ── Leg row ────────────────────────────────────────────────
-function LegRow({ leg }: { leg: ComboLeg }) {
+function LegRow({ leg, isCorrect }: { leg: ComboLeg; isCorrect?: boolean | null }) {
   const typeLabel = TYPE_LABELS[leg.prediction_type] ?? leg.prediction_type;
   const predLabel = formatPrediction(leg.prediction_type, leg.prediction);
   const confPct   = Math.round(leg.confidence * 100);
 
+  const resultBorder =
+    isCorrect === true  ? "border-l-2 border-[#34D399]" :
+    isCorrect === false ? "border-l-2 border-[#F87171]" :
+    "";
+
   return (
-    <div className="surface-card p-3 flex items-center gap-3">
+    <div className={`surface-card p-3 flex items-center gap-3 ${resultBorder}`}>
       <div className="flex-1 min-w-0">
         <div className="text-[10px] text-[var(--text-muted)] truncate mb-0.5">{leg.league}</div>
         <div className="text-[12px] font-medium truncate">
@@ -300,7 +316,9 @@ function LegRow({ leg }: { leg: ComboLeg }) {
         <div className="text-[12px] font-semibold text-white">{predLabel}</div>
       </div>
       <div className="shrink-0 text-right ml-1 min-w-[44px]">
-        <div className="text-[12px] font-bold text-[#D4AF37]">{leg.bookmaker_odds.toFixed(2)}</div>
+        {isCorrect === true  && <div className="text-[13px] text-[#34D399] font-bold">✓</div>}
+        {isCorrect === false && <div className="text-[13px] text-[#F87171] font-bold">✗</div>}
+        {isCorrect == null   && <div className="text-[12px] font-bold text-[#D4AF37]">{leg.bookmaker_odds.toFixed(2)}</div>}
         <div className="text-[10px] text-[var(--text-muted)]">{confPct}%</div>
       </div>
     </div>

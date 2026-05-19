@@ -13,6 +13,8 @@
 // — Seul 'correct_score' est exclu (fondamentalement imprévisible).
 // — Safe  : top 3 par confiance (seuil ≥ 0.78), min 2 jambes, 1 par match
 // — Bold  : top 5 par confiance (≥ 0.72), 1 par match, max 2 par ligue
+//           les matchs déjà utilisés dans le Safe sont EXCLUS du Bold
+//           → si un match perd, il n'impacte qu'un seul combo
 // — Les cotes sont affichées pour info mais ne pilotent PAS la sélection.
 // ============================================================
 import { getSupabaseAdmin } from "../_shared/supabase.ts";
@@ -247,8 +249,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── COMBO 2 : "AUDACIEUX" — top 5 par confiance (≥ 0.72) ──
-    // Peut inclure les mêmes matchs que le safe (pas d'exclusion)
-    const boldLegs = selectLegs(allPool, 5, new Set(), 3);
+    // Exclut les matchs déjà présents dans le safe : un match perdu
+    // n'impacte ainsi qu'un seul combo à la fois.
+    const safeMatchIds = new Set<number>(safeLegs?.map(l => l.match_id) ?? []);
+    const boldLegs = selectLegs(allPool, 5, safeMatchIds, 3);
     if (boldLegs) {
       const combinedOdds = boldLegs.reduce((acc, l) => acc * l.bookmaker_odds, 1);
       const combinedConf = boldLegs.reduce((acc, l) => acc * l.confidence, 1);
