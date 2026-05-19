@@ -4,10 +4,15 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Nakora - Pronostics Sportifs par IA",
   description: "Pronostics football, basket et hockey par IA. 85% de reussite. Combos automatiques, suivi en direct.",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
   openGraph: {
     title: "Nakora - Pronostics Sportifs par IA",
     description: "Pronostics football, basket et hockey par IA. 85% de reussite.",
     type: "website",
+    images: [{ url: "/logo.png" }],
   },
 };
 

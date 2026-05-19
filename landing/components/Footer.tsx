@@ -46,12 +46,11 @@ export default function Footer() {
           {/* Brand */}
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 9,
-                background: "linear-gradient(135deg, #D4AF37, #B8960C)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 16, fontWeight: 900, color: "#080810",
-              }}>N</div>
+              <img
+                src="/logo.png"
+                alt="Nakora"
+                style={{ width: 32, height: 32, borderRadius: 9, objectFit: "cover" }}
+              />
               <span style={{ fontSize: 18, fontWeight: 800, color: "#f0f0f0" }}>
                 nakora<span style={{ color: "#D4AF37" }}>.</span>
               </span>

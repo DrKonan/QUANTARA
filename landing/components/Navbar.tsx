@@ -28,12 +28,11 @@ export default function Navbar() {
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 68 }}>
         {/* Logo */}
         <a href="#" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: "linear-gradient(135deg, #D4AF37, #B8960C)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 18, fontWeight: 900, color: "#080810",
-          }}>N</div>
+          <img
+            src="/logo.png"
+            alt="Nakora"
+            style={{ width: 36, height: 36, borderRadius: 10, objectFit: "cover" }}
+          />
           <span style={{ fontSize: 20, fontWeight: 800, color: "#f0f0f0", letterSpacing: "-0.3px" }}>
             nakora
             <span style={{ color: "#D4AF37" }}>.</span>
