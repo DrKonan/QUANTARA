@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-const SESSION_COOKIE = "quantara_admin_session";
+const SESSION_COOKIE = "nakora_admin_session";
 
 export async function POST() {
   const cookieStore = await cookies();

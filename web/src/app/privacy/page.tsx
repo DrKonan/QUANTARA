@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Politique de Confidentialité - Quantara",
-  description: "Politique de confidentialité de l'application Quantara",
+  title: "Politique de Confidentialité - Nakora",
+  description: "Politique de confidentialité de l'application Nakora",
 };
 
 export default function PrivacyPolicyPage() {
@@ -19,7 +19,7 @@ export default function PrivacyPolicyPage() {
         </div>
 
         <Section title="1. Données collectées">
-          {`Quantara collecte les données suivantes pour le fonctionnement du service :
+          {`Nakora collecte les données suivantes pour le fonctionnement du service :
 
 • Numéro de téléphone (obligatoire pour l'inscription)
 • Adresse email (optionnelle)
@@ -50,7 +50,7 @@ export default function PrivacyPolicyPage() {
         </Section>
 
         <Section title="4. Services tiers">
-          {`Quantara utilise les services tiers suivants :
+          {`Nakora utilise les services tiers suivants :
 
 • Supabase — Authentification et base de données
 • Firebase — Analytics, Crashlytics, Cloud Messaging
@@ -61,7 +61,7 @@ Ces services ont leurs propres politiques de confidentialité.`}
         </Section>
 
         <Section title="5. Notifications">
-          {`Quantara envoie des notifications push pour :
+          {`Nakora envoie des notifications push pour :
 
 • Nouvelles prédictions disponibles
 • Résultats des matchs analysés
@@ -83,20 +83,20 @@ La suppression du compte est irréversible et entraîne l'effacement de toutes v
         </Section>
 
         <Section title="7. Données de paiement">
-          {`Quantara ne stocke aucune donnée de paiement sensible. Les transactions sont traitées directement par nos partenaires PawaPay et Wave.
+          {`Nakora ne stocke aucune donnée de paiement sensible. Les transactions sont traitées directement par nos partenaires de paiement Mobile Money.
 
-Pays supportés : Côte d'Ivoire, Sénégal, Mali, Burkina Faso, Bénin, Togo, Niger, Guinée, Cameroun, Gabon, Congo, RD Congo.`}
+Nakora est disponible à l'international. La disponibilité des moyens de paiement varie selon les pays.`}
         </Section>
 
         <Section title="8. Contact">
           {`Pour toute question concernant la protection de vos données :
 
-📧 Email : support@quantara.app
+📧 Email : support@nakora.app
 📱 Application : Aide & Support > Nous contacter`}
         </Section>
 
         <div className="mt-16 pt-8 border-t border-gray-800 text-center text-gray-500 text-sm">
-          © 2026 Quantara. Tous droits réservés.
+          © 2026 Nakora. Tous droits réservés.
         </div>
       </div>
     </main>

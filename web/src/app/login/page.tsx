@@ -18,7 +18,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/quantara/api/auth/login", {
+      const res = await fetch("/nakora/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -48,7 +48,7 @@ export default function LoginPage() {
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#D4AF37] to-[#B8961F] flex items-center justify-center mb-4 glow-gold">
             <Zap size={28} className="text-black" />
           </div>
-          <h1 className="text-2xl font-bold text-gold-gradient">Quantara</h1>
+          <h1 className="text-2xl font-bold text-gold-gradient">Nakora</h1>
           <p className="text-xs text-[#6B6B80] font-medium uppercase tracking-[0.2em] mt-1">Back-office</p>
         </div>
 
@@ -62,7 +62,7 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoFocus
-              placeholder="admin@quantara.app"
+              placeholder="admin@nakora.app"
               className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-[#D4AF37]/50 focus:ring-1 focus:ring-[#D4AF37]/20 transition-all placeholder:text-[#6B6B80]/50"
             />
           </div>

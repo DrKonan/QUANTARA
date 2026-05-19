@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const SESSION_COOKIE = "quantara_admin_session";
+const SESSION_COOKIE = "nakora_admin_session";
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
