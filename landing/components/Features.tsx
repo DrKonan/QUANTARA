@@ -10,7 +10,7 @@ const features = [
   {
     icon: "🛡️",
     title: "Combo Sûr",
-    desc: "3 sélections à haute confiance (≥78%) choisies automatiquement. Indépendantes du Combo Audacieux — si un match perd, l'autre combo reste intact.",
+    desc: "2 à 3 sélections à haute confiance (≥78%) choisies automatiquement. Indépendantes du Combo Audacieux — si un match perd, l'autre combo reste intact.",
     accent: "#22c55e",
   },
   {

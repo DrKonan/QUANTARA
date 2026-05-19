@@ -8,7 +8,7 @@ const items = [
   },
   {
     q: "Quelle est la différence entre le Combo Sûr et le Combo Audacieux ?",
-    a: "Le Combo Sûr contient 3 sélections à très haute confiance (≥78%), sur des matchs sélectionnés en priorité. Le Combo Audacieux contient 5 sélections sur des matchs entièrement différents — ce qui signifie qu'un résultat défavorable n'impacte qu'un seul des deux combos.",
+    a: "Le Combo Sûr contient 2 à 3 sélections à très haute confiance (≥78%), sur des matchs sélectionnés en priorité. Le Combo Audacieux contient 5 sélections sur des matchs entièrement différents — ce qui signifie qu'un résultat défavorable n'impacte qu'un seul des deux combos.",
   },
   {
     q: "Les pronostics sont-ils garantis gagnants ?",
@@ -20,7 +20,7 @@ const items = [
   },
   {
     q: "Comment fonctionne le paiement ?",
-    a: "Les abonnements sont gérés via PayDunya (FCFA, EUR, USD). Aucun engagement : tu peux annuler à tout moment depuis les paramètres de l'application. Le renouvellement est automatique chaque mois.",
+    a: "Les abonnements sont gérés via PayDunya (Mobile Money : Wave, Orange Money, MTN, Free Money…). Aucun engagement : tu peux annuler à tout moment depuis les paramètres de l'application. Le renouvellement est automatique chaque mois.",
   },
   {
     q: "Quels sports et ligues Nakora couvre-t-il ?",

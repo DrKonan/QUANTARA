@@ -76,9 +76,9 @@ export default function Footer() {
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(240,240,240,0.5)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 16 }}>Légal</div>
             {[
-              { label: "Politique de confidentialité", href: "/quantara/privacy" },
-              { label: "Conditions d'utilisation", href: "/quantara/terms" },
-              { label: "Supprimer mon compte", href: "/quantara/delete-account" },
+              { label: "Politique de confidentialité", href: "/nakora/privacy" },
+              { label: "Conditions d'utilisation", href: "/nakora/terms" },
+              { label: "Supprimer mon compte", href: "/nakora/delete-account" },
             ].map(l => (
               <a key={l.label} href={l.href} style={{ display: "block", fontSize: 14, color: "rgba(240,240,240,0.55)", textDecoration: "none", marginBottom: 10 }}
               onMouseEnter={e => (e.currentTarget.style.color = "#D4AF37")}

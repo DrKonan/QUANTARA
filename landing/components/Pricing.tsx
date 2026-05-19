@@ -1,7 +1,8 @@
 const plans = [
   {
     name: "FREE",
-    price: "0",
+    price: "Gratuit",
+    priceRaw: null,
     period: "",
     desc: "Pour découvrir Nakora sans risque",
     accent: "rgba(255,255,255,0.6)",
@@ -19,8 +20,29 @@ const plans = [
     ctaStyle: "secondary",
   },
   {
+    name: "STARTER",
+    price: "1 000",
+    priceRaw: "FCFA",
+    period: "/ mois",
+    desc: "Pour commencer à parier avec l'IA",
+    accent: "#22c55e",
+    accentBg: "rgba(34,197,94,0.05)",
+    popular: false,
+    features: [
+      { text: "Tous les pronostics illimités", ok: true },
+      { text: "Suivi live complet", ok: true },
+      { text: "Alertes résultats push", ok: true },
+      { text: "Historique et statistiques", ok: true },
+      { text: "Combo Sûr quotidien", ok: false },
+      { text: "Combo Audacieux (VIP uniquement)", ok: false },
+    ],
+    cta: "Choisir STARTER",
+    ctaStyle: "secondary",
+  },
+  {
     name: "PRO",
-    price: "4.99",
+    price: "2 000",
+    priceRaw: "FCFA",
     period: "/ mois",
     desc: "Pour les parieurs sérieux",
     accent: "#D4AF37",
@@ -39,7 +61,8 @@ const plans = [
   },
   {
     name: "VIP",
-    price: "9.99",
+    price: "4 000",
+    priceRaw: "FCFA",
     period: "/ mois",
     desc: "L'expérience Nakora complète",
     accent: "#f59e0b",
@@ -122,7 +145,10 @@ export default function Pricing() {
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: p.accent, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 8 }}>{p.name}</div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 8 }}>
-                  <span style={{ fontSize: "2.4rem", fontWeight: 900, color: "#f0f0f0" }}>{p.price === "0" ? "Gratuit" : `${p.price}€`}</span>
+                  <span style={{ fontSize: "2.4rem", fontWeight: 900, color: "#f0f0f0" }}>
+                    {p.price}
+                  </span>
+                  {p.priceRaw && <span style={{ fontSize: 13, color: "rgba(240,240,240,0.5)", fontWeight: 600 }}>{p.priceRaw}</span>}
                   {p.period && <span style={{ fontSize: 14, color: "rgba(240,240,240,0.4)" }}>{p.period}</span>}
                 </div>
                 <p style={{ fontSize: 13, color: "rgba(240,240,240,0.5)" }}>{p.desc}</p>
@@ -154,7 +180,7 @@ export default function Pricing() {
 
         {/* Note */}
         <p style={{ textAlign: "center", marginTop: 32, fontSize: 13, color: "rgba(240,240,240,0.35)" }}>
-          Paiement sécurisé via PayDunya · Disponible en FCFA, EUR et USD
+          Paiement sécurisé via PayDunya · Mobile Money (Wave, Orange Money, MTN…)
         </p>
       </div>
     </section>
