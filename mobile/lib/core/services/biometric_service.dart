@@ -60,11 +60,11 @@ class BiometricService {
     try {
       final types = await _auth.getAvailableBiometrics();
       if (types.contains(BiometricType.face))        return 'Face ID';
-      if (types.contains(BiometricType.fingerprint)) return 'Touch ID';
-      if (types.contains(BiometricType.strong))      return 'Biomtrie';
-      return 'Biomtrie';
+      if (types.contains(BiometricType.fingerprint)) return 'Empreinte digitale';
+      if (types.contains(BiometricType.strong))      return 'Biométrie';
+      return 'Biométrie';
     } catch (_) {
-      return 'Biomtrie';
+      return 'Biométrie';
     }
   }
 
@@ -144,7 +144,7 @@ class BiometricService {
   Future<bool> authenticateBiometricOnly() async {
     try {
       return await _auth.authenticate(
-        localizedReason: "Vrifiez votre identit pour activer la connexion biomtrique",
+        localizedReason: "Vérifiez votre identité pour activer la connexion biométrique",
         biometricOnly: false,
         persistAcrossBackgrounding: false,
       ).timeout(const Duration(seconds: 60), onTimeout: () => false);
@@ -158,7 +158,7 @@ class BiometricService {
   Future<bool> authenticateAndSignIn() async {
     try {
       final authenticated = await _auth.authenticate(
-        localizedReason: 'Connectez-vous  Nakora',
+        localizedReason: 'Connectez-vous à Nakora',
         biometricOnly: false,
         persistAcrossBackgrounding: false,
       ).timeout(const Duration(seconds: 60), onTimeout: () => false);
