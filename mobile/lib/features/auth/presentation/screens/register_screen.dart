@@ -130,46 +130,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        maxChildSize: 0.85,
-        minChildSize: 0.4,
-        expand: false,
-        builder: (ctx, scrollController) => Column(
-          children: [
-            const SizedBox(height: 8),
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(color: AppColors.surfaceLight, borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text("Choisir votre pays", style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: AppConstants.supportedCountries.length,
-                itemBuilder: (ctx, i) {
-                  final country = AppConstants.supportedCountries[i];
-                  final isSelected = country.code == _selectedCountry.code;
-                  return ListTile(
-                    leading: Text(country.flag, style: const TextStyle(fontSize: 24)),
-                    title: Text(country.name, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
-                    trailing: Text('+${country.dialCode}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                    selected: isSelected,
-                    selectedTileColor: AppColors.gold.withValues(alpha: 0.08),
-                    onTap: () {
-                      setState(() => _selectedCountry = country);
-                      Navigator.pop(ctx);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
+      builder: (ctx) => _CountryPickerSheet(
+        selected: _selectedCountry,
+        onSelected: (c) => setState(() => _selectedCountry = c),
       ),
     );
   }
@@ -463,6 +426,123 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(error, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Reusable country picker bottom sheet with search.
+class _CountryPickerSheet extends StatefulWidget {
+  final PaymentCountry selected;
+  final ValueChanged<PaymentCountry> onSelected;
+
+  const _CountryPickerSheet({required this.selected, required this.onSelected});
+
+  @override
+  State<_CountryPickerSheet> createState() => _CountryPickerSheetState();
+}
+
+class _CountryPickerSheetState extends State<_CountryPickerSheet> {
+  late List<PaymentCountry> _filtered;
+  final _search = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = AppConstants.allPhoneCountries;
+    _search.addListener(_onSearch);
+  }
+
+  void _onSearch() {
+    final q = _search.text.toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? AppConstants.allPhoneCountries
+          : AppConstants.allPhoneCountries
+              .where((c) =>
+                  c.name.toLowerCase().contains(q) ||
+                  c.dialCode.contains(q) ||
+                  c.code.toLowerCase().contains(q))
+              .toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      maxChildSize: 0.92,
+      minChildSize: 0.5,
+      expand: false,
+      builder: (ctx, scrollController) => Column(
+        children: [
+          const SizedBox(height: 8),
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              "Choisir votre pays",
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _search,
+              style: const TextStyle(color: AppColors.textPrimary),
+              decoration: InputDecoration(
+                hintText: "Rechercher un pays...",
+                hintStyle: const TextStyle(color: AppColors.textSecondary),
+                prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+                filled: true,
+                fillColor: AppColors.surfaceLight,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView.builder(
+              controller: scrollController,
+              itemCount: _filtered.length,
+              itemBuilder: (ctx, i) {
+                final country = _filtered[i];
+                final isSelected = country.code == widget.selected.code;
+                return ListTile(
+                  leading: Text(country.flag, style: const TextStyle(fontSize: 24)),
+                  title: Text(country.name, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+                  trailing: Text('+${country.dialCode}', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                  selected: isSelected,
+                  selectedTileColor: AppColors.gold.withValues(alpha: 0.08),
+                  onTap: () {
+                    widget.onSelected(country);
+                    Navigator.pop(ctx);
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),
