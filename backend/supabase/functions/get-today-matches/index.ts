@@ -261,15 +261,39 @@ Deno.serve(async (req: Request) => {
     const upcoming = result.filter((m: { status: string }) => m.status === "scheduled");
 
     // --- Récupère les combinés du jour ---
-    let combos: unknown[] = [];
-    const { data: combosRaw } = await supabase
+    // Si l'heure locale est avant 06:00, on inclut aussi les combos "evening" du jour précédent
+    // (les matchs de nuit peuvent finir après minuit ; ils ne doivent pas disparaître au changement de date).
+    const localNow = new Date(now.getTime() + tzOffsetMinutes * 60 * 1000);
+    const localHour = localNow.getUTCHours(); // heure dans le fuseau de l'utilisateur
+
+    const { data: todayCombosRaw } = await supabase
       .from("combo_predictions")
       .select("id, combo_type, combo_slot, combined_odds, combined_confidence, leg_count, legs, status, min_plan, created_at, result_detail")
       .eq("combo_date", localDate)
       .order("combo_type", { ascending: true });
 
-    if (combosRaw && combosRaw.length > 0) {
-      combos = combosRaw.map((c: {
+    let allCombosRaw = todayCombosRaw ?? [];
+
+    if (localHour < 6) {
+      // Calcule la date du jour précédent dans le fuseau de l'utilisateur
+      const prevLocalNow = new Date(localNow.getTime() - 24 * 60 * 60 * 1000);
+      const previousDate = prevLocalNow.toISOString().slice(0, 10);
+      const { data: prevEveningRaw } = await supabase
+        .from("combo_predictions")
+        .select("id, combo_type, combo_slot, combined_odds, combined_confidence, leg_count, legs, status, min_plan, created_at, result_detail")
+        .eq("combo_date", previousDate)
+        .eq("combo_slot", "evening")
+        .order("combo_type", { ascending: true });
+      if (prevEveningRaw && prevEveningRaw.length > 0) {
+        const existingIds = new Set(allCombosRaw.map((c: { id: number }) => c.id));
+        const newOnes = prevEveningRaw.filter((c: { id: number }) => !existingIds.has(c.id));
+        allCombosRaw = [...newOnes, ...allCombosRaw]; // combos de nuit en premier
+      }
+    }
+
+    let combos: unknown[] = [];
+    if (allCombosRaw.length > 0) {
+      combos = allCombosRaw.map((c: {
         id: number; combo_type: string; combo_slot: string; combined_odds: number; combined_confidence: number;
         leg_count: number; legs: Array<{ prediction_id: number; [key: string]: unknown }>; status: string; min_plan: string; created_at: string;
         result_detail: Array<{ prediction_id: number; is_correct: boolean | null }> | null;

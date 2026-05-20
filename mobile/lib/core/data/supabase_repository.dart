@@ -117,19 +117,46 @@ class SupabaseRepository {
   }
 
   /// Fetches today's combos directly from DB (used in fallback path).
-  /// Returns combos with is_locked=false and full data; the UI enforces
-  /// access control based on the user's local profile.
+  /// Before 06:00 local time, also fetches yesterday's evening combos so that
+  /// late-night combos remain visible until all matches are finished.
   Future<List<ComboPrediction>> _fetchTodayCombos(String? date) async {
     try {
-      final now = DateTime.now(); // heure locale
+      final now = DateTime.now();
       final localDate = date ??
           '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      final data = await _client
+
+      final todayData = await _client
           .from('combo_predictions')
           .select('id, combo_type, combo_slot, combined_odds, combined_confidence, leg_count, legs, status, min_plan, created_at')
           .eq('combo_date', localDate)
           .order('combo_type', ascending: true);
-      final combos = (data as List)
+
+      List<dynamic> rawCombos = todayData as List;
+
+      // Avant 06:00 du matin, on inclut aussi les combos "soir" de la veille
+      // (matchs de nuit pouvant finir après minuit).
+      if (now.hour < 6) {
+        final yesterday = now.subtract(const Duration(days: 1));
+        final prevDate = '${yesterday.year}-${yesterday.month.toString().padLeft(2, '0')}-${yesterday.day.toString().padLeft(2, '0')}';
+        try {
+          final prevData = await _client
+              .from('combo_predictions')
+              .select('id, combo_type, combo_slot, combined_odds, combined_confidence, leg_count, legs, status, min_plan, created_at')
+              .eq('combo_date', prevDate)
+              .eq('combo_slot', 'evening')
+              .order('combo_type', ascending: true);
+          final prevList = prevData as List;
+          if (prevList.isNotEmpty) {
+            final existingIds = {for (final c in rawCombos) (c as Map)['id']};
+            final newOnes = prevList.where((c) => !existingIds.contains((c as Map)['id'])).toList();
+            rawCombos = [...newOnes, ...rawCombos];
+          }
+        } catch (e) {
+          debugPrint('[Nakora] Failed to fetch previous evening combos: $e');
+        }
+      }
+
+      final combos = rawCombos
           .map((c) => ComboPrediction.fromJson(c as Map<String, dynamic>))
           .toList();
       debugPrint('[Nakora] Fallback loaded ${combos.length} combos for $localDate');
