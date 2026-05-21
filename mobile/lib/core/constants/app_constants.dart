@@ -291,7 +291,7 @@ abstract class AppConstants {
     PaymentCountry(code: 'KP', name: 'Coree du Nord', dialCode: '850', flag: '🇰🇵', methods: []),
     PaymentCountry(code: 'KR', name: 'Coree du Sud', dialCode: '82', flag: '🇰🇷', methods: []),
     PaymentCountry(code: 'CR', name: 'Costa Rica', dialCode: '506', flag: '🇨🇷', methods: []),
-    PaymentCountry(code: 'CI', name: 'Cote d Ivoire', dialCode: '225', flag: '🇨🇮', methods: []),
+    PaymentCountry(code: 'CI', name: 'Cote d Ivoire', dialCode: '225', flag: '🇨🇮', methods: [], localDigits: 10, keepLeadingZero: true),
     PaymentCountry(code: 'HR', name: 'Croatie', dialCode: '385', flag: '🇭🇷', methods: []),
     PaymentCountry(code: 'CU', name: 'Cuba', dialCode: '53', flag: '🇨🇺', methods: []),
     PaymentCountry(code: 'DK', name: 'Danemark', dialCode: '45', flag: '🇩🇰', methods: []),
